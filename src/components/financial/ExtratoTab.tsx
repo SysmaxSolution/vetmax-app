@@ -16,9 +16,9 @@ const CONC: Record<ExtratoMovement['status'], { label: string; cls: string; Icon
   pending:    { label: 'Pendente',   cls: 'bg-slate-100 text-slate-500',    Icon: Circle },
 }
 
-interface Props { bankAccounts: BankAccount[] }
+interface Props { bankAccounts: BankAccount[]; /** ids das empresas do filtro ([] = todas) */ empresas?: string[] }
 
-export default function ExtratoTab({ bankAccounts }: Props) {
+export default function ExtratoTab({ bankAccounts, empresas = [] }: Props) {
   const [selectedBank, setSelectedBank] = useState<string>('')   // '' = todas as contas
   const [startDate, setStartDate] = useState(firstDayOfMonth())
   const [endDate, setEndDate]     = useState(todayStr())
@@ -29,11 +29,17 @@ export default function ExtratoTab({ bankAccounts }: Props) {
   function load() {
     setErrorMsg(null)
     startTransition(async () => {
-      const res = await getEffectiveExtrato({ start_date: startDate, end_date: endDate, bank_account_id: selectedBank || undefined })
+      const res = await getEffectiveExtrato({ start_date: startDate, end_date: endDate, bank_account_id: selectedBank || undefined, company_ids: empresas.length ? empresas : undefined })
       if ('error' in res) setErrorMsg(res.error); else setResult(res)
     })
   }
-  useEffect(() => { load() }, [])   // carga inicial
+  // Carga inicial e recarga quando o filtro de empresas muda. Conta que saiu
+  // da lista por causa do filtro volta para "todas".
+  useEffect(() => {
+    if (selectedBank && !bankAccounts.some(b => b.id === selectedBank)) setSelectedBank('')
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresas.join(',')])
 
   const cards = result ? [
     { label: 'Entradas (recebidas)', value: result.total_entradas, Icon: TrendingUp,      color: 'border-emerald-200 bg-emerald-50', iconClr: 'text-emerald-500', valClr: 'text-emerald-700' },

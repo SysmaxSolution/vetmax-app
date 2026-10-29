@@ -13,7 +13,7 @@ import { revalidatePath } from 'next/cache'
 import { mensagemErro } from '@/lib/errors'
 import { zCpfCnpjPreservandoFormato } from '@/lib/validation/primitivos'
 import { variantesCnpj } from '@/lib/clinics/grupo-empresas'
-import type { Company, CompanyInput } from '@/types/companies'
+import type { Company, CompanyInput, EmpresasModo } from '@/types/companies'
 
 async function getCtx() {
   const supabase = await createClient()
@@ -149,4 +149,39 @@ export async function listActiveCompanies(): Promise<{ id: string; code: string;
     .eq('is_active', true)
     .order('code', { ascending: true })
   return (data ?? []) as { id: string; code: string; name: string; is_default: boolean }[]
+}
+
+// ── Modo de operação das empresas do grupo (clinics.flow_config.empresas_modo) ──
+// 'conjunto' = matriz e filiais operam dentro DESTA clínica (CNPJs internos:
+//              contas bancárias e documentos fiscais por empresa; as outras
+//              clínicas do grupo não aparecem).
+// 'separado' = cada CNPJ é uma clínica própria; a empresa com CNPJ de outra
+//              clínica liga as duas num grupo (acesso cruzado). Padrão.
+
+export async function lerModoDasEmpresas(): Promise<{ modo: EmpresasModo } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error as string }
+  const admin = createAdminClient()
+  const { data } = await admin.from('clinics').select('flow_config').eq('id', ctx.clinic_id).maybeSingle()
+  const modo = ((data?.flow_config ?? {}) as { empresas_modo?: string }).empresas_modo
+  return { modo: modo === 'conjunto' ? 'conjunto' : 'separado' }
+}
+
+export async function definirModoDasEmpresas(modo: EmpresasModo): Promise<{ ok: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error as string }
+  if (!CAN_MANAGE.includes(ctx.role) && !ctx.is_sysmax) return { error: 'Sem permissão' }
+  if (modo !== 'conjunto' && modo !== 'separado') return { error: 'Modo inválido' }
+  const admin = createAdminClient()
+  // Lê e grava o flow_config inteiro: a coluna é um JSON com as outras flags da clínica.
+  const { data } = await admin.from('clinics').select('flow_config').eq('id', ctx.clinic_id).maybeSingle()
+  const atual = (data?.flow_config ?? {}) as Record<string, unknown>
+  const { error } = await admin
+    .from('clinics')
+    .update({ flow_config: { ...atual, empresas_modo: modo } })
+    .eq('id', ctx.clinic_id)
+  if (error) return { error: `Erro ao salvar: ${mensagemErro(error, 'lib/actions/companies.ts')}` }
+  revalidatePath('/dashboard/management')
+  revalidatePath('/dashboard', 'layout')
+  return { ok: true }
 }

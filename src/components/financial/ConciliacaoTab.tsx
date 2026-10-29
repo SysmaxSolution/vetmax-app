@@ -20,6 +20,13 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
   const defaultAccount = bankAccounts.find(b => b.is_default) ?? bankAccounts[0]
 
   const [selectedBank, setSelectedBank] = useState<string>(defaultAccount?.id ?? '')
+  // O filtro de empresas do Financeiro reduz a lista de contas: se a conta
+  // escolhida saiu da lista, cai na padrão/primeira visível.
+  useEffect(() => {
+    if (!bankAccounts.some(b => b.id === selectedBank)) {
+      setSelectedBank(bankAccounts.find(b => b.is_default)?.id ?? bankAccounts[0]?.id ?? '')
+    }
+  }, [bankAccounts, selectedBank])
   const [batch, setBatch]         = useState<ReconciliationBatch | null>(null)
   const [statements, setStatements] = useState<StatementWithLinks[]>([])
   const [candidates, setCandidates] = useState<{ paid: ReconcCandidate[]; open: ReconcCandidate[] }>({ paid: [], open: [] })

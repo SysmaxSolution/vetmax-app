@@ -1,6 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import FiltroDeEmpresas, { lerFiltroDeEmpresasSalvo, salvarFiltroDeEmpresas, type EmpresaOpcao } from '@/components/financial/FiltroDeEmpresas'
+import { EmpresasFiltroContext } from './EmpresasFiltroContext'
+import { listActiveCompanies } from '@/lib/actions/companies'
 import { BarChart3, Users, DollarSign, TrendingUp, PieChart, MessageCircle, ClipboardList, PawPrint, Percent, ShieldAlert, CalendarClock, LineChart, Layers, Boxes, LayoutDashboard, Sparkles, Barcode, FlaskConical, FileText } from 'lucide-react'
 import BoletoMovementReport from '@/components/financial/BoletoMovementReport'
 import PetFrequencyReport from './PetFrequencyReport'
@@ -29,6 +32,8 @@ import { isReportVisible } from '@/lib/reports/visibility'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ModuleKey = 'painel' | 'financeiro' | 'clinico' | 'operacional' | 'estoque' | 'comercial' | 'regulatorio'
+// Relatórios que aceitam o filtro por empresa faturante (multi-CNPJ).
+const COM_FILTRO_DE_EMPRESA = new Set<string>(['financial', 'dre', 'aging', 'cashflow', 'revenue', 'dre_company', 'clients'])
 const MODULE_ORDER: { key: ModuleKey; label: string }[] = [
   { key: 'painel', label: 'Painel' },
   { key: 'financeiro', label: 'Financeiro' },
@@ -98,6 +103,20 @@ export default function ReportsWorkspace({ initialEnabled, usesExamRejection = f
   // O extrato de boletos acompanha a rotina de Boletos (flow_config.usa_boleto).
   const usaBoleto = useUsaBoleto()
   const [activeKey, setActiveKey] = useState<string>('dashboard')
+  // Filtro por empresa faturante (multi-CNPJ) dos relatórios financeiros; [] = todas.
+  const [empresas,    setEmpresas]    = useState<EmpresaOpcao[]>([])
+  const [empresasSel, setEmpresasSel] = useState<string[]>([])
+  useEffect(() => {
+    let vivo = true
+    listActiveCompanies().then(lista => {
+      if (!vivo) return
+      setEmpresas(lista)
+      const salva = lerFiltroDeEmpresasSalvo().filter(id => lista.some(e => e.id === id))
+      setEmpresasSel(salva.length < lista.length ? salva : [])
+    })
+    return () => { vivo = false }
+  }, [])
+  function mudarEmpresas(ids: string[]) { setEmpresasSel(ids); salvarFiltroDeEmpresas(ids) }
 
   const ALL_CATEGORIES: ReportCategory[] = [
     {
@@ -320,7 +339,7 @@ export default function ReportsWorkspace({ initialEnabled, usesExamRejection = f
       <main className="flex-1 p-4 lg:p-6 overflow-y-auto animate-enter">
         {activeCategory && (
           <>
-            <div className="mb-6">
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-violet-100 flex items-center justify-center">
                   <activeCategory.icon className="w-5 h-5 text-violet-600" />
@@ -330,10 +349,15 @@ export default function ReportsWorkspace({ initialEnabled, usesExamRejection = f
                   <p className="text-xs text-slate-500">{activeCategory.description}</p>
                 </div>
               </div>
+              {COM_FILTRO_DE_EMPRESA.has(String(activeCategory.key)) && (
+                <FiltroDeEmpresas empresas={empresas} value={empresasSel} onChange={mudarEmpresas} />
+              )}
             </div>
 
             <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-              {activeCategory.component}
+              <EmpresasFiltroContext.Provider value={empresasSel}>
+                {activeCategory.component}
+              </EmpresasFiltroContext.Provider>
             </div>
           </>
         )}

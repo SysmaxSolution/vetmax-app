@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Landmark } from 'lucide-react'
 import { listBankAccounts } from '@/lib/actions/financial'
 import { listCompanies } from '@/lib/actions/companies'
+import { contasDasEmpresas } from '@/lib/financial/empresas-filtro'
 
 /**
  * Escolhe a conta bancária que vai operar — e, por tabela, a empresa.
@@ -34,10 +35,12 @@ interface Props {
   bankCode?: string
   label?:    string
   className?: string
+  /** ids das empresas do filtro da tela ([] = todas): só mostra contas dessas empresas. */
+  empresasFiltro?: string[]
 }
 
 export default function SeletorDeConta({
-  value, onChange, bankCode, label = 'Conta', className = '',
+  value, onChange, bankCode, label = 'Conta', className = '', empresasFiltro = [],
 }: Props) {
   const [contas, setContas] = useState<ContaOperacao[]>([])
   const [carregando, setCarregando] = useState(true)
@@ -59,15 +62,18 @@ export default function SeletorDeConta({
             company_name: cid ? empresas.find(e => e.id === cid)?.name ?? null : null,
           }
         })
-      setContas(lista)
+      const padraoId = empresas.find(e => e.is_default)?.id ?? null
+      const visiveis = contasDasEmpresas(lista, empresasFiltro, padraoId)
+      setContas(visiveis)
       setCarregando(false)
-      // Escolhe sozinho quando não há escolha a fazer.
-      if (!value && lista.length) onChange(lista[0].id, lista[0])
+      // Escolhe sozinho quando não há escolha a fazer — e troca quando a conta
+      // escolhida saiu da lista por causa do filtro de empresas.
+      if ((!value || !visiveis.some(c => c.id === value)) && visiveis.length) onChange(visiveis[0].id, visiveis[0])
     }
     void carregar()
     return () => { vivo = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bankCode])
+  }, [bankCode, empresasFiltro.join(',')])
 
   if (carregando || contas.length === 0) return null
 

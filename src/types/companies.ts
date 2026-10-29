@@ -28,3 +28,13 @@ export interface CompanyInput {
   is_default?: boolean
   is_active?: boolean
 }
+
+/**
+ * Como as empresas do grupo operam (clinics.flow_config.empresas_modo):
+ *  'conjunto' — matriz e filiais dentro de UMA clínica: as empresas são CNPJs
+ *               internos (contas bancárias e documentos fiscais por empresa) e
+ *               as outras clínicas do grupo não aparecem.
+ *  'separado' — cada CNPJ é uma clínica própria; a empresa com CNPJ de outra
+ *               clínica liga as duas num grupo (acesso cruzado de usuários).
+ */
+export type EmpresasModo = 'conjunto' | 'separado'

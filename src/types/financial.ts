@@ -42,6 +42,8 @@ export interface FinancialEntry {
   professional_id:      string | null
   chart_of_accounts_id: string | null
   settlement_bank_id:   string | null
+  /** Empresa faturante gravada no título (OS/serviço). Null = herda da conta de liquidação ou da empresa padrão. */
+  company_id?:          string | null
   // joins
   tutor_name:           string | null
   /** CPF do tutor (contas a receber) — para a busca por documento. */
@@ -82,6 +84,8 @@ export interface ListEntriesFilters {
   due_to?:    string
   paid_from?: string
   paid_to?:   string
+  /** Empresas faturantes (multi-CNPJ); vazio/ausente = todas. Ver src/lib/financial/empresas-filtro.ts. */
+  company_ids?: string[]
 }
 
 export interface CreateEntryData {

@@ -4,6 +4,7 @@
 // bancária de liquidação. CMV consolidado fica no DRE principal.
 
 import { useState, useTransition } from 'react'
+import { useEmpresasFiltro } from './EmpresasFiltroContext'
 import { getDREByCompany, type DREByCompanyReport as Data } from '@/lib/actions/reports-g13'
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -15,11 +16,12 @@ export default function DREByCompanyReport() {
   const [data, setData] = useState<Data | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, startT] = useTransition()
+  const empresas = useEmpresasFiltro()
 
   function run() {
     startT(async () => {
       setError(null)
-      const res = await getDREByCompany({ from, to })
+      const res = await getDREByCompany({ from, to, company_ids: empresas.length ? empresas : undefined })
       if ('error' in res) { setError(res.error); return }
       setData(res)
     })

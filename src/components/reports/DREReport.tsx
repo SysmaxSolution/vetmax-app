@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useEmpresasFiltro } from './EmpresasFiltroContext'
 import { getDREReport, type DRELine } from '@/lib/actions/reports-g13'
 
 const fmt = (v: number) =>
@@ -15,11 +16,12 @@ export default function DREReport() {
   const [lines,   setLines]   = useState<DRELine[] | null>(null)
   const [error,   setError]   = useState<string | null>(null)
   const [pending, startT]     = useTransition()
+  const empresas = useEmpresasFiltro()
 
   function run() {
     startT(async () => {
       setError(null)
-      const res = await getDREReport({ from, to })
+      const res = await getDREReport({ from, to, company_ids: empresas.length ? empresas : undefined })
       if ('error' in res) { setError(res.error); return }
       setLines(res)
     })

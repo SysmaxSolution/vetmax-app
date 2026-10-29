@@ -48,18 +48,19 @@ export interface BoletoConfig {
   beneficiarioNome?: string; beneficiarioDoc?: string; beneficiarioEndereco?: string
   environment?: 'sandbox' | 'production'
 }
-export interface BankAccountBoleto { id: string; name: string; bankName: string | null; companyName: string | null; enabled: boolean; nextNossoNumero: number; config: BoletoConfig; webhookToken: string | null }
+export interface BankAccountBoleto { id: string; name: string; bankName: string | null; companyId: string | null; companyName: string | null; enabled: boolean; nextNossoNumero: number; config: BoletoConfig; webhookToken: string | null }
 
 export async function listBoletoAccounts(): Promise<BankAccountBoleto[]> {
   const c = await ctx(); if ('error' in c) return []
   const admin = createAdminClient()
   const { data } = await admin.from('bank_accounts')
-    .select('id, name, bank_name, boleto_enabled, next_nosso_numero, boleto_config, boleto_webhook_token, companies:company_id ( name )')
+    .select('id, name, bank_name, company_id, boleto_enabled, next_nosso_numero, boleto_config, boleto_webhook_token, companies:company_id ( name )')
     .eq('clinic_id', c.clinicId).order('is_default', { ascending: false }).order('name')
   return (data ?? []).map((a: any) => ({
     id: a.id, name: a.name, bankName: a.bank_name ?? null,
     // Por qual CNPJ o boleto sai — com varias empresas, o nome da conta sozinho
     // nao diz quem esta emitindo.
+    companyId: (a.company_id as string | null) ?? null,
     companyName: (Array.isArray(a.companies) ? a.companies[0]?.name : a.companies?.name) ?? null,
     enabled: !!a.boleto_enabled,
     nextNossoNumero: Number(a.next_nosso_numero ?? 1), config: (a.boleto_config ?? {}) as BoletoConfig,

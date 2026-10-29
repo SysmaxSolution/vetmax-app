@@ -16,9 +16,14 @@ export async function clinicasDoGrupo(admin: SupabaseClient, clinicaId: string):
   const empresas: EmpresaCnpj[] = []
   const empresasDe = new Set<string>()      // clínicas cujas empresas já foram lidas
 
-  const { data: origem } = await admin.from('clinics').select('id, name, cnpj, status').eq('id', clinicaId).maybeSingle()
+  const { data: origem } = await admin.from('clinics').select('id, name, cnpj, status, flow_config').eq('id', clinicaId).maybeSingle()
   if (!origem || origem.status !== 'active') return []
   clinicas.set(origem.id, { id: origem.id, name: origem.name, cnpj: origem.cnpj })
+
+  // Modo "conjunto" (matriz e filiais dentro de UMA clínica): as empresas são
+  // CNPJs internos, não ligações com outras clínicas — o grupo é só ela.
+  const modo = ((origem.flow_config ?? {}) as { empresas_modo?: string }).empresas_modo
+  if (modo === 'conjunto') return montarGrupo(clinicaId, [...clinicas.values()], [])
 
   for (let salto = 0; salto < MAX_SALTOS; salto++) {
     const pendentes = [...clinicas.keys()].filter(id => !empresasDe.has(id))
