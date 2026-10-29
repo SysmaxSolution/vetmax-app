@@ -14,6 +14,9 @@ import { mensagemErro } from '@/lib/errors'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+// O PDF de um ano inteiro (≈1.700 linhas) leva perto de um minuto para
+// diagramar; o padrão da função cortaria no meio.
+export const maxDuration = 120
 
 const PAPEIS = ['admin', 'owner', 'manager', 'accountant', 'vet']
 const DATA = /^\d{4}-\d{2}-\d{2}$/
