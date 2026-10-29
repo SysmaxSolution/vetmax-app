@@ -73,8 +73,6 @@ export interface CobrancaCriada {
   transaction_id?: string | null
   /** Se a cobrança saiu com o split do profissional. */
   com_split?: boolean
-  /** Se a cobrança saiu com o split do profissional. */
-  com_split?: boolean
   /** Mensagem para a tela: o que acontece agora. */
   mensagem: string
   /** Avisos que não impedem a cobrança mas precisam aparecer. */
