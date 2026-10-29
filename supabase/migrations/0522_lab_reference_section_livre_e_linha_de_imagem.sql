@@ -1,4 +1,4 @@
--- 0510 — Libera a seção do laudo e aceita linha de imagem.
+-- 0522 — Libera a seção do laudo e aceita linha de imagem.
 --
 -- Contexto: o acervo de laudos da Clínica Animais (backup do Vertis, 22/10, 5.786 linhas
 -- de layout em 694 exames) não cabe nos dois CHECKs que a 0489 fechou. Medido antes:
