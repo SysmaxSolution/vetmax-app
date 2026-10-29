@@ -57,7 +57,12 @@ export async function montarLivroControlados(
   from: string,
   to: string,
 ): Promise<ControlledBook> {
+  // Período no fuso da clínica (Brasília): o que aconteceu antes de 00:00 do
+  // primeiro dia é saldo anterior. Instantes normalizados em UTC para a
+  // comparação de datas do razão não depender do formato que o banco devolve.
   const toEnd = to + 'T23:59:59.999-03:00'
+  const fromInstant = new Date(from + 'T00:00:00-03:00').toISOString()
+  const instante = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? iso : d.toISOString() }
 
   const { data: clinicRow } = await admin
     .from('clinics')
@@ -128,7 +133,7 @@ export async function montarLivroControlados(
     const kindFinal: ControlledKind = (m.loss_reason && delta < 0) ? 'perda' : kind
     const antigo = historico.get(m.id as string)
     events.push({
-      item_id: m.stock_item_id as string, movement_id: m.id as string, date: m.created_at as string, delta, kind: kindFinal,
+      item_id: m.stock_item_id as string, movement_id: m.id as string, date: instante(m.created_at as string), delta, kind: kindFinal,
       origin: SOURCE_LABEL[m.source as string] ?? ((m.source as string) ?? 'Movimento'),
       reference: (m.notes as string | null) ?? null,
       document: (m.document_number as string | null) ?? null,
@@ -148,7 +153,7 @@ export async function montarLivroControlados(
   }
   for (const v of vendas) {
     events.push({
-      item_id: v.item_id, movement_id: null, date: v.sale!.created_at, delta: -Math.abs(v.quantity), kind: 'saida',
+      item_id: v.item_id, movement_id: null, date: instante(v.sale!.created_at), delta: -Math.abs(v.quantity), kind: 'saida',
       origin: 'Venda (PDV)', reference: v.sale!.tutor_id ? (nomeTutor.get(v.sale!.tutor_id) ?? null) : null,
       document: null, os_number: null, patient_name: null, tutor_name: v.sale!.tutor_id ? (nomeTutor.get(v.sale!.tutor_id) ?? null) : null,
       procedure_name: 'Venda (PDV)', counterparty: null, batch_number: null, expires_at: null, loss_reason: null,
@@ -162,7 +167,7 @@ export async function montarLivroControlados(
 
   const books: ControlledItemBook[] = []
   for (const item of items) {
-    const led = buildItemLedger(porItem.get(item.id) ?? [], from)
+    const led = buildItemLedger(porItem.get(item.id) ?? [], fromInstant)
     if (led.opening === 0 && led.entries.length === 0) continue
     const entries: ControlledLedgerEntry[] = led.entries.map(l => ({
       movement_id: l.movement_id, date: l.date, kind: l.kind, quantity: l.quantity, balance: l.balance, origin: l.origin,

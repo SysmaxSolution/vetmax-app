@@ -21,7 +21,8 @@ function cabecalho(ws: ExcelJS.Worksheet, linha: number, textos: string[]) {
   const row = ws.getRow(linha)
   textos.forEach((t, i) => {
     const c = row.getCell(i + 1)
-    c.value = t
+    // Célula mesclada: escrever '' numa célula escrava apaga o valor da mestre.
+    if (t !== '') c.value = t
     c.font = { bold: true, size: 10 }
     c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CINZA } }
     c.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
