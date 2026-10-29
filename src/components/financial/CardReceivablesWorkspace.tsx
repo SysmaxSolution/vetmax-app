@@ -263,6 +263,13 @@ export default function CardReceivablesWorkspace({
             <CreditCard className="h-4 w-4" />
             Conciliar extrato
           </a>
+          <a
+            href="/dashboard/financial/cards/maquininha"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold shadow-sm"
+          >
+            <CreditCard className="h-4 w-4" />
+            Maquininha FinPet
+          </a>
           <button
             onClick={refresh}
             disabled={loading}

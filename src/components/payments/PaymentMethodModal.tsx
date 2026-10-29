@@ -24,6 +24,8 @@ export interface PaymentSplit {
   card_nsu:            string | null
   card_authorization:  string | null
   transaction_date:    string | null
+  /** Cobrança da maquininha integrada (FinPet) que gerou este comprovante. */
+  card_transaction_id?: string | null
   label:               string
   /**
    * Taxa adm. sobre coparticipação embutida no amount (Épico A). 0 para
@@ -73,6 +75,9 @@ interface Props {
   /** A quem a cobrança se refere — repassado à cobrança integrada na maquininha. */
   consultationId?: string | null
   tutorId?:        string | null
+  /** Título que a cobrança integrada vai baixar (fatura ou venda). */
+  invoiceId?:      string | null
+  saleId?:         string | null
   /** Crédito/adiantamento disponível do tutor (Sprint Animais 1.6). Exibido no topo. */
   creditBalance?: number
   /** Permite lançar a sobra como crédito do tutor (só onde há tutor vinculado). */
@@ -81,7 +86,7 @@ interface Props {
   onConfirm:  (splits: PaymentSplit[], extras?: { copay_interest?: number; overpayment?: { amount: number; as: 'change' | 'credit' } }) => Promise<void> | void
 }
 
-export default function PaymentMethodModal({ totalDue, subject, disableSplit, copayInterest, creditBalance, allowCredit, consultationId, tutorId, onCancel, onConfirm }: Props) {
+export default function PaymentMethodModal({ totalDue, subject, disableSplit, copayInterest, creditBalance, allowCredit, consultationId, tutorId, invoiceId, saleId, onCancel, onConfirm }: Props) {
   const [splits,        setSplits]        = useState<PaymentSplit[]>([])
   const [pendingMethod, setPendingMethod] = useState<PaymentMethodKey | null>(null)
   const [pendingAmount, setPendingAmount] = useState<string>('')
@@ -224,6 +229,7 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
       card_nsu:           result.card_nsu,
       card_authorization: result.card_authorization,
       transaction_date:   result.transaction_date,
+      card_transaction_id: result.card_transaction_id ?? null,
       label,
       interest_included:  interestIncluded,
     }
@@ -561,6 +567,8 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
             : Math.min(parseFloat(pendingAmount.replace(',', '.')) || remaining, remaining)}
           consultationId={consultationId}
           tutorId={tutorId}
+          invoiceId={invoiceId}
+          saleId={saleId}
           onCancel={() => { setShowCardModal(null); setPendingMethod(null) }}
           onConfirm={handleCardConfirm}
         />

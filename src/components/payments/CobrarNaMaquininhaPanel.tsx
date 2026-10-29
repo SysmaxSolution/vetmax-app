@@ -33,8 +33,11 @@ interface Props {
   parcelas:        number
   consultationId?: string | null
   tutorId?:        string | null
+  /** Título que esta cobrança vai baixar (fatura ou venda) — elo para estorno e extrato. */
+  invoiceId?:      string | null
+  saleId?:         string | null
   /** Chamado quando o comprovante chega pelo callback. */
-  onComprovante:   (dados: { nsu: string; autorizacao: string; bandeira: string | null }) => void
+  onComprovante:   (dados: { nsu: string; autorizacao: string; bandeira: string | null; card_transaction_id: string }) => void
 }
 
 function fmt(v: number) {
@@ -42,7 +45,7 @@ function fmt(v: number) {
 }
 
 export default function CobrarNaMaquininhaPanel({
-  paymentMethod, valor, parcelas, consultationId, tutorId, onComprovante,
+  paymentMethod, valor, parcelas, consultationId, tutorId, invoiceId, saleId, onComprovante,
 }: Props) {
   const [configs,    setConfigs]    = useState<ConfigAdquirente[]>([])
   const [empresaId,  setEmpresaId]  = useState<string>('')
@@ -114,6 +117,7 @@ export default function CobrarNaMaquininhaPanel({
         nsu:         res.nsu,
         autorizacao: res.autorizacao ?? '',
         bandeira:    res.bandeira,
+        card_transaction_id: id,
       })
     }
   }, [onComprovante])
@@ -139,6 +143,8 @@ export default function CobrarNaMaquininhaPanel({
       terminalId:     terminalId || null,
       consultationId: consultationId ?? null,
       tutorId:        tutorId ?? null,
+      invoiceId:      invoiceId ?? null,
+      saleId:         saleId ?? null,
     })
     setDisparando(false)
     if ('error' in res) { setErro(res.error); return }

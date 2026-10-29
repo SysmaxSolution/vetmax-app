@@ -19,6 +19,8 @@ export interface CardPaymentResult {
   card_nsu:           string
   card_authorization: string
   transaction_date:   string
+  /** Cobrança da maquininha integrada que gerou este comprovante, se houve. */
+  card_transaction_id?: string | null
 }
 
 interface Props {
@@ -26,6 +28,9 @@ interface Props {
   /** A quem a cobrança se refere — só para amarrar a transação da maquininha. */
   consultationId?:   string | null
   tutorId?:          string | null
+  /** Título que a cobrança integrada vai baixar (fatura ou venda). */
+  invoiceId?:        string | null
+  saleId?:           string | null
   /** Saldo máximo permitido para este split (default = saldo restante). */
   maxAmount:         number
   /** Valor sugerido inicial. */
@@ -39,7 +44,7 @@ function fmt(v: number) {
 }
 
 export default function CardSelectionModal({
-  paymentMethod, maxAmount, suggestedAmount, consultationId, tutorId, onCancel, onConfirm,
+  paymentMethod, maxAmount, suggestedAmount, consultationId, tutorId, invoiceId, saleId, onCancel, onConfirm,
 }: Props) {
   const [cards,         setCards]         = useState<PaymentCard[]>([])
   const [loading,       setLoading]       = useState(true)
@@ -50,6 +55,8 @@ export default function CardSelectionModal({
   const [authorization, setAuthorization] = useState('')
   const [txnDate,       setTxnDate]       = useState(() => new Date().toISOString().slice(0, 10))
   const [error,         setError]         = useState<string | null>(null)
+  // Cobrança feita pela maquininha integrada (quando o comprovante vem do callback).
+  const [cardTransactionId, setCardTransactionId] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -101,6 +108,7 @@ export default function CardSelectionModal({
       card_nsu:           nsu.trim(),
       card_authorization: authorization.trim(),
       transaction_date:   txnDate,
+      card_transaction_id: cardTransactionId,
     })
   }
 
@@ -271,9 +279,12 @@ export default function CardSelectionModal({
                   parcelas={installments}
                   consultationId={consultationId}
                   tutorId={tutorId}
+                  invoiceId={invoiceId}
+                  saleId={saleId}
                   onComprovante={dados => {
                     setNsu(dados.nsu)
                     setAuthorization(dados.autorizacao)
+                    setCardTransactionId(dados.card_transaction_id)
                   }}
                 />
               )}
