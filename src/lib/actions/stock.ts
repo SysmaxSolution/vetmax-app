@@ -818,9 +818,23 @@ export async function dispenseStockItem(
 // ─── Abatimento Automático (chamado internamente) ─────────────────────────────
 
 /**
- * Tenta encontrar o item de estoque pelo nome do medicamento (case-insensitive)
- * e decrementa 1 unidade. Registra movimentação de saída e audit log.
- * Nunca lança erro — falha silenciosa para não bloquear o fluxo clínico.
+ * Baixa automatica por NOME do medicamento, usada pelos caminhos que nao tem o
+ * item de estoque em maos (hoje: a evolucao da internacao, que guarda medicacao
+ * como texto num JSONB).
+ *
+ * Historico que explica a reescrita: a versao anterior procurava o item em
+ * `pharmacy_stock` — tabela legada que a propria migration 0186 declara vazia —,
+ * baixava sempre 1 unidade e inseria em `stock_movements` um `stock_item_id`
+ * vindo dali, enquanto a FK dessa coluna aponta para `stock_items` desde a 0186.
+ * O INSERT violava a FK e o erro morria num try/catch. Resultado medido em
+ * 17/10/2026: zero movimentos de consulta ou internacao em dev e em producao.
+ *
+ * Agora casa em `stock_items` e delega para `rpc_apply_stock_consumption`, que
+ * consome lote FIFO, respeita validade, grava o rastro de lote e marca
+ * divergencia quando o item nao e reconhecido ou o saldo fica negativo.
+ *
+ * Continua sem lancar excecao — o fluxo clinico nao pode cair por causa de
+ * estoque —, mas devolve o que aconteceu para quem quiser mostrar na tela.
  */
 export async function deductStockForMedication(params: {
   clinicId: string
@@ -828,85 +842,51 @@ export async function deductStockForMedication(params: {
   medicationName: string
   source: 'CONSULTATION' | 'HOSPITALIZATION'
   referenceId: string  // consultation_id ou hospitalization_record_id
-}): Promise<void> {
+  /** Quantidade aplicada. Padrao 1 — e o que os caminhos legados sabem informar. */
+  quantity?: number
+  notes?: string | null
+}): Promise<{ matched: boolean; quantity_after: number | null; requires_reconciliation: boolean } | { error: string }> {
   try {
     const admin = createAdminClient()
-    const nameLower = params.medicationName.trim().toLowerCase()
+    const nome = params.medicationName.trim()
+    if (!nome) return { error: 'medication_name vazio.' }
 
-    // Busca todos os itens da clínica e filtra por nome (case-insensitive)
-    const { data: items } = await admin
-      .from('pharmacy_stock')
-      .select('id, medication_name, quantity')
+    const quantidade = params.quantity && params.quantity > 0 ? params.quantity : 1
+
+    // Casa pelo nome em stock_items (nao-servico). ILIKE exato primeiro; sem
+    // match, a RPC registra a saida como divergencia em vez de ignorar.
+    const { data: candidatos } = await admin
+      .from('stock_items')
+      .select('id, name')
       .eq('clinic_id', params.clinicId)
+      .eq('is_service', false)
+      .ilike('name', nome)
+      .limit(2)
 
-    if (!items || items.length === 0) return
+    const itemId = (candidatos ?? []).length === 1 ? (candidatos as { id: string }[])[0].id : null
 
-    const match = items.find(
-      item => item.medication_name.trim().toLowerCase() === nameLower
-    )
-    if (!match) return // Medicamento não cadastrado no estoque — ignora
+    const { data, error } = await admin.rpc('rpc_apply_stock_consumption', {
+      p_clinic_id:       params.clinicId,
+      p_stock_item_id:   itemId,
+      p_medication_name: nome,
+      p_quantity:        quantidade,
+      p_source:          params.source,
+      p_reference_id:    params.referenceId,
+      p_notes:           params.notes?.trim() || null,
+      p_user_id:         params.userId,
+    })
 
-    const qtyBefore = Number(match.quantity)
-    if (qtyBefore <= 0) {
-      // Estoque zerado — registra movimento de débito zerado (para auditoria)
-      await admin.from('stock_movements').insert({
-        clinic_id:       params.clinicId,
-        stock_item_id:   match.id,
-        medication_name: match.medication_name,
-        movement_type:   'DEBIT',
-        quantity_change: 0,
-        quantity_before: 0,
-        quantity_after:  0,
-        source:          params.source,
-        reference_id:    params.referenceId,
-        notes:           'Estoque esgotado no momento da aplicação',
-        created_by:      params.userId,
-      })
-      return
+    if (error) return { error: mensagemErro(error, 'lib/actions/stock.ts') }
+
+    const row = Array.isArray(data) ? data[0] : data
+    if (!row) return { error: 'RPC de consumo nao retornou linha.' }
+
+    return {
+      matched:                 Boolean(row.matched),
+      quantity_after:          row.quantity_after === null ? null : Number(row.quantity_after),
+      requires_reconciliation: Boolean(row.requires_reconciliation),
     }
-
-    const qtyAfter = qtyBefore - 1
-
-    // Decrementa
-    await admin
-      .from('pharmacy_stock')
-      .update({ quantity: qtyAfter })
-      .eq('id', match.id)
-      .eq('clinic_id', params.clinicId)
-
-    // Registra movimentação (Audit Trail de estoque)
-    await admin.from('stock_movements').insert({
-      clinic_id:       params.clinicId,
-      stock_item_id:   match.id,
-      medication_name: match.medication_name,
-      movement_type:   'DEBIT',
-      quantity_change: 1,
-      quantity_before: qtyBefore,
-      quantity_after:  qtyAfter,
-      source:          params.source,
-      reference_id:    params.referenceId,
-      notes:           null,
-      created_by:      params.userId,
-    })
-
-    // Audit log geral (integrado com o Audit Trail existente)
-    await admin.from('audit_logs').insert({
-      clinic_id:   params.clinicId,
-      user_id:     params.userId,
-      action:      'STOCK_DEBIT',
-      entity_type: 'pharmacy_stock',
-      entity_id:   match.id,
-      details: {
-        medication_name: match.medication_name,
-        qty_before:      qtyBefore,
-        qty_after:       qtyAfter,
-        source:          params.source,
-        reference_id:    params.referenceId,
-      },
-    })
-
-  } catch (err) {
-    // Nunca bloqueia o fluxo clínico
-    console.error('[Stock] Falha no abatimento automático:', err)
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Falha ao baixar estoque.' }
   }
 }

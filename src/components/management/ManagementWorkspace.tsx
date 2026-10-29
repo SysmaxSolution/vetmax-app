@@ -13,7 +13,7 @@ import { createInvitation, createAndSendInvitation, revokeInvitation } from '@/l
 import ClinicJoinCodeCard from './ClinicJoinCodeCard'
 import { uploadClinicLogo, removeClinicLogo } from '@/lib/actions/clinic-settings'
 import type { DocumentTemplate, TemplateType, UserRole, Invitation, InvitationRole } from '@/types'
-import type { ClinicConfig, ClinicSettingsConfig } from '@/lib/actions/clinic-settings'
+import type { ClinicConfig, ClinicSettingsConfig } from '@/types/clinic-settings'
 import { apiFetch } from '@/lib/api-fetch'
 import ImportTemplateModal from './ImportTemplateModal'
 import CanvasEditor from '@/components/canva/editor/CanvasEditor'

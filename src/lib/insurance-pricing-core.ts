@@ -6,10 +6,19 @@
  *
  *   1) Pet SEM convênio ativo                       → particular (unit_price puro)
  *   2) Pet COM convênio + patient_custom_prices     → trio (custom_price, copay, repass)
- *   3) Pet COM convênio + default_insurance_price   → default + split pendente
- *   4) Pet COM convênio sem nenhum dos dois         → particular como fallback + flag
+ *   3) Pet COM convênio + REGRA FIXA no convênio    → split calculado (percentual,
+ *      valor fixo ou tutor-não-paga), sem ninguém digitar nada (item 1.9)
+ *   4) Pet COM convênio + default_insurance_price   → default + split pendente
+ *   5) Pet COM convênio sem nenhum dos dois         → particular como fallback + flag
  *      requires_split_input para a UI exigir copay/repass no consultório.
+ *
+ * A ordem não é arbitrária: o que foi negociado para AQUELE pet e AQUELE item
+ * (nível 2) vence a regra geral do convênio (nível 3), que por sua vez vence o
+ * default do serviço. É a mesma lógica custom → default → fallback do resto do
+ * sistema de preços.
  */
+
+import { calcularSplitDoConvenio, type RegraCopay } from '@/lib/insurance/copay'
 
 export interface ResolvedPricing {
   unit_price: number
@@ -18,7 +27,7 @@ export interface ResolvedPricing {
     total:                number
     copay:                number | null   // null quando ainda não cadastrado (UI exige preencher)
     repass:               number | null
-    source:               'custom' | 'default' | 'fallback_unit'
+    source:               'custom' | 'provider_rule' | 'default' | 'fallback_unit'
     /** True quando UI deve forçar o vet a inserir copay/repass antes de salvar. */
     requires_split_input: boolean
     /** Nome do provider (para label na UI). */
@@ -41,6 +50,13 @@ export interface PricingDecisionInput {
     copay_amount:  number | null
     repass_amount: number | null
   }
+  /**
+   * Regra de coparticipação do convênio (item 1.9). Ausente ou com
+   * modo 'per_item' = comportamento histórico, nada muda.
+   */
+  regra_convenio?: RegraCopay | null
+  /** Quantidade aplicada — pesa no modo 'fixed', que é valor fixo POR item. */
+  quantidade?: number
 }
 
 export function decideServicePricing(input: PricingDecisionInput): ResolvedPricing {
@@ -70,7 +86,31 @@ export function decideServicePricing(input: PricingDecisionInput): ResolvedPrici
     }
   }
 
-  // 3) Default de convênio cadastrado no serviço
+  // 3) Regra fixa no convênio (item 1.9) — percentual, valor fixo ou tutor não
+  //    paga. Resolve o caso da guia "ENCAMINHADA" da AVA, em que o tutor paga um
+  //    valor intermediário: ninguém precisa digitar copay/repass por atendimento.
+  //    A base é o preço de convênio do serviço quando houver, senão o particular.
+  if (input.regra_convenio && input.regra_convenio.modo !== 'per_item') {
+    const base = input.default_insurance_price !== null
+      ? Number(input.default_insurance_price)
+      : unit_price
+    const split = calcularSplitDoConvenio(input.regra_convenio, base, input.quantidade ?? 1)
+    if (split) {
+      return {
+        unit_price,
+        insurance: {
+          total:                base,
+          copay:                split.copay,
+          repass:               split.repass,
+          source:               'provider_rule',
+          requires_split_input: false,
+          provider_name:        input.provider_name,
+        },
+      }
+    }
+  }
+
+  // 4) Default de convênio cadastrado no serviço
   if (input.default_insurance_price !== null) {
     return {
       unit_price,
@@ -85,7 +125,7 @@ export function decideServicePricing(input: PricingDecisionInput): ResolvedPrici
     }
   }
 
-  // 4) Fallback: cobra particular (unit_price), mas marca para UI mostrar
+  // 5) Fallback: cobra particular (unit_price), mas marca para UI mostrar
   //    inputs de split caso o vet queira registrar o acordo agora.
   return {
     unit_price,

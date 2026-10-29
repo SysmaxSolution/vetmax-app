@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Search, Loader2, Package, X, AlertTriangle } from 'lucide-react'
-import { searchStockItems, type StockItemLite } from '@/lib/actions/stock-consumption'
+import { searchStockItems } from '@/lib/actions/stock-consumption'
+import type { StockItemLite } from '@/types/stock-consumption'
 
 /**
  * Dropdown buscável de stock_items para vincular à prescrição.

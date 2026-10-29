@@ -8,7 +8,8 @@ import {
   Hotel, Syringe, FlaskConical, Scissors, ShoppingBag, Stethoscope, ClipboardList, MessageCircle, MessageSquare, Sparkles, Bot, ShoppingCart, Truck,
   PawPrint, Banknote, FolderKanban, DollarSign, FileBarChart2, FileText,
 } from 'lucide-react'
-import { updateClinicConfig, type ClinicConfig, type FlowConfig } from '@/lib/actions/clinic-settings'
+import { updateClinicConfig } from '@/lib/actions/clinic-settings'
+import type { ClinicConfig, FlowConfig } from '@/types/clinic-settings'
 import { useUpgradeModal } from '@/components/upgrade/UpgradeProvider'
 import { isModuleFree } from '@/config/access-matrix'
 import type { UpgradeFeatureKey } from '@/components/upgrade/UpgradeModal'

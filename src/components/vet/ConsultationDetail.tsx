@@ -17,7 +17,9 @@ import ConsultationQuotationBadge from '@/components/billing/ConsultationQuotati
 import InsuranceAuditBanner from '@/components/consultation/InsuranceAuditBanner'
 import type { AuditResult } from '@/lib/actions/insurance-audit'
 import { updatePatientFromLiveReg } from '@/lib/actions/pets'
-import { addAppliedMedication, deleteAppliedMedication, updateAppliedMedication, extractFullVoice, type AppliedMedication, type VoiceExtractionResult } from '@/lib/actions/pharmacy'
+import { addAppliedMedication, deleteAppliedMedication, updateAppliedMedication, extractFullVoice } from '@/lib/actions/pharmacy'
+import type { AppliedMedication } from '@/types/pharmacy'
+import type { VoiceExtractionResult } from '@/types/pharmacy-voice'
 import { addVaccine, type PatientVaccine } from '@/lib/actions/vaccines'
 import { isConsentStale } from '@/lib/consent-version'
 import { wrapAiBlock, stripAiBlocks, hasUnreviewedAiText } from '@/lib/voice/ai-provenance'
@@ -54,7 +56,7 @@ import { extractPatientDataFromTranscript, type ExtractedData } from '@/lib/acti
 import type { DocumentTemplate } from '@/types'
 import type { PatientDocument } from '@/lib/actions/documents'
 import type { Attachment } from '@/lib/actions/attachments'
-import type { FlowConfig } from '@/lib/actions/clinic-settings'
+import type { FlowConfig } from '@/types/clinic-settings'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
 
@@ -548,8 +550,13 @@ export default function ConsultationDetail({
       setToast({ type: 'error', message: res.error })
       return
     }
-    setClinicalMeds(prev => [...prev, res])
+    setClinicalMeds(prev => [...prev, res.medication])
     setPendingMedSuggestions(prev => prev.filter((_, i) => i !== index))
+    // A sugestao da voz vem sem item de estoque: a baixa fica pendente de
+    // conferencia e o MV precisa saber disso agora, nao no fim do mes.
+    if (res.stock && res.stock.tom !== 'ok') {
+      setToast({ type: 'error', message: res.stock.mensagem })
+    }
   }, [pendingMedSuggestions, consultation.id])
 
   const dismissPendingMed = useCallback((index: number) => {
@@ -569,7 +576,7 @@ export default function ConsultationDetail({
         notes:  m.notes  ?? undefined,
         is_controlled: false,
       })
-      if (!('error' in res)) saved.push(res)
+      if (!('error' in res)) saved.push(res.medication)
     }
     if (saved.length > 0) setClinicalMeds(prev => [...prev, ...saved])
     // Mantém apenas os controlados — confirmação individual obrigatória.
@@ -662,12 +669,25 @@ export default function ConsultationDetail({
   // ─── Handlers para ClinicalActionsSection (controlado) ─────────────────────
   const handleAddMed = async (data: {
     medication_name: string; dosage?: string; route?: string; notes?: string; is_controlled?: boolean
+    stock_item_id?: string | null; quantity?: number | null
+    prescription_notification?: string | null; sem_baixa?: boolean
   }) => {
     const res = await addAppliedMedication({ consultation_id: consultation.id, ...data })
     if ('error' in res) {
       setToast({ type: 'error', message: res.error })
-    } else {
-      setClinicalMeds(prev => [...prev, res])
+      return
+    }
+    setClinicalMeds(prev => [...prev, res.medication])
+
+    // O registro clinico nunca cai por causa de estoque, mas o que aconteceu com
+    // o estoque e com a conta aparece: item fora do catalogo, saldo negativo ou
+    // cobranca que nao entrou sao avisos, nao silencio.
+    const avisos = [res.stock?.tom !== 'ok' ? res.stock?.mensagem : null, res.avisoCobranca]
+      .filter(Boolean) as string[]
+    if (avisos.length > 0) {
+      setToast({ type: 'error', message: avisos.join(' ') })
+    } else if (res.stock) {
+      setToast({ type: 'success', message: res.stock.mensagem })
     }
   }
 
@@ -675,13 +695,19 @@ export default function ConsultationDetail({
     const res = await deleteAppliedMedication(id, consultation.id)
     if ('error' in res) {
       setToast({ type: 'error', message: res.error })
-    } else {
-      setClinicalMeds(prev => prev.filter(m => m.id !== id))
+      return
+    }
+    setClinicalMeds(prev => prev.filter(m => m.id !== id))
+    if (res.aviso) {
+      setToast({ type: 'error', message: res.aviso })
+    } else if (res.mensagem) {
+      setToast({ type: 'success', message: 'Aplicação removida — ' + res.mensagem + '.' })
     }
   }
 
   const handleUpdateMed = async (id: string, data: {
     medication_name: string; dosage?: string; route?: string; notes?: string; is_controlled?: boolean
+    prescription_notification?: string | null
   }) => {
     const res = await updateAppliedMedication(id, consultation.id, data)
     if ('error' in res) {

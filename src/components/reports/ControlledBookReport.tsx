@@ -5,7 +5,8 @@
 // Analítico: razão cronológica expansível por item. Imprimível p/ Vigilância.
 
 import { useState, useTransition } from 'react'
-import { getControlledBook, type ControlledBook, type ControlledItemBook } from '@/lib/actions/controlled-book'
+import { getControlledBook } from '@/lib/actions/controlled-book'
+import type { ControlledBook, ControlledItemBook } from '@/types/controlled-book'
 
 const fmtQty = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
 const fmtDate = (iso: string) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', '')

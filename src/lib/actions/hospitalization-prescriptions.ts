@@ -3,7 +3,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
-import { consumeStockForApplication, type StockConsumptionResult } from '@/lib/actions/stock-consumption'
+import { consumeStockForApplication } from '@/lib/actions/stock-consumption'
+import type { StockConsumptionResult } from '@/types/stock-consumption'
 import { formatClinicTime } from '@/lib/time'
 
 import { mensagemErro } from '@/lib/errors'

@@ -10,6 +10,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { movementDelta, buildItemLedger } from '@/lib/controlled/ledger'
+import type {
+  ControlledKind,
+  ControlledBook,
+  ControlledItemBook,
+} from '@/types/controlled-book'
 
 import { mensagemErro } from '@/lib/errors'
 async function getCtx() {
@@ -19,41 +24,6 @@ async function getCtx() {
   const { data: profile } = await supabase.from('profiles').select('clinic_id, role').eq('id', user.id).single()
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica' as const }
   return { admin: createAdminClient(), clinic_id: profile.clinic_id as string, role: (profile.role as string) ?? 'staff' }
-}
-
-export type ControlledKind = 'entrada' | 'saida' | 'perda' | 'ajuste'
-
-export interface ControlledLedgerEntry {
-  date:      string
-  kind:      ControlledKind
-  quantity:  number           // sinalizado (+entrada / −saída)
-  balance:   number           // saldo após o evento
-  origin:    string           // Compra/Reposição, Venda (PDV), Internação, Consulta, Ajuste…
-  reference: string | null    // tutor / observação
-  document:  string | null    // nota/nº quando houver
-}
-
-export interface ControlledItemBook {
-  stock_item_id:   string
-  name:            string
-  substance:       string | null
-  concentration:   string | null
-  control_class:   string | null
-  is_human_use:    boolean
-  unit:            string | null
-  opening_balance: number
-  total_in:        number
-  total_out:       number
-  total_loss:      number
-  closing_balance: number
-  entries:         ControlledLedgerEntry[]
-}
-
-export interface ControlledBook {
-  from: string
-  to:   string
-  human:      ControlledItemBook[]
-  veterinary: ControlledItemBook[]
 }
 
 export async function getControlledBook(params: {
@@ -83,12 +53,34 @@ export async function getControlledBook(params: {
   // 2) Movimentos de estoque (até o fim do período) — dão entrada/saída/ajuste
   const { data: movsRaw } = await admin
     .from('stock_movements')
-    .select('stock_item_id, movement_type, quantity_change, quantity_before, quantity_after, source, notes, created_at')
+    .select('id, stock_item_id, movement_type, quantity_change, quantity_before, quantity_after, source, notes, created_at')
     .eq('clinic_id', clinic_id)
     .in('stock_item_id', itemIds)
     .lte('created_at', toEnd)
     .order('created_at', { ascending: true })
   const movs = (movsRaw ?? []) as any[]
+
+  // 2.1) Numero da notificacao de receita por movimento.
+  //
+  // A Portaria 344/1998 pede o documento que amparou a saida do controlado. Ele
+  // e informado na aplicacao (applied_medications.prescription_notification,
+  // migration 0505) e chega aqui pelo movimento que a aplicacao gerou — por isso
+  // o livro le `stock_movements.id` acima.
+  const notificacaoPorMovimento = new Map<string, string>()
+  const movIds = movs.map(m => m.id).filter(Boolean) as string[]
+  if (movIds.length > 0) {
+    const { data: aplicacoes } = await admin
+      .from('applied_medications')
+      .select('stock_movement_id, prescription_notification')
+      .eq('clinic_id', clinic_id)
+      .in('stock_movement_id', movIds)
+      .not('prescription_notification', 'is', null)
+    for (const a of (aplicacoes ?? []) as any[]) {
+      if (a.stock_movement_id && a.prescription_notification) {
+        notificacaoPorMovimento.set(a.stock_movement_id, a.prescription_notification)
+      }
+    }
+  }
 
   // 3) Vendas do PDV (saídas que NÃO gravam stock_movements)
   const { data: saleItemsRaw } = await admin
@@ -125,7 +117,8 @@ export async function getControlledBook(params: {
     events.push({
       item_id: m.stock_item_id, date: m.created_at, delta, kind,
       origin: SOURCE_LABEL[m.source] ?? (m.source ?? 'Movimento'),
-      reference: m.notes ?? null, document: null,
+      reference: m.notes ?? null,
+      document: notificacaoPorMovimento.get(m.id) ?? null,
     })
   }
   for (const s of saleItems) {
@@ -149,6 +142,7 @@ export async function getControlledBook(params: {
   for (const item of items) {
     const evs = (byItem.get(item.id) ?? []).map(e => ({
       date: e.date, delta: e.delta, kind: e.kind, origin: e.origin, reference: e.reference,
+      document: e.document,
     }))
     const led = buildItemLedger(evs, params.from)
     // Só inclui itens com saldo inicial ou algum movimento no período
@@ -159,7 +153,7 @@ export async function getControlledBook(params: {
       is_human_use: Boolean(item.is_human_use), unit: item.unit ?? null,
       opening_balance: led.opening, total_in: led.total_in, total_out: led.total_out,
       total_loss: led.total_loss, closing_balance: led.closing,
-      entries: led.entries.map(l => ({ ...l, document: null })),
+      entries: led.entries,
     })
   }
 

@@ -8,7 +8,7 @@ import {
   ScanLine, Barcode, Syringe, ClipboardList, Globe, Sparkles
 } from 'lucide-react'
 import FinancialIntegrationsForm from './FinancialIntegrationsForm'
-import type { ClinicConfig, ClinicSettingsConfig, FlowConfig } from '@/lib/actions/clinic-settings'
+import type { ClinicConfig, ClinicSettingsConfig, FlowConfig } from '@/types/clinic-settings'
 import { updateClinicConfig, getClinicConfig } from '@/lib/actions/clinic-settings'
 import ModulesTab from '../ModulesTab'
 import ClinicSettingsTab from '../ClinicSettingsTab'
@@ -182,6 +182,16 @@ export default function SettingsWorkspace({
               whenOn="O Financeiro mostra a aba “Boletos” e a aba “Carteira Bancária” no cadastro da conta. É preciso configurar a carteira e habilitar a conta para emitir."
               whenOff="Quando desativado, a aba Boletos some do Financeiro, a carteira bancária some do cadastro da conta e emitir/enviar boleto é recusado."
               successMessage="Boletos configurados!"
+            />
+            <FlowFlagCard
+              initialConfig={initialClinicConfig} onToast={onToast}
+              flag="cobra_insumo_aplicado"
+              icon={<Syringe className="h-4 w-4 text-teal-600" />}
+              title="Medicação e insumo aplicados na consulta entram na conta sozinhos?"
+              subtitle="O que o Médico Veterinário aplica no animal vira item da conta da OS"
+              whenOn="Cada medicação ou insumo aplicado no consultório é lançado na conta da OS com o preço da tabela, na hora. Use quando a consulta é cobrada separada do que foi aplicado."
+              whenOff="Padrão. O insumo aplicado sai do estoque e vai ao Livro de Controlados, mas NÃO entra na conta — use se a medicação já está embutida no preço da consulta, senão o tutor pagaria duas vezes."
+              successMessage="Cobrança do insumo aplicado configurada!"
             />
             <VaccineRecallSettings initialConfig={initialClinicConfig} onToast={onToast} />
 
