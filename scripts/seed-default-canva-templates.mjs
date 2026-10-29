@@ -457,6 +457,184 @@ function buildTermoRetiradaSemAlta() {
   ])
 }
 
+// ── 10. Atestado de Vacinação ────────────────────────────────────────────────
+// A Animais emite este atestado desde sempre (o Vertis gerava um relatório).
+// `patient_vaccines` já tem os dados e `resolve-context.ts` já os expõe na
+// source `vaccines` — então aqui é só o layout, sem código novo de dados.
+
+/** Repeater de vacinas: uma linha por dose, com lote e próxima dose. */
+const vaccineRepeater = (box, maxItemsPerPage) => ({
+  id: eid('repeater'), kind: 'repeater', box, source: 'vaccines', zIndex: 2,
+  itemTemplate: '{{name}} — {{date}}',
+  itemTemplateLines: [
+    { template: '{{name}}{{LEADER}}{{date}}', leaderDots: true, style: { fontWeight: 700 } },
+    { template: 'Fabricante: {{manufacturer}} · Lote: {{lot}} · Validade: {{validity}} · Via: {{route}}', hideIfEmpty: true },
+    { template: 'Próxima dose: {{next}}', style: { fontStyle: 'italic' }, hideIfEmpty: true, marginBottom: 5 },
+  ],
+  groupAndEnumerate: true,
+  maxItemsPerPage,
+  lineSpacing: 4,
+  typography: { fontFamily: FONT, fontSize: 9.5, fontWeight: 400, color: INK, align: 'left', vAlign: 'top', lineHeight: 1.4 },
+})
+
+function buildAtestadoVacinacao() {
+  return state([
+    ...header(),
+    title('ATESTADO DE VACINAÇÃO', 13.5, 13),
+    ...idBlockFull(18),
+    T({ x: 6, y: 35, w: 88, h: 5 },
+      'ATESTO, para os devidos fins, que o animal acima identificado recebeu neste estabelecimento as doses de vacina relacionadas abaixo:',
+      { fontSize: 10, align: 'justify', lineHeight: 1.5 }),
+    vaccineRepeater({ x: 6, y: 41, w: 88, h: 36 }, 7),
+    T({ x: 6, y: 78.5, w: 88, h: 4 },
+      'A proteção conferida depende do cumprimento do calendário vacinal completo e dos reforços nas datas indicadas.',
+      { fontSize: 8, color: MUTE, align: 'justify', lineHeight: 1.4 }),
+    cityDate(83),
+    ...vetSignature(86.5),
+  ])
+}
+
+// ── 11. Termo de Não Aceitação de Conduta e Exames ───────────────────────────
+// Documento corrente na Animais e ausente da nossa biblioteca: protege a equipe
+// quando o tutor RECUSA exame pré-anestésico ou conduta indicada. O original
+// deles lista três recusas para rubricar individualmente — mantido, porque é
+// isso que dá valor probatório (o tutor rubrica item a item, não em bloco).
+
+function buildTermoNaoAceitacao() {
+  return state([
+    ...header(),
+    title('TERMO DE NÃO ACEITAÇÃO DE CONDUTA', 13.2, 12),
+    title('E DE NÃO REALIZAÇÃO DE EXAMES', 16.4, 10.5),
+    CT({ x: 6, y: 21, w: 88, h: 5 }, [
+      { tagId: 'tutor.name', prefix: 'Eu, ' },
+      { tagId: 'tutor.cpf', prefix: 'CPF ' },
+      { tagId: '', staticText: 'na qualidade de responsável pelo animal abaixo identificado:' },
+    ], { fontSize: 10.5, lineHeight: 1.5, align: 'justify' }, { separator: ', ' }),
+    ...idBlockCompact(26.5),
+    T({ x: 6, y: 38, w: 88, h: 11 },
+      'DECLARO que fui devidamente informado(a) e esclarecido(a) quanto aos riscos anestésicos e cirúrgicos do animal acima referido, do qual sou responsável. Estou ciente de que o procedimento anestésico pode apresentar intercorrências e RESPONSABILIZO-ME por NÃO realizar os procedimentos e exames abaixo assinalados, solicitados pelo Médico Veterinário:',
+      { fontSize: 9.5, align: 'justify', lineHeight: 1.55 }),
+    // Rubrica item a item — é o que sustenta o documento juridicamente.
+    FF({ x: 6, y: 50, w: 10, h: 4 }, 'recusa_hemograma_rubrica', '', { placeholder: '______' }),
+    T({ x: 17, y: 50.2, w: 77, h: 4.5 }, 'Exames hematológicos (até 15 dias antes do procedimento anestésico)', { fontSize: 9.5, lineHeight: 1.4 }),
+    FF({ x: 6, y: 56, w: 10, h: 4 }, 'recusa_cardio_rubrica', '', { placeholder: '______' }),
+    T({ x: 17, y: 56.2, w: 77, h: 4.5 }, 'Eletrocardiograma e ecocardiograma (até 6 meses antes do procedimento anestésico)', { fontSize: 9.5, lineHeight: 1.4 }),
+    FF({ x: 6, y: 62, w: 10, h: 4 }, 'recusa_jejum_rubrica', '', { placeholder: '______' }),
+    T({ x: 17, y: 62.2, w: 77, h: 4.5 }, 'Jejum alimentar e/ou hídrico conforme recomendação do Médico Veterinário', { fontSize: 9.5, lineHeight: 1.4 }),
+    FF({ x: 6, y: 68, w: 10, h: 4 }, 'recusa_outro_rubrica', '', { placeholder: '______' }),
+    FF({ x: 17, y: 68, w: 77, h: 4.5 }, 'recusa_outro_descricao', 'Outro: ', { placeholder: '____________________________________________' }),
+    T({ x: 6, y: 74, w: 88, h: 5 },
+      'ASSUMO integral responsabilidade pelas consequências desta recusa, isentando o estabelecimento e a equipe médico-veterinária de responsabilidade sobre os desdobramentos dela decorrentes.',
+      { fontSize: 9.5, align: 'justify', lineHeight: 1.55 }),
+    cityDate(80),
+    // O original da Animais tem três assinaturas: tutor, anestesista e MV responsável.
+    LN({ x: 6, y: 90, w: 34, h: 0.15 }),
+    CT({ x: 6, y: 90.6, w: 34, h: 2.4 }, [{ tagId: 'tutor.name' }], { fontSize: 8.5, fontWeight: 600, align: 'center' }),
+    T({ x: 6, y: 93, w: 34, h: 2.2 }, 'Tutor(a) / Responsável', { fontSize: 7.5, color: MUTE, align: 'center' }),
+    LN({ x: 43, y: 90, w: 24, h: 0.15 }),
+    T({ x: 43, y: 90.6, w: 24, h: 4.6 }, 'MV Anestesista\nCRMV: __________', { fontSize: 7.5, color: MUTE, align: 'center', lineHeight: 1.5 }),
+    LN({ x: 70, y: 90, w: 24, h: 0.15 }),
+    DT({ x: 70, y: 90.6, w: 24, h: 2.4 }, 'vet.name', { fontSize: 8.5, fontWeight: 600, align: 'center' }),
+    DT({ x: 70, y: 93, w: 24, h: 2.2 }, 'vet.crmv', { fontSize: 7.5, color: MUTE, align: 'center' }),
+  ])
+}
+
+// ── 12. TCLE — Anestesia para Exame de Imagem ────────────────────────────────
+// UM template para tomografia E ressonância, não dois. A Animais mantém arquivos
+// separados por modalidade, mas o texto de risco anestésico é o mesmo e a
+// diferença (contraste iodado, mielotomografia) cabe em campo preenchível.
+// Duplicar por modalidade é exatamente o vício que medimos no catálogo do Vertis
+// — 11 variantes de HISTOPATOLÓGICO pela mesma razão.
+
+function buildTermoAnestesiaImagem() {
+  return state([
+    ...header(),
+    title('TERMO DE CONSENTIMENTO LIVRE E ESCLARECIDO', 13.2, 12),
+    title('PROCEDIMENTO ANESTÉSICO PARA EXAME DE IMAGEM', 16.4, 10.5),
+    CT({ x: 6, y: 21, w: 88, h: 5 }, [
+      { tagId: 'tutor.name', prefix: 'Eu, ' },
+      { tagId: 'tutor.cpf', prefix: 'CPF ' },
+      { tagId: '', staticText: 'na qualidade de responsável pelo animal abaixo identificado:' },
+    ], { fontSize: 10.5, lineHeight: 1.5, align: 'justify' }, { separator: ', ' }),
+    ...idBlockCompact(26.5),
+    FF({ x: 6, y: 38, w: 43, h: 5 }, 'exame_modalidade', 'Exame: ', { required: true, placeholder: 'Tomografia / Ressonância' }),
+    FF({ x: 51, y: 38, w: 43, h: 5 }, 'exame_regioes', 'Região(ões): ', { required: true, placeholder: '____________________' }),
+    FF({ x: 6, y: 44, w: 88, h: 5 }, 'contraste', 'Contraste: ', { placeholder: 'iodado endovenoso / intratecal / não se aplica' }),
+    T({ x: 6, y: 50.5, w: 88, h: 30 },
+      'AUTORIZO a realização do procedimento anestésico e do exame de imagem acima descritos, solicitados pelo médico-veterinário responsável.\n\n'
+      + 'DECLARO que fui informado(a) quanto aos riscos possíveis de um evento anestésico, entre eles: náuseas, vômitos, aspiração de conteúdo gástrico, depressão respiratória, intubação difícil por variações anatômicas, hipertermia maligna, reação alérgica, choque anafilático, lesões bucais, sintomas neurológicos transitórios, acidente vascular cerebral, arritmias cardíacas, infarto, hipóxia, parada cardiorrespiratória, sinais oculares, disfunção cognitiva pós-anestésica, reações tóxicas e óbito.\n\n'
+      + 'DECLARO ter sido informado(a) quanto à importância, ao propósito, aos benefícios, aos riscos e às complicações potenciais do exame solicitado, e que tive oportunidade de fazer perguntas, respondidas satisfatoriamente.\n\n'
+      + 'ESTOU CIENTE de que, havendo administração de meio de contraste, a maioria dos pacientes não apresenta efeito adverso, mas podem ocorrer náuseas, vômitos, reações alérgicas e dificuldade respiratória e, excepcionalmente, complicações mais sérias como choque, insuficiência renal e eventos cardiorrespiratórios.\n\n'
+      + 'AUTORIZO a equipe a adotar, em caso de intercorrência ou emergência, os procedimentos adicionais necessários à preservação da vida e do bem-estar do animal.',
+      { fontSize: 9, align: 'justify', lineHeight: 1.5 }),
+    cityDate(82),
+    ...dualSignature(85.5),
+  ])
+}
+
+// ── 13. Termo de Esclarecimento — Prazo de Entrega de Laudo ──────────────────
+// Também UM template para tomografia e ressonância. Os prazos diferem (a Animais
+// pratica 3-5 dias úteis na tomografia conforme o nº de regiões, e 4 dias na
+// ressonância, com taxa de urgência opcional de 1 dia útil) — isso é campo, não
+// documento separado. O texto comum é o que importa: por que o laudo demora e
+// por que a prévia não vai para o tutor antes do laudo oficial.
+
+function buildTermoPrazoLaudo() {
+  return state([
+    ...header(),
+    title('TERMO DE ESCLARECIMENTO', 13.2, 12),
+    title('SOBRE O PRAZO DE ENTREGA DO LAUDO', 16.4, 10.5),
+    ...idBlockCompact(21),
+    FF({ x: 6, y: 32.5, w: 43, h: 5 }, 'exame_modalidade', 'Exame: ', { required: true, placeholder: 'Tomografia / Ressonância' }),
+    FF({ x: 51, y: 32.5, w: 43, h: 5 }, 'prazo_laudo', 'Prazo do laudo oficial: ', { required: true, placeholder: '___ dias úteis' }),
+    T({ x: 6, y: 39, w: 88, h: 28 },
+      'O estudo por imagem é uma avaliação complexa e multiplanar de segmentos específicos do corpo do paciente. '
+      + 'Exige trabalho minucioso do médico-veterinário imaginologista e reconstrução das imagens em software próprio. '
+      + 'Para oferecer um resultado de excelência, a equipe de diagnóstico por imagem necessita do prazo acima indicado, '
+      + 'contado a partir do término da realização do exame, para a emissão do LAUDO DEFINITIVO (oficial).\n\n'
+      + 'Todos os casos são avaliados de forma particular, respeitando a urgência e a emergência de cada paciente, '
+      + 'independentemente de sua origem. Em casos de extrema urgência, a equipe disponibiliza prévias e imagens ao '
+      + 'médico-veterinário solicitante, por telefone e/ou e-mail, se este julgar necessário.\n\n'
+      + 'DECLARO estar ciente de que a equipe NÃO repassa informações preliminares dos achados do exame a '
+      + 'proprietários ou tutores antes da emissão do laudo oficial. Informações prévias são prestadas apenas ao '
+      + 'médico-veterinário responsável pelo encaminhamento.',
+      { fontSize: 9, align: 'justify', lineHeight: 1.5 }),
+    // Opção de urgência — na Animais vale para ressonância (1 dia útil, taxa).
+    T({ x: 6, y: 68.5, w: 88, h: 3 }, 'Taxa de urgência (quando disponível para a modalidade):', { fontSize: 9, fontWeight: 700 }),
+    FF({ x: 6, y: 72, w: 10, h: 4 }, 'urgencia_aceito', '', { placeholder: '[   ]' }),
+    T({ x: 17, y: 72.2, w: 77, h: 4.5 }, 'Aceito e contrato o pagamento da taxa de urgência', { fontSize: 9, lineHeight: 1.4 }),
+    FF({ x: 6, y: 77, w: 10, h: 4 }, 'urgencia_recusado', '', { placeholder: '[   ]' }),
+    T({ x: 17, y: 77.2, w: 77, h: 4.5 }, 'Não aceito e não contrato a taxa de urgência (laudo no prazo padrão)', { fontSize: 9, lineHeight: 1.4 }),
+    cityDate(83),
+    ...dualSignature(86.5),
+  ])
+}
+
+// ── 14. Laudo Médico Veterinário ─────────────────────────────────────────────
+// Primeiro template de tipo `laudo` da biblioteca: até aqui `document_templates`
+// aceitava o tipo mas o catálogo padrão tinha zero — toda clínica desenhava o
+// laudo do zero no editor. Este é o laudo clínico de texto livre (Res. CFMV
+// 1321/2020 Art. 5º): identificação, histórico, achados, conclusão.
+// Laudo de exame de laboratório NÃO é este — aquele é montado a partir de
+// `exam_results` + `lab_reference_items`, fora do Canva.
+
+function buildLaudoMedicoVeterinario() {
+  return state([
+    ...header(),
+    title('LAUDO MÉDICO VETERINÁRIO', 13.5, 13),
+    ...idBlockFull(18),
+    FF({ x: 6, y: 35, w: 88, h: 5 }, 'laudo_exame', 'Exame / procedimento: ', { required: true, placeholder: '____________________________________________' }),
+    T({ x: 6, y: 41.5, w: 88, h: 3 }, 'HISTÓRICO / INDICAÇÃO CLÍNICA', { fontSize: 9.5, fontWeight: 700, letterSpacing: 0.5 }),
+    FF({ x: 6, y: 45, w: 88, h: 11 }, 'laudo_historico', '', { inputType: 'textarea', placeholder: '' }),
+    T({ x: 6, y: 57, w: 88, h: 3 }, 'ACHADOS', { fontSize: 9.5, fontWeight: 700, letterSpacing: 0.5 }),
+    FF({ x: 6, y: 60.5, w: 88, h: 18 }, 'laudo_achados', '', { inputType: 'textarea', required: true, placeholder: '' }),
+    T({ x: 6, y: 79.5, w: 88, h: 3 }, 'CONCLUSÃO', { fontSize: 9.5, fontWeight: 700, letterSpacing: 0.5 }),
+    FF({ x: 6, y: 83, w: 88, h: 9 }, 'laudo_conclusao', '', { inputType: 'textarea', required: true, placeholder: '' }),
+    // A conclusão é ato privativo do MV — a assinatura fecha o documento.
+    ...vetSignature(93.5),
+  ])
+}
+
 // ── extracted_fields derivados do canvas_state ──────────────────────────────
 // A UI de Gestão > Modelos e o fluxo legado exibem extracted_fields como o
 // "conteúdo" do template. Deriva a lista real de campos de cada layout para
@@ -529,6 +707,11 @@ const TEMPLATES = [
   { name: 'Termo de Consentimento — Internação',                type: 'termo',   build: buildTermoInternacao },
   { name: 'Termo de Consentimento — Eutanásia',                 type: 'termo',   build: buildTermoEutanasia },
   { name: 'Termo de Retirada sem Alta Médica',                  type: 'termo',   build: buildTermoRetiradaSemAlta },
+  { name: 'Atestado de Vacinação',                              type: 'outro',   build: buildAtestadoVacinacao },
+  { name: 'Termo de Não Aceitação de Conduta e Exames',         type: 'termo',   build: buildTermoNaoAceitacao },
+  { name: 'Termo de Consentimento — Anestesia para Exame de Imagem', type: 'termo', build: buildTermoAnestesiaImagem },
+  { name: 'Termo de Esclarecimento — Prazo de Entrega do Laudo', type: 'termo',   build: buildTermoPrazoLaudo },
+  { name: 'Laudo Médico Veterinário',                           type: 'laudo',   build: buildLaudoMedicoVeterinario },
 ]
 
 // ── Execução ─────────────────────────────────────────────────────────────────
