@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import {
   CreditCard, Filter, RefreshCw, CheckCircle2, AlertCircle, Loader2, X, Check,
   Calendar, TrendingUp, Clock, Receipt, FileText, Ban, Pencil, Search,
@@ -255,6 +256,13 @@ export default function CardReceivablesWorkspace({
               Liquidar {selected.size} em lote · {fmt(selectedTotal)}
             </button>
           )}
+          <a
+            href="/dashboard/financial/cards/reconciliation"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm"
+          >
+            <CreditCard className="h-4 w-4" />
+            Conciliar extrato
+          </a>
           <button
             onClick={refresh}
             disabled={loading}
@@ -580,7 +588,7 @@ export default function CardReceivablesWorkspace({
         </div>
       </div>
 
-      {detailModal && (
+      {detailModal && typeof document !== 'undefined' && createPortal(
         <InstallmentDetailModal
           installment={detailModal}
           canManage={canSettle}
@@ -589,25 +597,22 @@ export default function CardReceivablesWorkspace({
           onSettle={() => { const i = detailModal; setDetailModal(null); setSettleModal(i) }}
           onCancel={reason => handleCancel(detailModal, reason)}
           onSave={handleUpdate}
-        />
-      )}
+        />, document.body)}
 
-      {settleModal && (
+      {settleModal && typeof document !== 'undefined' && createPortal(
         <SettleSingleModal
           installment={settleModal}
           onCancel={() => setSettleModal(null)}
           onConfirm={handleSettleOne}
-        />
-      )}
+        />, document.body)}
 
-      {batchModal && (
+      {batchModal && typeof document !== 'undefined' && createPortal(
         <SettleBatchModal
           count={selected.size}
           total={selectedTotal}
           onCancel={() => setBatchModal(false)}
           onConfirm={handleSettleBatch}
-        />
-      )}
+        />, document.body)}
     </div>
   )
 }

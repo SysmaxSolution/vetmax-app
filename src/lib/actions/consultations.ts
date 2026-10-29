@@ -9,6 +9,7 @@ import { updatePatientWeight } from './patient-weight'
 import { getTenantCtx } from '@/lib/data/context'
 import { byUrgencyThenTime } from '@/lib/urgency'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Sprint Animais: campos extras da OS no check-in (aditivo + gateado) ──────
 // Chamado só quando animais_foundation está ligada (o caller já fez o gate).
 // Gera o nº de OS de forma atômica (next_document_number); se a sequência não
@@ -22,16 +23,23 @@ async function buildAnimaisOsFields(
     urgency:            data.urgency ?? null,
     referral_type:      data.referral_type ?? null,
     partner_clinic_id:  data.referral_type === 'referred' ? (data.partner_clinic_id ?? null) : null,
+    referring_professional_id: data.referral_type === 'referred' ? (data.referring_professional_id ?? null) : null,
     billing_company_id: data.billing_company_id ?? null,
   }
+  // P0 (0.9): TODA OS nasce com número. A RPC _auto emite o próximo número e,
+  // se a sequência ainda não existe, auto-provisiona (idempotente) e emite o nº 1.
   try {
-    const { data: osNum, error } = await admin.rpc('next_document_number', {
+    const { data: osNum, error } = await admin.rpc('next_document_number_auto', {
       p_clinic_id:  clinicId,
       p_company_id: data.billing_company_id ?? null,
       p_doc_type:   'os',
     })
     if (!error && osNum) fields.os_number = osNum
-  } catch { /* sequência de OS não configurada — segue sem número */ }
+    else if (error) console.error('[os_number] falha ao emitir número da OS:', error.message)
+  } catch (e) {
+    // Não derruba a recepção por um erro anômalo de numeração, mas registra.
+    console.error('[os_number] exceção ao emitir número da OS:', e)
+  }
   return fields
 }
 
@@ -107,7 +115,7 @@ export async function checkInPatientAdvanced(
     .select('id')
     .single()
 
-  if (error || !result) return { error: 'Erro ao fazer check-in: ' + (error?.message ?? '') }
+  if (error || !result) return { error: 'Erro ao fazer check-in: ' + ((error ? mensagemErro(error, 'lib/actions/consultations.ts') : '')) }
 
   await logAudit({ action: 'CHECK_IN', entity_type: 'consultations', entity_id: result.id, details: { patient_id: data.patient_id, visit_reason: data.visit_reason } })
 
@@ -174,7 +182,7 @@ export async function checkInPatientWithContacts(
     })
     .eq('id', data.tutor_id)
 
-  if (tutorErr) return { error: 'Erro ao atualizar dados do tutor: ' + tutorErr.message }
+  if (tutorErr) return { error: 'Erro ao atualizar dados do tutor: ' + mensagemErro(tutorErr, 'lib/actions/consultations.ts') }
 
   // Bloqueia atendimento de pet com óbito registrado ou arquivado.
   const { data: petCheck } = await admin
@@ -230,7 +238,7 @@ export async function checkInPatientWithContacts(
     .select('id')
     .single()
 
-  if (error || !result) return { error: 'Erro ao fazer check-in: ' + (error?.message ?? '') }
+  if (error || !result) return { error: 'Erro ao fazer check-in: ' + ((error ? mensagemErro(error, 'lib/actions/consultations.ts') : '')) }
 
   await logAudit({ action: 'CHECK_IN_WITH_CONTACTS', entity_type: 'consultations', entity_id: result.id, details: { patient_id: data.patient_id } })
 
@@ -281,7 +289,7 @@ export async function updateConsultation(
       .eq('id', updates.tutorId)
       .eq('clinic_id', profile.clinic_id)
 
-    if (tutorErr) return { error: 'Erro ao atualizar tutor: ' + tutorErr.message }
+    if (tutorErr) return { error: 'Erro ao atualizar tutor: ' + mensagemErro(tutorErr, 'lib/actions/consultations.ts') }
   }
 
   // 2. Atualizar consulta (remover campos de tutor da atualização)
@@ -298,7 +306,7 @@ export async function updateConsultation(
     .eq('id', consultationId)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: 'Erro ao atualizar: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar: ' + mensagemErro(error, 'lib/actions/consultations.ts') }
 
   await logAudit({ action: 'UPDATE_CONSULTATION', entity_type: 'consultations', entity_id: consultationId, details: { visit_reason: updates.visit_reason, payment_status: updates.payment_status } })
 
@@ -329,6 +337,7 @@ export type ReceptionQueueItem = {
   os_number: string | null
   urgency: 'green' | 'yellow' | 'red' | null
   referral_type: 'direct' | 'referred' | null
+  visit_reason: string | null
   patient: {
     id: string
     name: string
@@ -370,7 +379,7 @@ export async function getReceptionQueue(): Promise<ReceptionQueueItem[] | { erro
   const { data, error } = await admin
     .from('consultations')
     .select(`
-      id, status, created_at, payment_status, payment_method, os_number, urgency, referral_type,
+      id, status, created_at, payment_status, payment_method, os_number, urgency, referral_type, visit_reason,
       patients ( id, name, species, breed, birth_date, gender, neutered, coat_color, photo_url, behavior_tags,
         tutors ( id, name, phone, address )
       )
@@ -380,7 +389,7 @@ export async function getReceptionQueue(): Promise<ReceptionQueueItem[] | { erro
     .gte('created_at', todayStart.toISOString())
     .order('created_at', { ascending: true })
 
-  if (error) return { error: 'Erro ao buscar fila: ' + error.message }
+  if (error) return { error: 'Erro ao buscar fila: ' + mensagemErro(error, 'lib/actions/consultations.ts') }
 
   // Busca última visita para cada pet
   const patientIds = [...new Set((data ?? []).map((c: any) => c.patients?.id).filter(Boolean))]
@@ -411,6 +420,7 @@ export async function getReceptionQueue(): Promise<ReceptionQueueItem[] | { erro
     os_number:      c.os_number ?? null,
     urgency:        c.urgency ?? null,
     referral_type:  c.referral_type ?? null,
+    visit_reason:   c.visit_reason ?? null,
     patient: {
       id:            c.patients?.id ?? '',
       name:          c.patients?.name ?? '—',
@@ -485,7 +495,7 @@ export async function getReceptionHistory(): Promise<ReceptionHistoryItem[] | { 
     .gte('created_at', todayStart.toISOString())
     .order('updated_at', { ascending: false })
 
-  if (error) return { error: 'Erro ao buscar histórico: ' + error.message }
+  if (error) return { error: 'Erro ao buscar histórico: ' + mensagemErro(error, 'lib/actions/consultations.ts') }
 
   return (data ?? []).map((c: any) => ({
     id:             c.id,
@@ -523,7 +533,7 @@ export async function moveToTriage(
     .eq('id', consultationId)
     .eq('clinic_id', ctx.clinicId)
 
-  if (error) return { error: 'Erro ao mover para triagem: ' + error.message }
+  if (error) return { error: 'Erro ao mover para triagem: ' + mensagemErro(error, 'lib/actions/consultations.ts') }
   revalidatePath('/dashboard/reception')
   revalidatePath('/dashboard/triage')
   return null
@@ -543,9 +553,29 @@ export async function moveDirectToVet(
     .eq('id', consultationId)
     .eq('clinic_id', ctx.clinicId)
 
-  if (error) return { error: 'Erro ao enviar ao consultório: ' + error.message }
+  if (error) return { error: 'Erro ao enviar ao consultório: ' + mensagemErro(error, 'lib/actions/consultations.ts') }
   revalidatePath('/dashboard/reception')
   revalidatePath('/dashboard/vet')
+  return null
+}
+
+// ─── Enviar consulta da recepção para a fila de EXAMES ────────────────────────
+export async function moveToExams(
+  consultationId: string
+): Promise<{ error: string } | null> {
+  const ctx = await getTenantCtx()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  const adminC = createAdminClient()
+  const { error } = await adminC
+    .from('consultations')
+    .update({ status: 'waiting_exam', updated_at: new Date().toISOString() })
+    .eq('id', consultationId)
+    .eq('clinic_id', ctx.clinicId)
+
+  if (error) return { error: 'Erro ao enviar para exames: ' + mensagemErro(error, 'lib/actions/consultations.ts') }
+  revalidatePath('/dashboard/reception')
+  revalidatePath('/dashboard/exams')
   return null
 }
 
@@ -587,7 +617,7 @@ export async function rescheduleConsultation(
     .eq('id', consultationId)
     .eq('clinic_id', ctx.clinicId)
 
-  if (error) return { error: 'Erro ao reagendar: ' + error.message }
+  if (error) return { error: 'Erro ao reagendar: ' + mensagemErro(error, 'lib/actions/consultations.ts') }
 
   await logAudit({
     action: 'RESCHEDULE_CONSULTATION',

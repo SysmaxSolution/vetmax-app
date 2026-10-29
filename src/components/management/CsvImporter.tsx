@@ -152,7 +152,7 @@ export default function CsvImporter() {
           <button
             onClick={handleImport}
             disabled={isImporting}
-            className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-violet-200 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3.5 rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
           >
             {isImporting ? <Loader2 className="h-5 w-5 animate-spin" /> : <UploadCloud className="h-5 w-5" />}
             {isImporting ? 'Importando...' : `Confirmar Importação de ${preview.length} clientes`}

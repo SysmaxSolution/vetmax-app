@@ -3,9 +3,13 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { evolutionGetConnectionState } from '@/lib/evolution-api-client'
 
+import { limitarPorIp } from '@/lib/api/rate-limit'
 // GET /api/whatsapp/status
 // Retorna o estado de conexão da instância Evolution API da clínica autenticada.
-export async function GET() {
+export async function GET(req: Request) {
+  const barrado = await limitarPorIp(req, { escopo: 'wpp:status', limite: 60 })
+  if (barrado) return barrado
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { X, CheckCircle2, Upload, Loader2, Sparkles } from 'lucide-react'
 import { uploadClinicLogo } from '@/lib/actions/clinic-settings'
 import PatientFullModal from '@/components/patients/PatientFullModal'
@@ -107,7 +108,7 @@ export default function OnboardingWizard({
 
   if (!open) return null
 
-  return (
+  return typeof document === 'undefined' ? null : createPortal(
     <>
       {/* ── Backdrop ── */}
       <div
@@ -279,6 +280,7 @@ export default function OnboardingWizard({
           />
         </div>
       )}
-    </>
+    </>,
+    document.body,
   )
 }

@@ -8,10 +8,10 @@ const fmt = (v: number) =>
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
-    <div className="rounded-xl bg-violet-50 border border-violet-100 p-4">
-      <p className="text-xs font-medium text-violet-600 uppercase tracking-wide mb-1">{label}</p>
-      <p className="text-2xl font-bold text-violet-900">{value}</p>
-      {sub && <p className="text-xs text-violet-400 mt-0.5">{sub}</p>}
+    <div className="rounded-xl bg-white border border-slate-200 p-4 shadow-sm">
+      <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{label}</p>
+      <p className="text-2xl font-bold text-slate-900 font-mono tabular-nums">{value}</p>
+      {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
     </div>
   )
 }
@@ -51,15 +51,15 @@ export default function OperationalReport() {
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">De</label>
           <input type="date" value={from} onChange={e => setFrom(e.target.value)}
-            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Até</label>
           <input type="date" value={to} onChange={e => setTo(e.target.value)}
-            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
         </div>
         <button onClick={run} disabled={pending}
-          className="rounded-lg bg-violet-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50 transition-colors">
+          className="rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-60 transition-colors">
           {pending ? 'Carregando…' : 'Gerar'}
         </button>
       </div>
@@ -69,7 +69,7 @@ export default function OperationalReport() {
       )}
 
       {result === null && !pending && (
-        <div className="rounded-lg bg-violet-50 border border-violet-100 px-4 py-8 text-center text-sm text-violet-500">
+        <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
           Selecione o período e clique em Gerar.
         </div>
       )}
@@ -84,8 +84,8 @@ export default function OperationalReport() {
                 onClick={() => setTab(t.key)}
                 className={`px-4 py-2 text-sm font-medium transition-colors rounded-t-lg ${
                   tab === t.key
-                    ? 'bg-violet-600 text-white'
-                    : 'text-slate-600 hover:text-violet-700 hover:bg-violet-50'
+                    ? 'bg-teal-600 text-white'
+                    : 'text-slate-600 hover:text-teal-700 hover:bg-slate-50'
                 }`}
               >
                 {t.label}
@@ -103,8 +103,8 @@ export default function OperationalReport() {
               </div>
               {result.appointments.by_day.length > 0 && (
                 <div className="rounded-xl border border-slate-200 overflow-x-auto">
-                  <div className="px-4 py-3 bg-violet-50 border-b border-violet-100">
-                    <p className="text-xs font-semibold text-violet-700 uppercase tracking-wide">Consultas por Dia</p>
+                  <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Consultas por Dia</p>
                   </div>
                   <div className="flex gap-1 items-end px-4 py-4 overflow-x-auto" style={{ minHeight: 120 }}>
                     {(() => {
@@ -112,7 +112,7 @@ export default function OperationalReport() {
                       return result.appointments.by_day.map(d => (
                         <div key={d.date} className="flex flex-col items-center gap-1 min-w-[28px]">
                           <div
-                            className="w-5 rounded-sm bg-violet-400"
+                            className="w-5 rounded-sm bg-teal-400"
                             style={{ height: `${Math.max(4, (d.count / maxVal) * 80)}px` }}
                             title={`${d.date}: ${d.count} consultas`}
                           />

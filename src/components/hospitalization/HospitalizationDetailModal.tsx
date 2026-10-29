@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import {
   X, Activity, Pill, History,
   TrendingUp, TrendingDown, Minus, Loader2, Save,
@@ -644,6 +645,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
       </div>
     )}
 
+    {typeof document !== 'undefined' && createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
         
@@ -1580,7 +1582,9 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
           onUpdate={reloadPrescriptions}
         />
       )}
-    </div>
+    </div>,
+    document.body,
+    )}
 
     {/* WhatsApp — renderizado APÓS o modal principal para garantir sobreposição correta pelo DOM */}
     {whatsappPending && card.tutor?.phone && (
@@ -1606,7 +1610,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
     )}
 
     {/* Modal de Configurações de Voz */}
-    {voiceConfigOpen && (
+    {voiceConfigOpen && typeof document !== 'undefined' && createPortal(
       <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
           <div className="flex items-center justify-between">
@@ -1663,7 +1667,8 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
             {configSaving ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando…</> : <><Save className="h-4 w-4" /> Salvar Configurações</>}
           </button>
         </div>
-      </div>
+      </div>,
+      document.body,
     )}
     </>
   )

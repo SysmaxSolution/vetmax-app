@@ -16,6 +16,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { logAudit } from './audit'
 
+import { mensagemErro } from '@/lib/errors'
 export interface SaveFollowUpInput {
   consultation_id: string
   vet_notes?:      string | null
@@ -69,7 +70,7 @@ export async function saveFollowUp(
     .update(payload)
     .eq('id', consult.id)
     .eq('clinic_id', clinic_id)
-  if (error) return { error: 'Erro ao salvar acompanhamento: ' + error.message }
+  if (error) return { error: 'Erro ao salvar acompanhamento: ' + mensagemErro(error, 'lib/actions/followup.ts') }
 
   await logAudit({
     action:      input.mode === 'alta' ? 'FOLLOWUP_DISCHARGE' : 'FOLLOWUP_TO_CONSULTATION',

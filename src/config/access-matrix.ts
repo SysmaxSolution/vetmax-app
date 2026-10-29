@@ -11,6 +11,7 @@ export const FREE_ROUTES: Record<BusinessType, string[]> = {
     '/dashboard/reception',   // Recepção (simples, sem agendamento automatizado)
     '/dashboard/vet',         // Consultório
     '/dashboard/management',  // Gestão (com tabs restritas — ver MANAGEMENT_TAB_BLOCKED_ON_FREE)
+    '/dashboard/treinamento', // Academia de treinamento (onboarding — todos os planos)
   ],
   pet_aesthetics: [
     '/dashboard',
@@ -18,6 +19,7 @@ export const FREE_ROUTES: Record<BusinessType, string[]> = {
     '/dashboard/reception',   // Recepção
     '/dashboard/grooming',    // Banho e Tosa
     '/dashboard/management',  // Gestão (com tabs restritas)
+    '/dashboard/treinamento', // Academia de treinamento (onboarding — todos os planos)
   ],
 }
 
@@ -25,6 +27,7 @@ export const FREE_ROUTES: Record<BusinessType, string[]> = {
 export const ALWAYS_ALLOWED: string[] = [
   '/dashboard/profile',
   '/dashboard/settings',
+  '/dashboard/treinamento',   // Academia de treinamento — onboarding, liberado em todos os planos
 ]
 
 // ── Tabs da Gestão bloqueadas no plano Free ───────────────────────────────────

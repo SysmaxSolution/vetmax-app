@@ -1,10 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import {
-  X, CreditCard, Banknote, Smartphone, Building2, Receipt, Plus, Trash2, Check, Loader2, AlertCircle, Percent,
+  X, CreditCard, Banknote, Smartphone, Building2, Receipt, Plus, Trash2, Check, Loader2, AlertCircle, Percent, QrCode,
 } from 'lucide-react'
 import CardSelectionModal, { type CardPaymentResult } from './CardSelectionModal'
+import PixDynamicModal from './PixDynamicModal'
+import { isPixIntegrationEnabled } from '@/lib/actions/financial-integrations'
 import { proportionalCardInterest } from '@/lib/copay-interest'
 
 export type PaymentMethodKey = 'pix' | 'credit' | 'debit' | 'cash' | 'voucher' | 'convenio' | 'transfer' | 'other'
@@ -67,6 +70,9 @@ interface Props {
     interest_full: number
     percent:       number
   } | null
+  /** A quem a cobrança se refere — repassado à cobrança integrada na maquininha. */
+  consultationId?: string | null
+  tutorId?:        string | null
   /** Crédito/adiantamento disponível do tutor (Sprint Animais 1.6). Exibido no topo. */
   creditBalance?: number
   /** Permite lançar a sobra como crédito do tutor (só onde há tutor vinculado). */
@@ -75,7 +81,7 @@ interface Props {
   onConfirm:  (splits: PaymentSplit[], extras?: { copay_interest?: number; overpayment?: { amount: number; as: 'change' | 'credit' } }) => Promise<void> | void
 }
 
-export default function PaymentMethodModal({ totalDue, subject, disableSplit, copayInterest, creditBalance, allowCredit, onCancel, onConfirm }: Props) {
+export default function PaymentMethodModal({ totalDue, subject, disableSplit, copayInterest, creditBalance, allowCredit, consultationId, tutorId, onCancel, onConfirm }: Props) {
   const [splits,        setSplits]        = useState<PaymentSplit[]>([])
   const [pendingMethod, setPendingMethod] = useState<PaymentMethodKey | null>(null)
   const [pendingAmount, setPendingAmount] = useState<string>('')
@@ -87,6 +93,21 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
   const [changeChoice,  setChangeChoice]  = useState<'change' | 'credit'>('change')
   // Desconto sobre a taxa adm. — informado ANTES de passar o cartão (~30:48)
   const [interestDiscount, setInterestDiscount] = useState<string>('')
+  // PIX dinâmico (QR): condicional à integração ativa
+  const [pixEnabled, setPixEnabled] = useState(false)
+  const [showPixQr, setShowPixQr]   = useState(false)
+  useEffect(() => { isPixIntegrationEnabled().then(setPixEnabled) }, [])
+
+  function onPixPaid(result: { txid: string; e2eid: string | null; amount: number }) {
+    const applied = Math.min(result.amount, remaining)
+    setSplits(prev => [...prev, {
+      id: crypto.randomUUID(), amount: applied, payment_method: 'pix' as PaymentMethodKey,
+      payment_card_id: null, installments: 1, card_acquirer: 'Sicoob', card_brand: null,
+      card_nsu: result.e2eid ?? result.txid, card_authorization: null, transaction_date: null,
+      label: 'PIX dinâmico (QR)',
+    }])
+    setShowPixQr(false); setPendingMethod(null); setPendingAmount(''); setError(null)
+  }
 
   // Cada split de cartão guarda a taxa embutida; o saldo é controlado pela
   // BASE (amount − taxa), nunca pelo valor cobrado.
@@ -246,6 +267,7 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
 
   return (
     <>
+      {typeof document !== 'undefined' && createPortal(
       <div
         role="dialog"
         aria-modal="true"
@@ -353,6 +375,15 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
                     Cancelar
                   </button>
                 </div>
+                {pendingMethod === 'pix' && pixEnabled && (
+                  <>
+                    <button onClick={() => setShowPixQr(true)}
+                      className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 flex items-center justify-center gap-2">
+                      <QrCode className="h-4 w-4" /> Gerar QR Code (PIX dinâmico)
+                    </button>
+                    <p className="text-[11px] text-center text-slate-400">ou registre o valor recebido (PIX estático):</p>
+                  </>
+                )}
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-slate-500 font-semibold">R$</span>
                   <input
@@ -506,7 +537,18 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
             </button>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body,
+      )}
+
+      {showPixQr && (
+        <PixDynamicModal
+          amount={Math.min(parseFloat(pendingAmount.replace(',', '.')) || remaining, remaining) || remaining}
+          description={subject}
+          onPaid={onPixPaid}
+          onCancel={() => setShowPixQr(false)}
+        />
+      )}
 
       {showCardModal && (
         <CardSelectionModal
@@ -517,6 +559,8 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
           suggestedAmount={hasInterestConfig
             ? planCharge
             : Math.min(parseFloat(pendingAmount.replace(',', '.')) || remaining, remaining)}
+          consultationId={consultationId}
+          tutorId={tutorId}
           onCancel={() => { setShowCardModal(null); setPendingMethod(null) }}
           onConfirm={handleCardConfirm}
         />

@@ -1,498 +1,741 @@
 'use client'
 
-import { useState, useRef, useTransition, useCallback } from 'react'
+import { useState, useRef, useTransition, useMemo, useEffect } from 'react'
+import { isBankIntegrationEnabled } from '@/lib/actions/financial-integrations'
 import {
-  BankAccount, FinancialEntry, BankStatement,
-  ReconciliationBatch, AutoMatchResult, MatchedPair,
-  importStatements, listBatchStatements, listEntries,
-  autoMatchStatements, reconcileStatements, getBBStatement,
+  BankAccount, ReconciliationBatch, StatementWithLinks, ReconcCandidate, AutoLinkResult,
+  importStatements, getBBStatement, getStatementsWithLinks, persistAutoLinks, listReconcCandidates,
+  linkEntriesToStatement, unlinkEntry, unlinkStatement, reconcileLines, unreconcileLine,
+  settleOpenEntryAndLink, insertEntryFromStatement, importBankStatementFromSicoob,
+  getStatementsWithLinksByPeriod, persistAutoLinksByPeriod,
+  linkStatementsToEntry, buscarTitulosParaVincular, linkManyToMany,
 } from '@/lib/actions/financial'
-import { parseFile, ParsedStatement } from '@/lib/parsers/bankStatementParser'
+import { parseFile } from '@/lib/parsers/bankStatementParser'
+import DiferencaModal from './DiferencaModal'
 import {
-  Upload, RefreshCcw, CheckCircle2, AlertTriangle,
-  Circle, Link2, Building2, FileText,
+  Upload, RefreshCcw, CheckCircle2, Circle, Link2, Link2Off, Building2, FileText,
+  PlusCircle, Search, Undo2, Sparkles,
 } from 'lucide-react'
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+const fmtDate = (d: string) => { if (!d) return '—'; const [y, m, day] = d.slice(0, 10).split('-'); return `${day}/${m}/${y}` }
 
-function fmt(v: number): string {
-  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-}
-
-function fmtDate(d: string): string {
-  if (!d) return '—'
-  const [y, m, day] = d.split('-')
-  return `${day}/${m}/${y}`
-}
-
-// ─── Badge de status de conciliação ─────────────────────────────────────────
-
-type MatchStatus = 'matched' | 'divergent' | 'unmatched'
-
-function MatchBadge({ status }: { status: MatchStatus }) {
-  if (status === 'matched') {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-        <CheckCircle2 className="h-3 w-3" /> Conciliado
-      </span>
-    )
-  }
-  if (status === 'divergent') {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
-        <AlertTriangle className="h-3 w-3" /> Divergência
-      </span>
-    )
-  }
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">
-      <Circle className="h-3 w-3" /> Pendente
-    </span>
-  )
-}
-
-// ─── Painel de matching manual ────────────────────────────────────────────────
-
-interface ManualMatchPanelProps {
-  importedStatements: BankStatement[]
-  pendingEntries:     FinancialEntry[]
-  onMatch:            (stmtId: string, entryId: string) => Promise<void>
-  matchResult:        AutoMatchResult | null
-}
-
-function ManualMatchPanel({
-  importedStatements,
-  pendingEntries,
-  onMatch,
-  matchResult,
-}: ManualMatchPanelProps) {
-  const [selectedStmt,  setSelectedStmt]  = useState<string | null>(null)
-  const [selectedEntry, setSelectedEntry] = useState<string | null>(null)
-  const [isSaving,      setIsSaving]      = useState(false)
-  const [saveMsg,       setSaveMsg]       = useState<string | null>(null)
-
-  // IDs já conciliados pelo match automático
-  const autoMatchedStmtIds  = new Set(matchResult?.matched.map(m => m.statement.id) ?? [])
-  const autoMatchedEntryIds = new Set(matchResult?.matched.map(m => m.entry.id) ?? [])
-
-  async function handleConfirm() {
-    if (!selectedStmt || !selectedEntry) return
-    setIsSaving(true)
-    setSaveMsg(null)
-    await onMatch(selectedStmt, selectedEntry)
-    setSaveMsg('Conciliado com sucesso!')
-    setSelectedStmt(null)
-    setSelectedEntry(null)
-    setIsSaving(false)
-  }
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      {/* Coluna: Lançamentos importados */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
-          <h3 className="text-sm font-bold text-slate-700">Lançamentos Importados</h3>
-          <p className="text-xs text-slate-400">{importedStatements.length} registros — clique para selecionar</p>
-        </div>
-        <div className="divide-y divide-slate-100 max-h-[400px] overflow-y-auto">
-          {importedStatements.length === 0 && (
-            <p className="px-4 py-6 text-center text-sm text-slate-400">Nenhum lançamento importado</p>
-          )}
-          {importedStatements.map(stmt => {
-            const isAutoMatched = autoMatchedStmtIds.has(stmt.id)
-            const isSelected    = selectedStmt === stmt.id
-            return (
-              <div
-                key={stmt.id}
-                onClick={() => !isAutoMatched && setSelectedStmt(isSelected ? null : stmt.id)}
-                className={`px-4 py-3 cursor-pointer transition-colors ${
-                  isAutoMatched
-                    ? 'bg-emerald-50 opacity-60 cursor-default'
-                    : isSelected
-                      ? 'bg-teal-50 border-l-4 border-teal-500'
-                      : 'hover:bg-slate-50'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-slate-700 truncate">{stmt.description}</p>
-                    <p className="text-xs text-slate-400 font-mono tabular-nums">{fmtDate(stmt.date)}</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className={`text-sm font-bold font-mono tabular-nums ${stmt.type === 'credit' ? 'text-emerald-700' : 'text-red-700'}`}>
-                      {stmt.type === 'credit' ? '+' : '-'}{fmt(stmt.amount)}
-                    </p>
-                    {isAutoMatched && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 ml-auto mt-1" />}
-                  </div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Coluna: Títulos pendentes */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
-          <h3 className="text-sm font-bold text-slate-700">Títulos Pendentes</h3>
-          <p className="text-xs text-slate-400">{pendingEntries.length} títulos — clique para selecionar</p>
-        </div>
-        <div className="divide-y divide-slate-100 max-h-[400px] overflow-y-auto">
-          {pendingEntries.length === 0 && (
-            <p className="px-4 py-6 text-center text-sm text-slate-400">Nenhum título pendente</p>
-          )}
-          {pendingEntries.map(entry => {
-            const isAutoMatched = autoMatchedEntryIds.has(entry.id)
-            const isSelected    = selectedEntry === entry.id
-            return (
-              <div
-                key={entry.id}
-                onClick={() => !isAutoMatched && setSelectedEntry(isSelected ? null : entry.id)}
-                className={`px-4 py-3 cursor-pointer transition-colors ${
-                  isAutoMatched
-                    ? 'bg-emerald-50 opacity-60 cursor-default'
-                    : isSelected
-                      ? 'bg-teal-50 border-l-4 border-teal-500'
-                      : 'hover:bg-slate-50'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-slate-700 truncate">{entry.description}</p>
-                    <p className="text-xs text-slate-400 font-mono tabular-nums">Venc. {fmtDate(entry.due_date)}</p>
-                    {entry.category && <p className="text-xs text-teal-600">{entry.category}</p>}
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-bold text-slate-700 font-mono tabular-nums">{fmt(entry.amount)}</p>
-                    {isAutoMatched && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 ml-auto mt-1" />}
-                  </div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Ação de conciliar */}
-      {(selectedStmt || selectedEntry) && (
-        <div className="col-span-1 sm:col-span-2 flex items-center justify-between rounded-xl border border-teal-200 bg-teal-50 px-4 py-3">
-          <div className="flex items-center gap-3">
-            <Link2 className="h-4 w-4 text-teal-600" />
-            <p className="text-sm font-medium text-teal-800">
-              {selectedStmt && selectedEntry
-                ? 'Pronto para conciliar os itens selecionados'
-                : 'Selecione um lançamento importado e um título para conciliar'}
-            </p>
-          </div>
-          <button
-            onClick={handleConfirm}
-            disabled={!selectedStmt || !selectedEntry || isSaving}
-            className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-50 transition-colors"
-          >
-            {isSaving ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
-            Conciliar
-          </button>
-        </div>
-      )}
-
-      {saveMsg && (
-        <div className="col-span-1 sm:col-span-2 rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-2 text-sm text-emerald-700">
-          {saveMsg}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Resumo do auto-match ─────────────────────────────────────────────────────
-
-function AutoMatchSummary({ result }: { result: AutoMatchResult }) {
-  return (
-    <div className="grid grid-cols-3 gap-3">
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
-        <CheckCircle2 className="h-5 w-5 text-emerald-600 mx-auto mb-1" />
-        <p className="text-2xl font-bold font-mono tabular-nums text-emerald-700">{result.matched.length}</p>
-        <p className="text-xs font-semibold text-emerald-600">Conciliados (auto)</p>
-      </div>
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
-        <Circle className="h-5 w-5 text-slate-400 mx-auto mb-1" />
-        <p className="text-2xl font-bold font-mono tabular-nums text-slate-600">{result.unmatched_imported.length}</p>
-        <p className="text-xs font-semibold text-slate-500">Importados sem par</p>
-      </div>
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center">
-        <AlertTriangle className="h-5 w-5 text-amber-500 mx-auto mb-1" />
-        <p className="text-2xl font-bold font-mono tabular-nums text-amber-700">{result.unmatched_entries.length}</p>
-        <p className="text-xs font-semibold text-amber-600">Títulos sem par</p>
-      </div>
-    </div>
-  )
-}
-
-// ─── ConciliacaoTab ──────────────────────────────────────────────────────────
-
-interface Props {
-  bankAccounts: BankAccount[]
-}
+interface Props { bankAccounts: BankAccount[] }
 
 export default function ConciliacaoTab({ bankAccounts }: Props) {
   const defaultAccount = bankAccounts.find(b => b.is_default) ?? bankAccounts[0]
 
-  const [selectedBank,    setSelectedBank]    = useState<string>(defaultAccount?.id ?? '')
-  const [batch,           setBatch]           = useState<ReconciliationBatch | null>(null)
-  const [imported,        setImported]        = useState<BankStatement[]>([])
-  const [pendingEntries,  setPendingEntries]  = useState<FinancialEntry[]>([])
-  const [matchResult,     setMatchResult]     = useState<AutoMatchResult | null>(null)
-  const [parseErrors,     setParseErrors]     = useState<string[]>([])
-  const [errorMsg,        setErrorMsg]        = useState<string | null>(null)
-  const [successMsg,      setSuccessMsg]      = useState<string | null>(null)
+  const [selectedBank, setSelectedBank] = useState<string>(defaultAccount?.id ?? '')
+  const [batch, setBatch]         = useState<ReconciliationBatch | null>(null)
+  const [statements, setStatements] = useState<StatementWithLinks[]>([])
+  const [candidates, setCandidates] = useState<{ paid: ReconcCandidate[]; open: ReconcCandidate[] }>({ paid: [], open: [] })
+  const [matchResult, setMatchResult] = useState<AutoLinkResult | null>(null)
+  const [period, setPeriod]       = useState<{ start: string; end: string } | null>(null)
 
-  const [isPending,    startTransition]    = useTransition()
-  const [isBBLoading, setIsBBLoading]     = useState(false)
+  const [activeStmt, setActiveStmt] = useState<string | null>(null)   // linha do extrato selecionada
+  const [selCands, setSelCands]   = useState<Set<string>>(new Set())  // candidatos marcados p/ vincular
+  // Multi-seleção de LANÇAMENTOS do extrato. O inverso (vários títulos → um
+  // lançamento) já existia via selCands; faltava esta direção, que é o caso do
+  // título parcelado ou do repasse que o banco quebra em várias linhas.
+  const [selStmts, setSelStmts] = useState<Set<string>>(new Set())
 
+  // Filtro por SITUAÇÃO. Com 313 linhas no período, achar as pendentes uma a
+  // uma é inviável — era a reclamação do operador.
+  type Situacao = 'todos' | 'pendente' | 'vinculado' | 'conciliado'
+  const [situacao, setSituacao] = useState<Situacao>('todos')
+
+  const linhasVisiveis = useMemo(() => statements.filter(s => {
+    if (situacao === 'todos')      return true
+    if (situacao === 'conciliado') return s.reconciled
+    if (situacao === 'vinculado')  return s.linked.length > 0 && !s.reconciled
+    return s.linked.length === 0 && !s.reconciled   // pendente
+  }), [statements, situacao])
+
+  const contagem = useMemo(() => ({
+    todos:      statements.length,
+    pendente:   statements.filter(s => s.linked.length === 0 && !s.reconciled).length,
+    vinculado:  statements.filter(s => s.linked.length > 0 && !s.reconciled).length,
+    conciliado: statements.filter(s => s.reconciled).length,
+  }), [statements])
+
+  function alternarStmt(id: string) {
+    setSelStmts(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+  const [showOpen, setShowOpen]   = useState(false)
+  const [search, setSearch]       = useState('')
+
+  const [parseErrors, setParseErrors] = useState<string[]>([])
+  const [errorMsg, setErrorMsg]   = useState<string | null>(null)
+  const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+  const [isBBLoading, setIsBBLoading] = useState(false)
+  const [busy, setBusy]           = useState(false)
+  // buscar extrato do banco (Sicoob) por período
+  const firstOfMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01` }
+  const [apiStart, setApiStart] = useState(firstOfMonth())
+  const [apiEnd, setApiEnd]     = useState(new Date().toISOString().slice(0, 10))
+  const [apiLoading, setApiLoading] = useState(false)
+  const [bankApiEnabled, setBankApiEnabled] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // Carrega títulos pendentes da clínica (receivable e payable)
-  async function loadPendingEntries() {
-    const [recRes, payRes] = await Promise.all([
-      listEntries({ type: 'receivable', status: 'pending' }),
-      listEntries({ type: 'payable',   status: 'pending' }),
-    ])
-    const rec = Array.isArray(recRes) ? recRes : []
-    const pay = Array.isArray(payRes) ? payRes : []
-    setPendingEntries([...rec, ...pay])
+  useEffect(() => { isBankIntegrationEnabled().then(setBankApiEnabled) }, [])
+
+  const candById = useMemo(() => {
+    const m = new Map<string, ReconcCandidate>()
+    ;[...candidates.paid, ...candidates.open].forEach(c => m.set(c.id, c))
+    return m
+  }, [candidates])
+
+  // TOTAIS da seleção dos dois lados. É o que permite ver, antes de amarrar,
+  // se o que foi marcado no extrato fecha com o que foi marcado no sistema.
+  // Em MÓDULO, igual a `linkManyToMany`. O extrato traz débito negativo e o
+  // título a pagar positivo: somando com sinal, a diferença de uma conciliação
+  // de despesa virava o dobro do valor e o aviso na tela não batia com o que o
+  // vínculo calculava.
+  const totalSelExtrato = useMemo(
+    () => statements.filter(s => selStmts.has(s.id)).reduce((a, s) => a + Math.abs(s.amount), 0),
+    [statements, selStmts])
+  const totalSelSistema = useMemo(
+    () => [...selCands].reduce((a, id) => a + (candById.get(id)?.amount ?? 0), 0),
+    [selCands, candById])
+  const diferencaSel = Math.round((totalSelExtrato - totalSelSistema) * 100) / 100
+
+  // Carrega o que JA esta importado para a conta no periodo.
+  //
+  // Antes a tela so carregava por `import_batch_id`: ao sair e voltar, `batch`
+  // era nulo e nada aparecia. Parecia que o trabalho tinha sido perdido, e
+  // reimportar duplicava (43 grupos duplicados em producao antes da 0494). O
+  // dado sempre esteve gravado — faltava recarregar.
+  const [jaImportado, setJaImportado] = useState<number | null>(null)
+  useEffect(() => {
+    if (!selectedBank || !apiStart || !apiEnd) { setJaImportado(null); return }
+    let valido = true
+    ;(async () => {
+      const [st, cand] = await Promise.all([
+        getStatementsWithLinksByPeriod({ bank_account_id: selectedBank, start_date: apiStart, end_date: apiEnd }),
+        listReconcCandidates({ bank_account_id: selectedBank, start_date: apiStart, end_date: apiEnd }),
+      ])
+      if (!valido) return                      // troca de conta/periodo no meio: descarta
+      if (!('error' in st)) {
+        setStatements(st)
+        setJaImportado(st.length)
+        if (st.length) setPeriod({ start: apiStart, end: apiEnd })
+      }
+      if (!('error' in cand)) setCandidates(cand)
+    })()
+    return () => { valido = false }
+  }, [selectedBank, apiStart, apiEnd])
+
+  // Amarra o periodo carregado, sem depender de reimportar. O caso real: o
+  // extrato chega antes de o titulo ser lancado, e aí a linha fica orfa.
+  async function amarrarPeriodo() {
+    if (!selectedBank || busy) return
+    setBusy(true); setErrorMsg(null); setSuccessMsg(null)
+    const r = await persistAutoLinksByPeriod({ bank_account_id: selectedBank, start_date: apiStart, end_date: apiEnd })
+    if ('error' in r) setErrorMsg(r.error)
+    else {
+      setMatchResult(r)
+      setSuccessMsg(r.linked > 0
+        ? `${r.linked} lançamento(s) vinculados automaticamente.`
+        : 'Nenhum vínculo novo: as linhas sem título correspondente continuam aguardando.')
+      await reload()
+    }
+    setBusy(false)
   }
 
-  // Upload e parse do arquivo
+  async function loadData(batchId: string, start: string, end: string) {
+    const [st, cand] = await Promise.all([
+      getStatementsWithLinks(batchId),
+      listReconcCandidates({ bank_account_id: selectedBank, start_date: start, end_date: end }),
+    ])
+    if (!('error' in st)) setStatements(st)
+    if (!('error' in cand)) setCandidates(cand)
+  }
+  async function reload() {
+    if (batch && period) { await loadData(batch.id, period.start, period.end); return }
+    // Sem lote na mao (o usuario voltou a tela): recarrega pelo periodo.
+    if (!selectedBank) return
+    const [st, cand] = await Promise.all([
+      getStatementsWithLinksByPeriod({ bank_account_id: selectedBank, start_date: apiStart, end_date: apiEnd }),
+      listReconcCandidates({ bank_account_id: selectedBank, start_date: apiStart, end_date: apiEnd }),
+    ])
+    if (!('error' in st)) setStatements(st)
+    if (!('error' in cand)) setCandidates(cand)
+  }
+
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file || !selectedBank) return
+    setErrorMsg(null); setSuccessMsg(null); setParseErrors([]); setBatch(null)
+    setStatements([]); setMatchResult(null); setActiveStmt(null); setSelCands(new Set())
 
-    setErrorMsg(null)
-    setSuccessMsg(null)
-    setParseErrors([])
-    setBatch(null)
-    setImported([])
-    setMatchResult(null)
-
-    // Parse client-side
-    const parseResult = await parseFile(file)
-    setParseErrors(parseResult.errors)
-
-    if (!parseResult.statements.length) {
-      setErrorMsg('Nenhum lançamento encontrado no arquivo.')
-      return
-    }
-
-    // Detecta formato
+    const parsed = await parseFile(file)
+    setParseErrors(parsed.errors)
+    if (!parsed.statements.length) { setErrorMsg('Nenhum lançamento encontrado no arquivo.'); return }
     const ext = file.name.split('.').pop()?.toLowerCase() ?? 'unknown'
     const source = ['ofx', 'csv', 'txt', 'xlsx', 'xls'].includes(ext) ? ext : 'unknown'
+    const dates = parsed.statements.map(s => s.date).sort()
+    const start = dates[0], end = dates[dates.length - 1]
+    setPeriod({ start, end })
 
     startTransition(async () => {
-      const res = await importStatements({
-        bank_account_id: selectedBank,
-        source,
-        statements:      parseResult.statements,
-      })
-
-      if ('error' in res) {
-        setErrorMsg(res.error)
-        return
-      }
-
+      const res = await importStatements({ bank_account_id: selectedBank, source, statements: parsed.statements })
+      if ('error' in res) { setErrorMsg(res.error); return }
       setBatch(res)
-
-      // Carrega os lançamentos do batch recém criado
-      const stmtsRes = await listBatchStatements(res.id)
-      if (!('error' in stmtsRes)) setImported(stmtsRes)
-
-      await loadPendingEntries()
-      setSuccessMsg(`${parseResult.statements.length} lançamentos importados com sucesso.`)
-
-      // Executa auto-match
-      const autoRes = await autoMatchStatements(res.id, 'receivable')
-      if (!('error' in autoRes)) setMatchResult(autoRes)
+      const auto = await persistAutoLinks(res.id)
+      if (!('error' in auto)) setMatchResult(auto)
+      await loadData(res.id, start, end)
+      setSuccessMsg(`${parsed.statements.length} lançamentos importados. ${'error' in auto ? '' : auto.linked + ' vinculados automaticamente.'}`)
     })
-
-    // Reset input
     if (fileRef.current) fileRef.current.value = ''
   }
 
-  // Importar do BB (mock)
   async function handleBBImport() {
     if (!selectedBank) return
-    setIsBBLoading(true)
-    setErrorMsg(null)
-    setSuccessMsg(null)
-
-    const today = new Date().toISOString().split('T')[0]
-    const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
-
-    const bbData = await getBBStatement({
-      account_id: selectedBank,
-      start_date: monthAgo,
-      end_date:   today,
-    })
-
-    if ('error' in bbData) {
-      setErrorMsg(bbData.error)
-      setIsBBLoading(false)
-      return
-    }
-
+    setIsBBLoading(true); setErrorMsg(null); setSuccessMsg(null)
+    const today = new Date().toISOString().slice(0, 10)
+    const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+    const bb = await getBBStatement({ account_id: selectedBank, start_date: monthAgo, end_date: today })
+    if ('error' in bb) { setErrorMsg(bb.error); setIsBBLoading(false); return }
+    setPeriod({ start: monthAgo, end: today })
     const res = await importStatements({
-      bank_account_id: selectedBank,
-      source:          'bb_api',
-      statements:      bbData.map(s => ({
-        external_id: s.external_id ?? undefined,
-        date:        s.date,
-        amount:      s.amount,
-        description: s.description,
-        type:        s.type,
-      })),
+      bank_account_id: selectedBank, source: 'bb_api',
+      statements: bb.map(s => ({ external_id: s.external_id ?? undefined, date: s.date, amount: s.amount, description: s.description, type: s.type })),
     })
-
-    if ('error' in res) {
-      setErrorMsg(res.error)
-    } else {
-      setBatch(res)
-      const stmtsRes = await listBatchStatements(res.id)
-      if (!('error' in stmtsRes)) setImported(stmtsRes)
-      await loadPendingEntries()
-      setSuccessMsg(`${bbData.length} lançamentos importados do Banco do Brasil (simulado).`)
+    if ('error' in res) { setErrorMsg(res.error) }
+    else {
+      setBatch(res); setActiveStmt(null); setSelCands(new Set())
+      const auto = await persistAutoLinks(res.id)
+      if (!('error' in auto)) setMatchResult(auto)
+      await loadData(res.id, monthAgo, today)
+      setSuccessMsg(`${bb.length} lançamentos importados do Banco (simulado).`)
     }
-
     setIsBBLoading(false)
   }
 
-  // Conciliação manual
-  const handleMatch = useCallback(async (stmtId: string, entryId: string) => {
-    const res = await reconcileStatements(stmtId, entryId)
-    if (res.error) {
-      setErrorMsg(res.error)
-      return
+  async function handleSicoobImport() {
+    if (!selectedBank || apiLoading) { if (!selectedBank) setErrorMsg('Selecione a conta bancária.'); return }
+    // NAO limpa `statements` aqui: se a importacao nao trouxer nada novo, o
+    // que ja estava conciliado continua na tela em vez de sumir.
+    setErrorMsg(null); setSuccessMsg(null); setMatchResult(null); setActiveStmt(null); setSelCands(new Set())
+    setApiLoading(true)
+    const res = await importBankStatementFromSicoob({ bank_account_id: selectedBank, start_date: apiStart, end_date: apiEnd })
+    setApiLoading(false)
+    if ('error' in res) { setErrorMsg(res.error); return }
+    setPeriod({ start: apiStart, end: apiEnd })
+    // recupera o lote recém-criado como batch (para as ações de reload)
+    setBatch({ id: res.batch_id, clinic_id: '', bank_account_id: selectedBank, source: 'sicoob_api', imported_at: '', total_records: res.imported, matched_count: res.linked, status: 'pending' })
+    setMatchResult({ linked: res.linked, unmatched_statements: res.imported - res.linked, unmatched_candidates: 0 })
+    await loadData(res.batch_id, apiStart, apiEnd)
+    const avisos = res.warnings.length ? ' Avisos: ' + res.warnings.join(' · ') : ''
+    setSuccessMsg(res.imported === 0
+      ? `Nada novo no período — o extrato já estava importado.${avisos}`
+      : `${res.imported} lançamento(s) do Sicoob importados. ${res.linked} vinculados automaticamente.${avisos}`)
+  }
+
+  const active = statements.find(s => s.id === activeStmt) ?? null
+
+  function toggleCand(id: string) {
+    setSelCands(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+  function selectLine(id: string) { setActiveStmt(prev => prev === id ? null : id); setSelCands(new Set()); setSearch('') }
+
+  /**
+   * Lançamentos que o Vincular vai amarrar.
+   *
+   * As caixas de seleção (`selStmts`) MANDAM quando há alguma marcada. Antes
+   * daqui o botão amarrava só em `active.id` — a linha aberta — e ignorava a
+   * multi-seleção: marcando 3 linhas e 2 títulos, uma linha ficava de fora e o
+   * operador não tinha como saber qual.
+   *
+   * Sem nada marcado vale a linha aberta, que é o caso de 1 para 1.
+   */
+  const alvosExtrato = useMemo(() => {
+    if (selStmts.size > 0) return statements.filter(s => selStmts.has(s.id))
+    return active ? [active] : []
+  }, [selStmts, statements, active])
+
+  const [diferencaAberta, setDiferencaAberta] = useState<
+    { statementIds: string[]; diferenca: number; totalExtrato: number; totalSistema: number } | null
+  >(null)
+
+  async function handleLink() {
+    if (alvosExtrato.length === 0 || selCands.size === 0 || busy) return
+    setBusy(true); setErrorMsg(null); setSuccessMsg(null)
+
+    const idsExtrato = alvosExtrato.map(s => s.id)
+    const chosen = [...selCands]
+    const openIds = chosen.filter(id => candById.get(id)?.status === 'pending')
+
+    // A baixa do título aberto usa a data da ÚLTIMA transação marcada: é o dia
+    // em que o dinheiro terminou de entrar.
+    const dataBaixa = [...alvosExtrato].sort((a, b) => a.date.localeCompare(b.date)).slice(-1)[0].date
+
+    for (const id of openIds) {
+      const r = await settleOpenEntryAndLink({
+        entry_id: id, statement_id: idsExtrato[0],
+        bank_account_id: selectedBank, payment_date: dataBaixa,
+      })
+      if (r.error) { setErrorMsg(r.error); setBusy(false); return }
     }
-    // Atualiza estado local
-    setImported(prev => prev.map(s =>
-      s.id === stmtId ? { ...s, reconciled_entry_id: entryId } : s
-    ))
-  }, [])
+
+    // Um único passo cobre o produto cartesiano, inclusive o vínculo que a
+    // baixa acima já criou (o upsert ignora o repetido).
+    const r = await linkManyToMany({ statement_ids: idsExtrato, entry_ids: chosen })
+    if ('error' in r) { setErrorMsg(r.error); setBusy(false); return }
+
+    setSelCands(new Set()); setSelStmts(new Set())
+    await reload()
+    setBusy(false)
+
+    if (Math.abs(r.diferenca) >= 0.005) {
+      // Não fechou. Em vez de deixar a linha pendente para sempre, perguntar
+      // onde lançar a sobra.
+      setDiferencaAberta({
+        statementIds: idsExtrato, diferenca: r.diferenca,
+        totalExtrato: r.total_extrato, totalSistema: r.total_sistema,
+      })
+    } else {
+      setSuccessMsg(`${idsExtrato.length} lançamento(s) e ${chosen.length} título(s) vinculados. Conciliação fecha.`)
+    }
+  }
+
+  // Vincula os LANÇAMENTOS marcados a UM título. Caso do título parcelado ou
+  // do repasse que o banco quebra em várias linhas: um título nosso
+  // corresponde a 3 créditos. Antes o operador escolhia uma linha e deixava as
+  // outras órfãs.
+  async function handleVincularLancamentos(entryId: string) {
+    if (selStmts.size === 0 || busy) return
+    setBusy(true); setErrorMsg(null); setSuccessMsg(null)
+    const r = await linkStatementsToEntry(entryId, [...selStmts])
+    if ('error' in r) setErrorMsg(r.error)
+    else { setSuccessMsg(`${r.linked} lançamento(s) vinculados ao título.`); setSelStmts(new Set()); await reload() }
+    setBusy(false)
+  }
+
+  // Busca nos títulos quando o automático não casou — por descrição, valor e
+  // data da BAIXA (que é a que casa com o extrato, não o vencimento). Antes a
+  // tela listava só os candidatos do período, sem busca: se a baixa foi
+  // lançada com data diferente, o título era inencontrável.
+  const [buscaTitulo, setBuscaTitulo] = useState('')
+  const [achados, setAchados] = useState<ReconcCandidate[]>([])
+  const [buscando, setBuscando] = useState(false)
+  async function buscarTitulos() {
+    const termo = buscaTitulo.trim()
+    if (!termo && !active) return
+    setBuscando(true); setErrorMsg(null)
+    const r = await buscarTitulosParaVincular({
+      termo: termo || undefined,
+      // Com uma linha selecionada, usa o valor dela como âncora e abre margem
+      // para achar o título com juros ou desconto.
+      valor: active ? active.amount : undefined,
+      valor_margem: active ? Math.max(0.01, active.amount * 0.02) : undefined,
+      tipo: active ? (active.type === 'credit' ? 'receivable' : 'payable') : undefined,
+      incluir_abertos: true,
+      limite: 40,
+    })
+    if ('error' in r) setErrorMsg(r.error)
+    else setAchados(r)
+    setBuscando(false)
+  }
+
+  async function handleUnlinkEntry(entryId: string) {
+    if (!active || busy) return
+    setBusy(true); const r = await unlinkEntry(active.id, entryId)
+    if (r.error) setErrorMsg(r.error)
+    await reload(); setBusy(false)
+  }
+  async function handleUnlinkAll(id: string) { setBusy(true); await unlinkStatement(id); await reload(); setBusy(false) }
+
+  async function handleInsertNew() {
+    if (!active || busy) return
+    setBusy(true); const r = await insertEntryFromStatement({ statement_id: active.id, bank_account_id: selectedBank })
+    if ('error' in r) setErrorMsg(r.error); else setSuccessMsg('Título inserido no sistema e vinculado a esta linha.')
+    await reload(); setBusy(false)
+  }
+
+  async function handleReconcileOne(id: string) { setBusy(true); const r = await reconcileLines([id]); if ('error' in r) setErrorMsg(r.error); await reload(); setBusy(false) }
+  async function handleUnreconcile(id: string) { setBusy(true); await unreconcileLine(id); await reload(); setBusy(false) }
+  async function handleReconcileAll() {
+    const ids = statements.filter(s => !s.reconciled && s.linked.length > 0).map(s => s.id)
+    if (!ids.length) return
+    setBusy(true); const r = await reconcileLines(ids); if ('error' in r) setErrorMsg(r.error); else setSuccessMsg(`${'reconciled' in r ? r.reconciled : ids.length} linha(s) conciliada(s).`)
+    await reload(); setBusy(false)
+  }
+
+  // ── derivados ──
+  const linkedCount    = statements.filter(s => s.linked.length > 0).length
+  const reconciledCount = statements.filter(s => s.reconciled).length
+  const pendingReconcile = statements.filter(s => !s.reconciled && s.linked.length > 0).length
+  const rightList = useMemo(() => {
+    const base = showOpen ? [...candidates.paid, ...candidates.open] : candidates.paid
+    const q = search.trim().toLowerCase()
+    return q ? base.filter(c => (c.description + ' ' + (c.tutor_name ?? '') + ' ' + (c.document_number ?? '')).toLowerCase().includes(q)) : base
+  }, [candidates, showOpen, search])
+  const linkedSum = active ? active.linked.reduce((s, c) => s + c.amount, 0) : 0
+  const diff = active ? Math.round((active.amount - linkedSum) * 100) / 100 : 0
 
   return (
     <div className="space-y-4">
-      {/* Seleção de conta e upload */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4 space-y-4">
+      {/* Importação */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4 space-y-3">
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-full sm:min-w-[200px] flex-1">
             <label className="block text-xs font-semibold text-slate-500 mb-1.5">Conta Bancária</label>
-            <select
-              value={selectedBank}
-              onChange={e => setSelectedBank(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-            >
+            <select value={selectedBank} onChange={e => setSelectedBank(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20">
               <option value="">Selecione uma conta</option>
-              {bankAccounts.map(b => (
-                <option key={b.id} value={b.id}>
-                  {b.name}{b.bank_name ? ` — ${b.bank_name}` : ''}
-                </option>
-              ))}
+              {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.name}{b.bank_name ? ` — ${b.bank_name}` : ''}</option>)}
             </select>
           </div>
-
-          {/* Upload de arquivo */}
           <div>
-            <label className="block text-xs font-semibold text-slate-500 mb-1.5">
-              <FileText className="inline h-3 w-3 mr-1" />
-              Importar Extrato
+            <label className="block text-xs font-semibold text-slate-500 mb-1.5"><FileText className="inline h-3 w-3 mr-1" /> Importar Extrato</label>
+            <input ref={fileRef} type="file" accept=".ofx,.csv,.txt,.xlsx,.xls" onChange={handleFileUpload} className="hidden" id="bank-statement-upload" disabled={!selectedBank || isPending} />
+            <label htmlFor="bank-statement-upload"
+              className={`flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold cursor-pointer justify-center ${!selectedBank || isPending ? 'opacity-50 cursor-default bg-slate-50 text-slate-400' : 'bg-white text-slate-700 hover:bg-slate-50'}`}>
+              <Upload className="h-4 w-4" /> {isPending ? 'Processando...' : 'Upload OFX / CSV / TXT / XLSX'}
             </label>
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".ofx,.csv,.txt,.xlsx,.xls"
-                onChange={handleFileUpload}
-                className="hidden"
-                id="bank-statement-upload"
-                disabled={!selectedBank || isPending}
-              />
-              <label
-                htmlFor="bank-statement-upload"
-                className={`flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold cursor-pointer transition-colors w-full sm:w-auto justify-center ${
-                  !selectedBank || isPending
-                    ? 'opacity-50 cursor-default bg-slate-50 text-slate-400'
-                    : 'bg-white text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <Upload className="h-4 w-4" />
-                {isPending ? 'Processando...' : 'Upload OFX / CSV / TXT / XLSX'}
-              </label>
-            </div>
           </div>
-
-          {/* Importar do BB */}
-          <button
-            onClick={handleBBImport}
-            disabled={!selectedBank || isBBLoading}
-            className="flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-100 disabled:opacity-50 transition-colors"
-          >
-            <Building2 className={`h-4 w-4 ${isBBLoading ? 'animate-spin' : ''}`} />
-            Importar do Banco (BB)
-          </button>
         </div>
 
-        {/* Avisos de parse */}
+        {/* Buscar extrato direto do banco (Sicoob) por período — só com integração ativa */}
+        {bankApiEnabled && (
+        <div className="flex flex-wrap items-end gap-2 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2.5">
+          <Building2 className="h-4 w-4 text-sky-600 mb-2" />
+          <div>
+            <label className="block text-[10px] font-semibold text-sky-700 mb-1">Buscar do banco · início</label>
+            <input type="date" value={apiStart} onChange={e => setApiStart(e.target.value)} className="rounded-lg border border-sky-200 bg-white px-2.5 py-1.5 text-sm" />
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-sky-700 mb-1">fim</label>
+            <input type="date" value={apiEnd} onChange={e => setApiEnd(e.target.value)} className="rounded-lg border border-sky-200 bg-white px-2.5 py-1.5 text-sm" />
+          </div>
+          <button onClick={handleSicoobImport} disabled={!selectedBank || apiLoading}
+            className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50">
+            {apiLoading ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Building2 className="h-4 w-4" />} Buscar extrato (Sicoob)
+          </button>
+          {/* Amarra o periodo ja carregado, sem reimportar. Caso real: o
+              extrato chega antes do titulo ser lancado, e a linha fica orfa. */}
+          {jaImportado !== null && jaImportado > 0 && (
+            <button onClick={amarrarPeriodo} disabled={!selectedBank || busy}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+              <Link2 className="h-4 w-4" /> Vincular automaticamente
+            </button>
+          )}
+          <span className="text-[10px] text-sky-600/80 mb-2">API Conta Corrente v4 · sandbox de teste (produção usa o e-CNPJ da clínica)</span>
+        </div>
+        )}
         {parseErrors.length > 0 && (
           <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
             <p className="text-sm font-semibold text-amber-800 mb-1">Avisos de importação:</p>
-            <ul className="text-xs text-amber-700 space-y-0.5 list-disc list-inside">
-              {parseErrors.map((e, i) => <li key={i}>{e}</li>)}
-            </ul>
+            <ul className="text-xs text-amber-700 space-y-0.5 list-disc list-inside">{parseErrors.map((e, i) => <li key={i}>{e}</li>)}</ul>
           </div>
         )}
-
-        {errorMsg && (
-          <p className="rounded-xl bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">{errorMsg}</p>
-        )}
-        {successMsg && (
-          <p className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-2 text-sm text-emerald-700">{successMsg}</p>
-        )}
+        {errorMsg && <p className="rounded-xl bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">{errorMsg}</p>}
+        {successMsg && <p className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-2 text-sm text-emerald-700">{successMsg}</p>}
       </div>
 
-      {/* Resumo do auto-match */}
       {matchResult && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-bold text-slate-700">Resultado da Conciliação Automática</h3>
-          <AutoMatchSummary result={matchResult} />
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-center">
+            <Sparkles className="h-4 w-4 text-emerald-600 mx-auto mb-1" />
+            <p className="text-xl font-bold tabular-nums text-emerald-700">{linkedCount}</p>
+            <p className="text-[11px] font-semibold text-emerald-600">Vinculados</p>
+          </div>
+          <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-center">
+            <CheckCircle2 className="h-4 w-4 text-sky-600 mx-auto mb-1" />
+            <p className="text-xl font-bold tabular-nums text-sky-700">{reconciledCount}</p>
+            <p className="text-[11px] font-semibold text-sky-600">Conciliados</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
+            <Circle className="h-4 w-4 text-slate-400 mx-auto mb-1" />
+            <p className="text-xl font-bold tabular-nums text-slate-600">{statements.length - linkedCount}</p>
+            <p className="text-[11px] font-semibold text-slate-500">Sem vínculo</p>
+          </div>
         </div>
       )}
 
-      {/* Painel de matching manual */}
-      {imported.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-bold text-slate-700">Conciliação Manual</h3>
-          <p className="text-xs text-slate-400">
-            Clique em um lançamento importado (esquerda) e um título (direita) para conciliá-los.
-            Itens em verde foram conciliados automaticamente.
+      {statements.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* ESQUERDA — extrato */}
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-700">Extrato bancário</h3>
+                <p className="text-xs text-slate-400">{reconciledCount} conciliados · {linkedCount} vinculados · clique numa linha</p>
+              </div>
+              <Building2 className="h-4 w-4 text-slate-300" />
+            </div>
+            <div className="divide-y divide-slate-100 max-h-[560px] overflow-y-auto">
+              {/* Filtro por situação + totais da seleção. Com 313 linhas no
+                  período, achar as pendentes uma a uma era inviável; e sem os
+                  totais o operador amarrava no escuro, sem saber se o que
+                  marcou de um lado fecha com o outro. */}
+              <div className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50/95 px-4 py-2 backdrop-blur">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {([
+                    ['todos', 'Todos'], ['pendente', 'Pendentes'],
+                    ['vinculado', 'Vinculados'], ['conciliado', 'Conciliados'],
+                  ] as const).map(([k, rotulo]) => (
+                    <button key={k} onClick={() => setSituacao(k)}
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                        situacao === k ? 'bg-teal-600 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`}>
+                      {rotulo} <span className="tabular-nums opacity-70">{contagem[k]}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {(selStmts.size > 0 || selCands.size > 0) && (
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-white px-2.5 py-1.5 text-[11px]">
+                    <span className="text-slate-500">
+                      Extrato: <strong className="tabular-nums text-slate-800">{selStmts.size}</strong> marcado(s) ·{' '}
+                      <strong className="tabular-nums text-slate-800">{fmt(totalSelExtrato)}</strong>
+                    </span>
+                    <span className="text-slate-500">
+                      Sistema: <strong className="tabular-nums text-slate-800">{selCands.size}</strong> título(s) ·{' '}
+                      <strong className="tabular-nums text-slate-800">{fmt(totalSelSistema)}</strong>
+                    </span>
+                    <span className={Math.abs(diferencaSel) < 0.005 ? 'font-semibold text-emerald-700' : 'font-semibold text-amber-700'}>
+                      {Math.abs(diferencaSel) < 0.005 ? 'Fecha' : `Diferença ${fmt(diferencaSel)}`}
+                    </span>
+                    {Math.abs(diferencaSel) >= 0.005 && selStmts.size > 0 && selCands.size > 0 && (
+                      <button
+                        onClick={() => setDiferencaAberta({
+                          statementIds: [...selStmts],
+                          diferenca: diferencaSel,
+                          totalExtrato: totalSelExtrato,
+                          totalSistema: totalSelSistema,
+                        })}
+                        className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 hover:bg-amber-100">
+                        Lançar diferença
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {linhasVisiveis.length === 0 && statements.length > 0 && (
+                <p className="px-4 py-6 text-center text-sm text-slate-400">
+                  Nenhum lançamento {situacao === 'pendente' ? 'pendente' : situacao === 'vinculado' ? 'vinculado' : 'conciliado'} neste período.
+                </p>
+              )}
+
+              {linhasVisiveis.map(s => {
+                const isSel = activeStmt === s.id
+                const hasLink = s.linked.length > 0
+                return (
+                  <div key={s.id} onClick={() => selectLine(s.id)}
+                    className={`px-4 py-2.5 cursor-pointer transition-colors ${isSel ? 'bg-teal-50 border-l-4 border-teal-500' : s.reconciled ? 'bg-sky-50/40 hover:bg-sky-50' : hasLink ? 'bg-emerald-50/30 hover:bg-emerald-50/60' : 'hover:bg-slate-50'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      {/* Marcar vários lançamentos para amarrar a UM título. */}
+                      <input
+                        type="checkbox"
+                        checked={selStmts.has(s.id)}
+                        onClick={e => e.stopPropagation()}
+                        onChange={() => alternarStmt(s.id)}
+                        className="shrink-0"
+                        aria-label={`Selecionar lançamento de ${fmt(s.amount)}`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-slate-700 truncate">{s.description}</p>
+                        {/* DE QUEM é a linha. O banco manda em descInfComplementar
+                            e a gente descartava: o operador só via
+                            "PIX RECEBIDO - OUTRA IF", que não identifica nada. */}
+                        {s.contraparte && (
+                          <p className="truncate text-xs text-slate-500" title={s.contraparte}>{s.contraparte}</p>
+                        )}
+                        <p className="text-xs text-slate-400 font-mono tabular-nums">{fmtDate(s.date)}</p>
+                      </div>
+                      <p className={`text-sm font-bold font-mono tabular-nums shrink-0 ${s.type === 'credit' ? 'text-emerald-700' : 'text-red-700'}`}>
+                        {s.type === 'credit' ? '+' : '-'}{fmt(s.amount)}
+                      </p>
+                    </div>
+                    <div className="mt-1 flex items-center gap-2 flex-wrap">
+                      {s.reconciled
+                        ? <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700"><CheckCircle2 className="h-3 w-3" /> Conciliado</span>
+                        : hasLink
+                          ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700"><Link2 className="h-3 w-3" /> Vinculado · {s.linked.length} título(s) · {fmt(s.linked.reduce((a, c) => a + c.amount, 0))}</span>
+                          : <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500"><Circle className="h-3 w-3" /> Pendente</span>}
+                      {s.reconciled && <button onClick={e => { e.stopPropagation(); handleUnreconcile(s.id) }} className="text-[10px] text-sky-700 hover:text-sky-900 inline-flex items-center gap-0.5"><Undo2 className="h-3 w-3" /> desconciliar</button>}
+                      {!s.reconciled && hasLink && <button onClick={e => { e.stopPropagation(); handleReconcileOne(s.id) }} className="text-[10px] text-teal-700 hover:text-teal-900 inline-flex items-center gap-0.5"><CheckCircle2 className="h-3 w-3" /> conciliar</button>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* DIREITA — títulos do sistema (da linha ativa) */}
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
+            {!active ? (
+              <div className="flex-1 flex items-center justify-center p-8 text-center text-sm text-slate-400">
+                Selecione uma linha do extrato à esquerda para ver/editar os títulos vinculados.
+              </div>
+            ) : (
+              <>
+                <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
+                  <h3 className="text-sm font-bold text-slate-700">Títulos do sistema · linha de {fmt(active.amount)}</h3>
+                  <p className="text-[11px] text-slate-400">{fmtDate(active.date)} · {active.description}</p>
+                </div>
+
+                {/* Vinculados a esta linha */}
+                <div className="px-4 py-2 border-b border-slate-100">
+                  <p className="text-[11px] font-semibold text-slate-500 uppercase mb-1">Vinculados ({active.linked.length})</p>
+                  {active.linked.length === 0 && <p className="text-xs text-slate-400 py-1">Nenhum título vinculado ainda.</p>}
+                  {active.linked.map(c => (
+                    <div key={c.id} className="flex items-center justify-between gap-2 py-1">
+                      <span className="text-xs text-slate-700 truncate">{c.document_number ? `${c.document_number} · ` : ''}{c.description}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs font-semibold tabular-nums">{fmt(c.amount)}</span>
+                        <button onClick={() => handleUnlinkEntry(c.id)} disabled={busy} className="text-[11px] text-rose-600 hover:text-rose-800 inline-flex items-center gap-0.5"><Link2Off className="h-3 w-3" /> desvincular</button>
+                      </div>
+                    </div>
+                  ))}
+                  {active.linked.length > 0 && (
+                    <p className={`mt-1 text-[11px] ${Math.abs(diff) < 0.01 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                      Soma vinculada {fmt(linkedSum)} · linha {fmt(active.amount)}{Math.abs(diff) >= 0.01 ? ` · diferença ${fmt(diff)}` : ' ✓ confere'}
+                    </p>
+                  )}
+                </div>
+
+                {/* Adicionar títulos */}
+                <div className="px-4 py-2 border-b border-slate-100 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-semibold text-slate-500 uppercase">Adicionar títulos (marque 1 ou mais)</p>
+                    <button onClick={() => setShowOpen(v => !v)} className={`text-[11px] rounded-md px-2 py-0.5 ${showOpen ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                      {showOpen ? 'incluindo em aberto' : 'incluir em aberto'}
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                    <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Filtrar por descrição, tutor, documento…"
+                      className="w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 py-1.5 text-xs focus:border-teal-500 focus:outline-none" />
+                  </div>
+
+                  {/* BUSCA no banco, não filtro da lista. O filtro acima só
+                      peneira os candidatos do período; quando o automático não
+                      casou porque a baixa foi lançada com data diferente, o
+                      título não está na lista — e era inencontrável. */}
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      value={buscaTitulo}
+                      onChange={e => setBuscaTitulo(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') buscarTitulos() }}
+                      placeholder="Buscar nos títulos baixados (fora do período)…"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs focus:border-teal-500 focus:outline-none"
+                    />
+                    <button onClick={buscarTitulos} disabled={buscando}
+                      className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                      {buscando ? '…' : 'Buscar'}
+                    </button>
+                  </div>
+                  {active && (
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      Ancorado em {fmt(active.amount)} (±2%) e no tipo da linha selecionada.
+                    </p>
+                  )}
+                  {achados.length > 0 && (
+                    <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-white">
+                      <p className="border-b border-slate-100 px-3 py-1.5 text-[11px] font-semibold uppercase text-slate-500">
+                        {achados.length} encontrado(s) na busca
+                      </p>
+                      {achados.map(c => (
+                        <div key={c.id} className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-slate-50">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-medium text-slate-700">{c.description}</p>
+                            <p className="tabular-nums text-slate-400">
+                              {fmt(c.amount)} · {c.status === 'paid' ? `baixado ${fmtDate(c.payment_date ?? c.due_date)}` : `aberto, venc. ${fmtDate(c.due_date)}`}
+                            </p>
+                          </div>
+                          {selStmts.size > 0 ? (
+                            <button onClick={() => handleVincularLancamentos(c.id)} disabled={busy}
+                              className="shrink-0 rounded-md bg-teal-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-teal-700 disabled:opacity-50">
+                              Vincular {selStmts.size} marcado(s)
+                            </button>
+                          ) : (
+                            <span className="shrink-0 text-[10px] text-slate-400">marque lançamentos à esquerda</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto flex-1">
+                  {rightList.length === 0 && <p className="px-4 py-6 text-center text-sm text-slate-400">Nenhum título candidato{showOpen ? '' : ' pago'} no período.</p>}
+                  {rightList.map(c => {
+                    const isOpen = c.status === 'pending'
+                    return (
+                      <label key={c.id} className="flex items-center gap-2 px-4 py-2 hover:bg-teal-50/50 cursor-pointer">
+                        <input type="checkbox" checked={selCands.has(c.id)} onChange={() => toggleCand(c.id)} />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-slate-700 truncate">{c.document_number ? `${c.document_number} · ` : ''}{c.description}</p>
+                          <p className="text-xs text-slate-400 tabular-nums">
+                            {c.type === 'receivable' ? 'A receber' : 'A pagar'} · {isOpen ? `Venc. ${fmtDate(c.due_date)}` : `Pago ${fmtDate(c.payment_date ?? c.due_date)}`}{c.tutor_name ? ` · ${c.tutor_name}` : ''}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-bold text-slate-700 font-mono tabular-nums">{fmt(c.amount)}</p>
+                          {isOpen && <span className="text-[10px] font-semibold text-amber-600">em aberto → baixa</span>}
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+
+                {/* ações da linha ativa */}
+                <div className="px-4 py-3 border-t border-slate-100 bg-slate-50 flex flex-wrap items-center gap-2">
+                  <button onClick={handleLink} disabled={busy || selCands.size === 0 || alvosExtrato.length === 0}
+                    className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50 flex items-center gap-2">
+                    {busy ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+                    Vincular {alvosExtrato.length} x {selCands.size}
+                  </button>
+                  <button onClick={handleInsertNew} disabled={busy} className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 flex items-center gap-1.5"><PlusCircle className="h-4 w-4" /> Inserir título</button>
+                  {active.linked.length > 0 && !active.reconciled && (
+                    <button onClick={() => handleReconcileOne(active.id)} disabled={busy} className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50 flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4" /> Conciliar linha</button>
+                  )}
+                  {active.reconciled && (
+                    <button onClick={() => handleUnreconcile(active.id)} disabled={busy} className="rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50 disabled:opacity-50 flex items-center gap-1.5"><Undo2 className="h-4 w-4" /> Desconciliar</button>
+                  )}
+                  {active.linked.length > 0 && (
+                    <button onClick={() => handleUnlinkAll(active.id)} disabled={busy} className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50 flex items-center gap-1.5"><Link2Off className="h-4 w-4" /> Desvincular tudo</button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* CONCILIAR EM LOTE (parcial — só os vinculados) */}
+      {statements.length > 0 && (
+        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <p className="text-xs text-slate-500">
+            {pendingReconcile > 0 ? `${pendingReconcile} linha(s) vinculada(s) prontas para conciliar.` : 'Nenhuma linha vinculada pendente de conciliação.'} As não vinculadas ficam pendentes.
           </p>
-          <ManualMatchPanel
-            importedStatements={imported}
-            pendingEntries={pendingEntries}
-            onMatch={handleMatch}
-            matchResult={matchResult}
-          />
+          <button onClick={handleReconcileAll} disabled={busy || pendingReconcile === 0}
+            className="rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50 flex items-center gap-2">
+            {busy ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Conciliar vinculados ({pendingReconcile})
+          </button>
         </div>
       )}
 
-      {/* Estado vazio */}
       {!batch && !isPending && (
         <div className="flex flex-col items-center justify-center py-16 text-center rounded-xl border border-slate-200 bg-white shadow-sm">
           <Upload className="h-12 w-12 text-slate-200 mb-3" />
-          <p className="text-sm font-semibold text-slate-400">
-            Selecione uma conta e importe um extrato bancário para iniciar a conciliação.
-          </p>
-          <p className="text-xs text-slate-400 mt-1">
-            Formatos suportados: OFX, CSV, TXT (Bradesco/Itaú), XLSX
-          </p>
+          <p className="text-sm font-semibold text-slate-400">Selecione uma conta e importe um extrato para iniciar a conciliação.</p>
+          <p className="text-xs text-slate-400 mt-1">Formatos: OFX, CSV, TXT (Bradesco/Itaú), XLSX · vários títulos podem compor uma linha</p>
         </div>
+      )}
+
+      {diferencaAberta && (
+        <DiferencaModal
+          statementIds={diferencaAberta.statementIds}
+          diferenca={diferencaAberta.diferenca}
+          totalExtrato={diferencaAberta.totalExtrato}
+          totalSistema={diferencaAberta.totalSistema}
+          onClose={() => setDiferencaAberta(null)}
+          onCriado={async (msg) => { setDiferencaAberta(null); setSuccessMsg(msg); await reload() }}
+        />
       )}
     </div>
   )

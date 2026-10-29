@@ -9,6 +9,7 @@ import { logDataAccess } from './compliance'
 import { byUrgencyThenTime } from '@/lib/urgency'
 import { runInsuranceAudit, type AuditResult } from './insurance-audit'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Fila do Médico Veterinário (in_progress) ─────────────────────────────────
 export type VetQueueItem = {
   id: string
@@ -70,7 +71,7 @@ export async function getVetQueue(
 
   const { data, error } = await query.order('created_at', { ascending: true })
 
-  if (error) return { error: 'Erro ao buscar fila: ' + error.message }
+  if (error) return { error: 'Erro ao buscar fila: ' + mensagemErro(error, 'lib/actions/vet.ts') }
 
   return (data ?? []).map((c: any) => {
     // Reconstrói VitalSigns das colunas antigas (migration 0006 não aplicada)
@@ -156,7 +157,7 @@ export async function getVetCompleted(): Promise<VetCompletedItem[] | { error: s
     .gte('updated_at', since.toISOString())
     .order('updated_at', { ascending: false })
 
-  if (error) return { error: 'Erro ao buscar finalizadas: ' + error.message }
+  if (error) return { error: 'Erro ao buscar finalizadas: ' + mensagemErro(error, 'lib/actions/vet.ts') }
 
   return (data ?? []).map((c: any) => ({
     id: c.id,
@@ -203,7 +204,7 @@ export async function listAwaitingReview(): Promise<AwaitingReviewItem[] | { err
     .eq('clinic_id', profile.clinic_id)
     .not('consultation_id', 'is', null)
     .order('created_at', { ascending: true })
-  if (invErr) return { error: 'Erro ao buscar faturas: ' + invErr.message }
+  if (invErr) return { error: 'Erro ao buscar faturas: ' + mensagemErro(invErr, 'lib/actions/vet.ts') }
 
   type Agg = { total: number; paid: boolean; billed_at: string }
   const byConsult = new Map<string, Agg>()
@@ -228,7 +229,7 @@ export async function listAwaitingReview(): Promise<AwaitingReviewItem[] | { err
     .eq('clinic_id', profile.clinic_id)
     .in('id', ids)
     .not('status', 'in', '(completed,cancelled)')
-  if (cErr) return { error: 'Erro ao buscar consultas: ' + cErr.message }
+  if (cErr) return { error: 'Erro ao buscar consultas: ' + mensagemErro(cErr, 'lib/actions/vet.ts') }
 
   const now = Date.now()
   const items: AwaitingReviewItem[] = (consults ?? []).map((c: any) => {
@@ -459,7 +460,7 @@ export async function addPatientDirectToVet(params: {
         .from('consultations')
         .update({ visit_reason: params.visit_reason, updated_at: new Date().toISOString() })
         .eq('id', open.id)
-      if (updErr) return { error: 'Erro ao atualizar consulta aberta: ' + updErr.message }
+      if (updErr) return { error: 'Erro ao atualizar consulta aberta: ' + mensagemErro(updErr, 'lib/actions/vet.ts') }
     }
     revalidatePath('/dashboard/vet')
     return { id: open.id }
@@ -480,7 +481,7 @@ export async function addPatientDirectToVet(params: {
     .select('id')
     .single()
 
-  if (error || !data) return { error: 'Erro ao incluir paciente: ' + (error?.message ?? '') }
+  if (error || !data) return { error: 'Erro ao incluir paciente: ' + ((error ? mensagemErro(error, 'lib/actions/vet.ts') : '')) }
 
   revalidatePath('/dashboard/vet')
   return { id: data.id }
@@ -543,7 +544,7 @@ export async function addConsultationAddendum(
       addendum_text:   addendumText.trim(),
     })
 
-  if (error) return { error: 'Erro ao registrar adendo: ' + error.message }
+  if (error) return { error: 'Erro ao registrar adendo: ' + mensagemErro(error, 'lib/actions/vet.ts') }
 
   await logAudit({
     action: 'ADD_CONSULTATION_ADDENDUM',
@@ -579,7 +580,7 @@ export async function listConsultationAddenda(
     .eq('clinic_id', profile.clinic_id)
     .order('created_at', { ascending: true })
 
-  if (error) return { error: 'Erro ao carregar adendos: ' + error.message }
+  if (error) return { error: 'Erro ao carregar adendos: ' + mensagemErro(error, 'lib/actions/vet.ts') }
 
   return (data ?? []).map((a: any) => ({
     id: a.id,
@@ -636,7 +637,7 @@ export async function saveVetNotes(
     .eq('id', consultationId)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: 'Erro ao salvar notas: ' + error.message }
+  if (error) return { error: 'Erro ao salvar notas: ' + mensagemErro(error, 'lib/actions/vet.ts') }
 
   await logAudit({ action: 'SAVE_VET_NOTES', entity_type: 'consultations', entity_id: consultationId })
   revalidatePath(`/dashboard/vet/${consultationId}`)
@@ -704,7 +705,7 @@ export async function finalizeConsultation(
     .eq('id', consultationId)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: 'Erro ao finalizar consulta: ' + error.message }
+  if (error) return { error: 'Erro ao finalizar consulta: ' + mensagemErro(error, 'lib/actions/vet.ts') }
 
   await logAudit({
     action: 'FINALIZE_CONSULTATION',
@@ -839,7 +840,7 @@ export async function savePrescription(params: {
       p_is_controlled:   true,
       p_prescription_type: params.prescription_type ?? 'blue_receipt',
     })
-    if (rpcError) return { error: 'Erro ao salvar prescrição controlada: ' + rpcError.message }
+    if (rpcError) return { error: 'Erro ao salvar prescrição controlada: ' + mensagemErro(rpcError, 'lib/actions/vet.ts') }
     const created = rpcData as { id: string; medication: string; dose: string | null; is_controlled: boolean; prescription_type: string; route_of_administration: string }
 
     if (pharmaceuticalForm && created?.id) {
@@ -867,6 +868,6 @@ export async function savePrescription(params: {
     pharmaceutical_form:      pharmaceuticalForm,
   }).select('id, medication, dose, is_controlled, prescription_type, route_of_administration, pharmaceutical_form').single()
 
-  if (error) return { error: 'Erro ao salvar prescrição: ' + error.message }
+  if (error) return { error: 'Erro ao salvar prescrição: ' + mensagemErro(error, 'lib/actions/vet.ts') }
   return data
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
 interface ImageLightboxProps {
@@ -21,7 +22,7 @@ export function ImageLightbox({ src, alt = '', className = '' }: ImageLightboxPr
         onClick={() => setOpen(true)}
       />
 
-      {open && (
+      {open && typeof document !== 'undefined' && createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
           onClick={() => setOpen(false)}
@@ -38,7 +39,8 @@ export function ImageLightbox({ src, alt = '', className = '' }: ImageLightboxPr
             className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
             onClick={e => e.stopPropagation()}
           />
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )

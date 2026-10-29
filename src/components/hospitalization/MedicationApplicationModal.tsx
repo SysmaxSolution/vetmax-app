@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState, useTransition, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Pill, X, Loader2, Check, Pause, CircleStop, AlertTriangle, Plus, Clock, ClockAlert, FileStack,
 } from 'lucide-react'
@@ -171,7 +172,7 @@ export default function MedicationApplicationModal({
     })
   }
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -456,8 +457,9 @@ export default function MedicationApplicationModal({
           onApplied={finalizeUpdate}
         />
       )}
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }
 
 // ─── Sub-form: nova prescrição ───────────────────────────────────────────────

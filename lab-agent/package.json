@@ -1,0 +1,13 @@
+{
+  "name": "sysvetmax-lab-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agente-ponte de laboratório SYSVETMAX — MLLP/HL7 (LAN) ⟷ nuvem (HTTPS).",
+  "bin": { "sysvetmax-lab-agent": "agent.mjs" },
+  "scripts": {
+    "start": "node agent.mjs",
+    "simulate": "node simulate.mjs"
+  },
+  "type": "module",
+  "engines": { "node": ">=18" }
+}

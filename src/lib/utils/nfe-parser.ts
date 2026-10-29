@@ -1,5 +1,6 @@
 import { XMLParser } from 'fast-xml-parser'
 
+import { mensagemErro } from '@/lib/errors'
 export interface ParsedSupplier {
   cnpj:       string
   name:       string
@@ -26,6 +27,12 @@ export interface ParsedNFeItem {
   tax_cofins?: number
 }
 
+export interface ParsedDuplicata {
+  numero:    string   // nDup
+  vencimento: string  // dVenc (AAAA-MM-DD)
+  valor:     number   // vDup
+}
+
 export interface ParsedNFe {
   nfe_key:     string
   nfe_number:  string
@@ -34,6 +41,7 @@ export interface ParsedNFe {
   total_value: number
   supplier:    ParsedSupplier
   items:       ParsedNFeItem[]
+  duplicatas:  ParsedDuplicata[]   // parcelas de cobrança (tag cobr/dup)
 }
 
 export function parseNFeXML(xmlContent: string): ParsedNFe | { error: string } {
@@ -100,6 +108,17 @@ export function parseNFeXML(xmlContent: string): ParsedNFe | { error: string } {
       }
     })
 
+    // Cobrança / duplicatas (parcelas) — tag <cobr><dup>
+    const dupRaw = inf.cobr?.dup ?? []
+    const dupArr = Array.isArray(dupRaw) ? dupRaw : [dupRaw]
+    const duplicatas: ParsedDuplicata[] = dupArr
+      .filter((d: any) => d && (d.vDup !== undefined || d.dVenc !== undefined))
+      .map((d: any, i: number) => ({
+        numero:     String(d.nDup ?? (i + 1)),
+        vencimento: String(d.dVenc ?? '').substring(0, 10),
+        valor:      parseFloat(String(d.vDup ?? 0)),
+      }))
+
     return {
       nfe_key:     key,
       nfe_number,
@@ -108,8 +127,9 @@ export function parseNFeXML(xmlContent: string): ParsedNFe | { error: string } {
       total_value: parseFloat(String(total.vNF ?? total.vTotTrib ?? 0)),
       supplier,
       items,
+      duplicatas,
     }
   } catch (e: any) {
-    return { error: `Erro ao processar XML: ${e?.message ?? 'desconhecido'}` }
+    return { error: `Erro ao processar XML: ${mensagemErro(e, 'lib/utils/nfe-parser.ts')}` }
   }
 }

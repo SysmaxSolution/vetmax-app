@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { consumeStockForApplication } from './stock-consumption'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
 export interface KitItem {
@@ -46,7 +47,7 @@ export async function listServiceKits(): Promise<ServiceKitSummary[] | { error: 
     .select('id, name, description, service_kit_items(count)')
     .eq('clinic_id', ctx.clinicId).eq('is_active', true)
     .order('name', { ascending: true })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/surgery-kits.ts') }
   return (data ?? []).map((r): ServiceKitSummary => ({
     id: r.id as string, name: r.name as string, description: (r.description as string | null) ?? null,
     item_count: Number((r.service_kit_items as { count: number }[] | null)?.[0]?.count ?? 0),
@@ -64,7 +65,7 @@ export async function createServiceKit(payload: { name: string; description?: st
   const { data: kit, error } = await admin.from('service_kits')
     .insert({ clinic_id: ctx.clinicId, name: payload.name.trim(), description: payload.description?.trim() || null, created_by: ctx.userId })
     .select('id').single()
-  if (error) return { error: 'Erro ao criar kit: ' + error.message }
+  if (error) return { error: 'Erro ao criar kit: ' + mensagemErro(error, 'lib/actions/surgery-kits.ts') }
 
   const rows = items.map((i, idx) => ({
     clinic_id: ctx.clinicId, kit_id: kit.id as string,
@@ -72,7 +73,7 @@ export async function createServiceKit(payload: { name: string; description?: st
     quantity: i.quantity, sort_order: idx,
   }))
   const { error: itErr } = await admin.from('service_kit_items').insert(rows)
-  if (itErr) { await admin.from('service_kits').delete().eq('id', kit.id); return { error: 'Erro ao salvar insumos: ' + itErr.message } }
+  if (itErr) { await admin.from('service_kits').delete().eq('id', kit.id); return { error: 'Erro ao salvar insumos: ' + mensagemErro(itErr, 'lib/actions/surgery-kits.ts') } }
 
   revalidatePath('/dashboard/surgery')
   return { id: kit.id as string }
@@ -86,7 +87,7 @@ export async function getServiceKit(id: string): Promise<ServiceKit | { error: s
     .from('service_kits')
     .select('id, name, description')
     .eq('id', id).eq('clinic_id', ctx.clinicId).single()
-  if (error || !kit) return { error: error?.message ?? 'Kit não encontrado.' }
+  if (error || !kit) return { error: (error ? mensagemErro(error, 'lib/actions/surgery-kits.ts') : 'Kit não encontrado.') }
   const { data: items } = await admin
     .from('service_kit_items')
     .select('stock_item_id, item_name, quantity')
@@ -113,7 +114,7 @@ export async function updateServiceKit(id: string, payload: { name: string; desc
   const { error: upErr } = await admin.from('service_kits')
     .update({ name: payload.name.trim(), description: payload.description?.trim() || null })
     .eq('id', id).eq('clinic_id', ctx.clinicId)
-  if (upErr) return { error: 'Erro ao atualizar kit: ' + upErr.message }
+  if (upErr) return { error: 'Erro ao atualizar kit: ' + mensagemErro(upErr, 'lib/actions/surgery-kits.ts') }
 
   // Substitui os insumos (delete + reinsert) para refletir a edição.
   await admin.from('service_kit_items').delete().eq('kit_id', id).eq('clinic_id', ctx.clinicId)
@@ -123,7 +124,7 @@ export async function updateServiceKit(id: string, payload: { name: string; desc
     quantity: i.quantity, sort_order: idx,
   }))
   const { error: itErr } = await admin.from('service_kit_items').insert(rows)
-  if (itErr) return { error: 'Erro ao salvar insumos: ' + itErr.message }
+  if (itErr) return { error: 'Erro ao salvar insumos: ' + mensagemErro(itErr, 'lib/actions/surgery-kits.ts') }
 
   revalidatePath('/dashboard/surgery')
   return { success: true }
@@ -134,7 +135,7 @@ export async function deleteServiceKit(id: string): Promise<{ success: true } | 
   if ('error' in ctx) return ctx
   const admin = createAdminClient()
   const { error } = await admin.from('service_kits').update({ is_active: false }).eq('id', id).eq('clinic_id', ctx.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/surgery-kits.ts') }
   revalidatePath('/dashboard/surgery')
   return { success: true }
 }
@@ -213,7 +214,7 @@ export async function getSurgeryAccount(surgeryId: string): Promise<SurgeryAccou
     .select('id, kind, description, amount, status, created_at')
     .eq('clinic_id', ctx.clinicId).eq('surgery_id', surgeryId).neq('status', 'void')
     .order('created_at', { ascending: false })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/surgery-kits.ts') }
   const charges = (data ?? []).map((r): SurgeryChargeRow => ({
     id: r.id as string, kind: r.kind as string, description: r.description as string,
     amount: Number(r.amount ?? 0), status: r.status as string, created_at: r.created_at as string,

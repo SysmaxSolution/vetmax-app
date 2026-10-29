@@ -39,7 +39,7 @@ export default function WeeklyChart({ data }: Props) {
                 <div
                   className={`w-full rounded-t-lg transition-all duration-300 ${
                     isToday
-                      ? 'bg-blue-600 group-hover:bg-blue-500'
+                      ? 'bg-teal-600 group-hover:bg-teal-500'
                       : d.count > 0
                         ? 'bg-slate-200 group-hover:bg-slate-300'
                         : 'bg-slate-100'

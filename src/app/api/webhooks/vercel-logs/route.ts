@@ -4,6 +4,7 @@ import { logServerError, computeFingerprint } from '@/lib/error-logger'
 import { classifyError } from '@/lib/error-classifier'
 import { sendP0Alert } from '@/lib/p0-alert'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 
 // POST /api/webhooks/vercel-logs
 // Recebe logs do Vercel Log Drain (HTTP format).
@@ -70,6 +71,9 @@ function parseEntries(rawBody: string): VercelLogEntry[] {
 }
 
 export async function POST(request: NextRequest) {
+  const barrado = await limitarPorIp(request, { escopo: 'wh:vercel', limite: 300 })
+  if (barrado) return barrado
+
   const secret = process.env.VERCEL_LOG_DRAIN_SECRET
   if (!secret) {
     console.error('[Vercel Log Drain] VERCEL_LOG_DRAIN_SECRET não configurado')

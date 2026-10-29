@@ -8,6 +8,7 @@ import { runAutoFixCycle } from '@/lib/fix-planner'
 import { sendP0FixPlanAlert } from '@/lib/p0-alert'
 import { getAppUrl } from '@/lib/app-url'
 
+import { mensagemErro } from '@/lib/errors'
 /**
  * Dispara aplicação do plano em background (fire-and-forget).
  *
@@ -101,7 +102,7 @@ export async function logClientError(
         resolved:         false,
       })
 
-    if (error) return { error: 'Erro ao registrar log: ' + error.message }
+    if (error) return { error: 'Erro ao registrar log: ' + mensagemErro(error, 'lib/actions/error-logs.ts') }
     return { success: true }
   } catch {
     return { error: 'Erro inesperado ao registrar log.' }
@@ -155,7 +156,7 @@ export async function getUnresolvedErrors(): Promise<
   }
 
   const { data, error } = await query
-  if (error) return { error: 'Erro ao buscar logs: ' + error.message }
+  if (error) return { error: 'Erro ao buscar logs: ' + mensagemErro(error, 'lib/actions/error-logs.ts') }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((row: any) => ({
@@ -208,7 +209,7 @@ export async function resolveError(
     }
 
     const { error } = await query
-    if (error) return { error: 'Erro ao resolver: ' + error.message }
+    if (error) return { error: 'Erro ao resolver: ' + mensagemErro(error, 'lib/actions/error-logs.ts') }
     return { success: true }
   } catch {
     return { error: 'Erro inesperado.' }
@@ -250,7 +251,7 @@ export async function getFixPlans(statusFilter?: string | string[]): Promise<
   }
 
   const { data, error } = await query
-  if (error) return { error: 'Erro ao buscar planos: ' + error.message }
+  if (error) return { error: 'Erro ao buscar planos: ' + mensagemErro(error, 'lib/actions/error-logs.ts') }
   return data ?? []
 }
 
@@ -277,7 +278,7 @@ export async function approveFixPlan(
       .eq('id', planId)
       .eq('status', 'pending_approval')
 
-    if (error) return { error: 'Erro ao aprovar: ' + error.message }
+    if (error) return { error: 'Erro ao aprovar: ' + mensagemErro(error, 'lib/actions/error-logs.ts') }
 
     // Dispara aplicação em background (fire-and-forget). Se o disparo falhar,
     // o cron periódico (a cada 15min via vercel.json) pegará planos approved
@@ -312,7 +313,7 @@ export async function rejectFixPlan(
       .update({ status: 'rejected' })
       .eq('id', planId)
 
-    if (error) return { error: 'Erro ao rejeitar: ' + error.message }
+    if (error) return { error: 'Erro ao rejeitar: ' + mensagemErro(error, 'lib/actions/error-logs.ts') }
     return { success: true }
   } catch {
     return { error: 'Erro inesperado.' }
@@ -402,7 +403,7 @@ export async function resolveAllErrors(): Promise<
     }
 
     const { error, count } = await query
-    if (error) return { error: 'Erro ao resolver: ' + error.message }
+    if (error) return { error: 'Erro ao resolver: ' + mensagemErro(error, 'lib/actions/error-logs.ts') }
     return { resolved: count ?? 0 }
   } catch {
     return { error: 'Erro inesperado.' }

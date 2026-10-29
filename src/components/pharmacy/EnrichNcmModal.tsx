@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Sparkles, Loader2, AlertCircle, Check } from 'lucide-react'
 import type { StockItemV2 } from '@/lib/actions/stock'
 import { updateStockItemV2 } from '@/lib/actions/stock'
@@ -59,7 +60,9 @@ export function EnrichNcmModal({ item, onClose, onSaved }: Props) {
 
   const needsEnrich = !(item as any).ncm && !item.barcode
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white shadow-xl animate-scale-in">
         {/* Header */}
@@ -166,6 +169,7 @@ export function EnrichNcmModal({ item, onClose, onSaved }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

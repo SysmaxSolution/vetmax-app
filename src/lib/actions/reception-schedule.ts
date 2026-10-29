@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+import { mensagemErro } from '@/lib/errors'
 // M9 — aba "Programações" da recepção.
 // Lista as vacinas com próxima dose definida (next_due_date), separando
 // ATRASADAS (vencidas) das PROGRAMADAS (futuras), com pet + tutor.
@@ -63,7 +64,7 @@ export async function getVaccinationSchedule(): Promise<VaccinationSchedule | { 
     .not('next_due_date', 'is', null)
     .order('next_due_date', { ascending: true })
 
-  if (error) return { error: 'Erro ao buscar programações: ' + error.message }
+  if (error) return { error: 'Erro ao buscar programações: ' + mensagemErro(error, 'lib/actions/reception-schedule.ts') }
 
   const today = new Date().toISOString().split('T')[0]
   const overdue: VaccinationScheduleItem[]   = []
@@ -129,6 +130,6 @@ export async function setVaccineScheduleStatus(
     .eq('clinic_id', ctx.clinicId)   // isolamento: nunca toca vacina de outra clínica
     .select('id')
 
-  if (error) return { error: 'Erro ao atualizar: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar: ' + mensagemErro(error, 'lib/actions/reception-schedule.ts') }
   return { ok: true, updated: (data ?? []).length }
 }

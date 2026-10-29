@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import {
   FileText, Plus, Loader2, Sparkles, Printer, CheckCircle2,
@@ -561,7 +562,7 @@ export default function DocumentsSection({
     <>
 
       {/* ── Template Selection Modal ── */}
-      {showModal && (
+      {showModal && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-6"
           onClick={() => { setShowModal(false); setModalError(null); setActiveHint(undefined); setTemplateSearch('') }}>
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[85vh] flex flex-col"
@@ -677,7 +678,8 @@ export default function DocumentsSection({
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* ── Review / Edit Form ── */}
@@ -968,7 +970,7 @@ export default function DocumentsSection({
       )}
 
       {/* Modal de confirmação de exclusão — UI do sistema, não window.confirm */}
-      {docToDelete && (
+      {docToDelete && typeof document !== 'undefined' && createPortal(
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-6"
           onClick={() => setDocToDelete(null)}
@@ -1011,7 +1013,8 @@ export default function DocumentsSection({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Modal Canvas Visual — geração inline, sem sair do consultório.

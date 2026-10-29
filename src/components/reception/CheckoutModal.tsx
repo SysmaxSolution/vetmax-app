@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { X, Loader2, Receipt, AlertCircle, Gift, Plus, Search, Trash2 } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { X, Loader2, Receipt, AlertCircle, Gift, Plus, Search, Trash2, CheckCircle2 } from 'lucide-react'
 import {
   getInvoiceWithItems, processSplitPayment, processPayment, markInvoiceAsCourtesy,
   addItemToInvoice, removeItemFromInvoice,
@@ -53,6 +54,7 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
   const [invoice,      setInvoice]      = useState<InvoiceWithDetails | null>(null)
   const [creditBalance, setCreditBalance] = useState<number>(0)
   const [creditInput,   setCreditInput]   = useState('')
+  const [creditNote,    setCreditNote]    = useState<string | null>(null)
   const [applyingCredit, setApplyingCredit] = useState(false)
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState<string | null>(null)
@@ -156,10 +158,14 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
     const raw = creditInput.trim() ? Number(creditInput.replace(',', '.')) : suggested
     const amount = Math.round(raw * 100) / 100
     if (!Number.isFinite(amount) || amount <= 0) { setError('Informe um valor de crédito válido.'); return }
-    setApplyingCredit(true); setError(null)
+    setApplyingCredit(true); setError(null); setCreditNote(null)
     const res = await applyTutorCreditToInvoice({ invoice_id: invoice.id, amount })
     setApplyingCredit(false)
     if ('error' in res) { setError(res.error); return }
+    // Clamp: se o valor informado excedia o saldo da fatura, avisa (não bloqueia).
+    setCreditNote(res.applied < amount - 0.005
+      ? `Aplicado ${fmt(res.applied)} — o valor informado excedia o saldo da fatura. O restante do crédito continua disponível.`
+      : null)
     setCreditInput('')
     const refreshed = await getInvoiceWithItems(invoice.id)
     if (!('error' in refreshed)) setInvoice(refreshed)
@@ -200,24 +206,26 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
   }, [invoice?.tutor_id])
 
   if (loading || !invoice) {
-    return (
+    return typeof document === 'undefined' ? null : createPortal(
       <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
         <div className="bg-white rounded-2xl p-10 flex items-center gap-3">
           <Loader2 className="h-5 w-5 animate-spin text-teal-600" />
           <span className="text-sm text-slate-600">Carregando fatura...</span>
         </div>
-      </div>
+      </div>,
+      document.body,
     )
   }
 
   if (error) {
-    return (
+    return typeof document === 'undefined' ? null : createPortal(
       <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
         <div className="bg-white rounded-2xl p-8 max-w-sm w-full text-center space-y-3">
           <p className="text-red-600 text-sm">{error}</p>
           <button onClick={onClose} className="text-slate-500 text-sm underline">Fechar</button>
         </div>
-      </div>
+      </div>,
+      document.body,
     )
   }
 
@@ -363,26 +371,43 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
     setShowPaymentModal(false)
 
     // Pergunta de NFS-e: só quando a clínica emite nota e há consulta vinculada.
+    // 1 nota por empresa faturante (CNPJ). Modo automático (config) emite sem
+    // perguntar; senão, o operador confirma.
     if (invoice.consultation_id) {
       const emits = await clinicEmitsNfse()
       if (emits.emits) {
         setNfsePrompt({ consultationId: invoice.consultation_id, petName: invoice.patient.name, total: totalReceived })
-        return // finaliza após a decisão do operador
+        if (emits.auto) { void runEmitNfse(invoice.consultation_id, invoice.patient.name, totalReceived) }
+        return // finaliza após a emissão/decisão
       }
     }
     onSuccess(invoice.patient.name, totalReceived)
   }
 
-  async function handleEmitNfse() {
-    if (!nfsePrompt) return
+  // Emite as NFS-e (uma por empresa faturante) e trata sucesso/erro parcial.
+  async function runEmitNfse(consultationId: string, petName: string, total: number) {
     setEmittingNfse(true)
     setNfseResult(null)
-    const res = await emitNfseForConsultation(nfsePrompt.consultationId)
+    const res = await emitNfseForConsultation(consultationId)
     setEmittingNfse(false)
     if ('error' in res) { setNfseResult('Erro: ' + res.error); return }
-    const { petName, total } = nfsePrompt
+    const fail = res.results.filter(r => r.error)
+    const ok   = res.results.filter(r => !r.error)
+    if (fail.length > 0) {
+      // Erro parcial: mantém o painel aberto mostrando quais CNPJs falharam.
+      setNfseResult(
+        `${ok.length} nota(s) enviada(s). Falha em ${fail.length}: ` +
+        fail.map(f => `${f.company_name} — ${f.error}`).join(' · '),
+      )
+      return
+    }
     setNfsePrompt(null)
     onSuccess(petName, total)
+  }
+
+  async function handleEmitNfse() {
+    if (!nfsePrompt) return
+    await runEmitNfse(nfsePrompt.consultationId, nfsePrompt.petName, nfsePrompt.total)
   }
 
   function handleSkipNfse() {
@@ -392,7 +417,7 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
     onSuccess(petName, total)
   }
 
-  return (
+  return typeof document === 'undefined' ? null : createPortal(
     <>
       <div
         className="fixed inset-0 z-[70] flex items-start justify-center bg-black/50 p-4 overflow-y-auto"
@@ -709,6 +734,9 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
                     </button>
                   </div>
                 )}
+                {creditNote && (
+                  <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">{creditNote}</p>
+                )}
               </div>
             )}
 
@@ -720,14 +748,24 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
                 Cancelar
               </button>
               {totalDue <= 0.005 ? (
-                <button
-                  onClick={() => setConfirmCourtesy(true)}
-                  data-mentor-step="cashier-courtesy-btn"
-                  title="Esta fatura está zerada — pode ser baixada como cortesia."
-                  className="flex-1 rounded-xl bg-violet-600 py-3 text-sm font-semibold text-white hover:bg-violet-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Gift className="h-4 w-4" /> Baixar como cortesia
-                </button>
+                (invoice.paid_amount ?? 0) > 0.005 ? (
+                  // Já quitada (ex.: coberta por crédito/adiantamento) — não é cortesia.
+                  <button
+                    onClick={onClose}
+                    className="flex-1 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle2 className="h-4 w-4" /> Fatura quitada · Concluir
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setConfirmCourtesy(true)}
+                    data-mentor-step="cashier-courtesy-btn"
+                    title="Esta fatura está zerada — pode ser baixada como cortesia."
+                    className="flex-1 rounded-xl bg-violet-600 py-3 text-sm font-semibold text-white hover:bg-violet-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Gift className="h-4 w-4" /> Baixar como cortesia
+                  </button>
+                )
               ) : (
                 <button
                   onClick={openPaymentFlow}
@@ -794,6 +832,8 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
             percent:       copayInterestPreview.percent,
           } : null}
           creditBalance={creditBalance}
+          consultationId={invoice.consultation_id}
+          tutorId={invoice.tutor_id}
           allowCredit
           onCancel={() => setShowPaymentModal(false)}
           onConfirm={handlePaymentConfirm}
@@ -850,11 +890,12 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
               </div>
             </div>
             <p className="text-sm text-slate-600">
-              Deseja emitir a <strong>NFS-e</strong> deste atendimento agora? A nota será gerada com base nos
-              serviços cobrados e enviada ao provedor (Focus NFe).
+              Deseja emitir a <strong>NFS-e</strong> deste atendimento agora? Será gerada
+              <strong> uma nota por empresa faturante (CNPJ)</strong> presente nos serviços cobrados,
+              enviada ao provedor (Focus NFe).
             </p>
             {nfseResult && (
-              <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-600">{nfseResult}</div>
+              <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">{nfseResult}</div>
             )}
             <div className="flex gap-2 pt-1">
               <button
@@ -875,6 +916,7 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
           </div>
         </div>
       )}
-    </>
+    </>,
+    document.body,
   )
 }

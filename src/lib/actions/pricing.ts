@@ -11,6 +11,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 export interface PriceTable {
   id: string
   clinic_id: string
@@ -59,7 +60,7 @@ export async function listPriceTables(): Promise<PriceTable[] | { error: string 
     .select('*')
     .eq('clinic_id', ctx.clinic_id)
     .order('slot', { ascending: true })
-  if (error) return { error: `Erro ao listar tabelas de preço: ${error.message}` }
+  if (error) return { error: `Erro ao listar tabelas de preço: ${mensagemErro(error, 'lib/actions/pricing.ts')}` }
   return (data ?? []) as PriceTable[]
 }
 
@@ -94,7 +95,7 @@ export async function upsertPriceTable(input: {
       .eq('clinic_id', ctx.clinic_id)
       .select('id')
       .single()
-    if (error) return { error: `Erro ao atualizar: ${error.message}` }
+    if (error) return { error: `Erro ao atualizar: ${mensagemErro(error, 'lib/actions/pricing.ts')}` }
     revalidatePath('/dashboard/registry')
     return { id: data.id as string }
   }
@@ -106,7 +107,7 @@ export async function upsertPriceTable(input: {
     .single()
   if (error) {
     if (error.code === '23505') return { error: `Já existe uma tabela no slot ${input.slot}` }
-    return { error: `Erro ao criar: ${error.message}` }
+    return { error: `Erro ao criar: ${mensagemErro(error, 'lib/actions/pricing.ts')}` }
   }
   revalidatePath('/dashboard/registry')
   return { id: data.id as string }
@@ -122,7 +123,7 @@ export async function getPricingSettings(): Promise<PricingSettings | { error: s
     .select('*')
     .eq('clinic_id', ctx.clinic_id)
     .maybeSingle()
-  if (error) return { error: `Erro ao carregar configurações: ${error.message}` }
+  if (error) return { error: `Erro ao carregar configurações: ${mensagemErro(error, 'lib/actions/pricing.ts')}` }
   // Default implícito se ainda não configurado
   return (data ?? {
     clinic_id: ctx.clinic_id,
@@ -158,7 +159,7 @@ export async function savePricingSettings(input: {
       margin_calc_type: input.margin_calc_type,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'clinic_id' })
-  if (error) return { error: `Erro ao salvar: ${error.message}` }
+  if (error) return { error: `Erro ao salvar: ${mensagemErro(error, 'lib/actions/pricing.ts')}` }
   revalidatePath('/dashboard/registry')
   revalidatePath('/dashboard/management')
   return { ok: true }
@@ -182,7 +183,7 @@ export async function getItemPrices(
     .select('price_table_id, price, margin_percent')
     .eq('clinic_id', ctx.clinic_id)
     .eq('stock_item_id', stockItemId)
-  if (error) return { error: `Erro ao carregar preços do item: ${error.message}` }
+  if (error) return { error: `Erro ao carregar preços do item: ${mensagemErro(error, 'lib/actions/pricing.ts')}` }
   const map: Record<string, ItemTablePrice> = {}
   for (const row of (data ?? []) as { price_table_id: string; price: number; margin_percent: number | null }[]) {
     map[row.price_table_id] = { price: Number(row.price), margin: row.margin_percent == null ? null : Number(row.margin_percent) }
@@ -218,7 +219,7 @@ export async function setItemPrices(
     const { error } = await admin
       .from('price_table_items')
       .upsert(toUpsert, { onConflict: 'price_table_id, stock_item_id' })
-    if (error) return { error: `Erro ao salvar preços: ${error.message}` }
+    if (error) return { error: `Erro ao salvar preços: ${mensagemErro(error, 'lib/actions/pricing.ts')}` }
   }
   if (toDelete.length > 0) {
     const { error } = await admin
@@ -227,7 +228,7 @@ export async function setItemPrices(
       .eq('clinic_id', ctx.clinic_id)
       .eq('stock_item_id', stockItemId)
       .in('price_table_id', toDelete)
-    if (error) return { error: `Erro ao remover preços: ${error.message}` }
+    if (error) return { error: `Erro ao remover preços: ${mensagemErro(error, 'lib/actions/pricing.ts')}` }
   }
   return { ok: true }
 }

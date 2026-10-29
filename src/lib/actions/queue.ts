@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 type QueueModule = 'triage' | 'vet' | 'exams'
 
 interface RemoveFromQueueParams {
@@ -38,7 +39,7 @@ export async function removeFromQueue(
     .eq('id', params.consultationId)
     .eq('clinic_id', profile.clinic_id)
 
-  if (updateErr) return { error: 'Erro ao cancelar consulta: ' + updateErr.message }
+  if (updateErr) return { error: 'Erro ao cancelar consulta: ' + mensagemErro(updateErr, 'lib/actions/queue.ts') }
 
   const { error: logErr } = await admin
     .from('module_removal_logs')
@@ -52,7 +53,7 @@ export async function removeFromQueue(
       reason:       params.reason,
     })
 
-  if (logErr) return { error: 'Consulta cancelada, mas erro no log: ' + logErr.message }
+  if (logErr) return { error: 'Consulta cancelada, mas erro no log: ' + mensagemErro(logErr, 'lib/actions/queue.ts') }
 
   revalidatePath('/dashboard/triage')
   revalidatePath('/dashboard/vet')

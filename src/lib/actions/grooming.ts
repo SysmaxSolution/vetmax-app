@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type GroomingStatus =
@@ -130,7 +131,7 @@ export async function getGroomingBoard(): Promise<GroomingBoard | { error: strin
     .or('current_status.is.null,and(current_status.neq.cancelled,current_status.neq.archived)')
     .order('created_at', { ascending: true })
 
-  if (error) return { error: 'Erro ao buscar sessões: ' + error.message }
+  if (error) return { error: 'Erro ao buscar sessões: ' + mensagemErro(error, 'lib/actions/grooming.ts') }
 
   const now = new Date()
   const board: GroomingBoard = {
@@ -235,7 +236,7 @@ export async function createGroomingSession(data: {
     .select('id')
     .single()
 
-  if (error) return { error: 'Erro ao criar sessão: ' + error.message }
+  if (error) return { error: 'Erro ao criar sessão: ' + mensagemErro(error, 'lib/actions/grooming.ts') }
 
   revalidatePath('/dashboard/grooming')
   revalidatePath('/dashboard/reception/calendar')
@@ -259,7 +260,7 @@ export async function cancelGroomingSession(
     .in('status', ['received'])           // só cancela se ainda não iniciou
     .is('started_at', null)               // proteção extra: não cancelar em andamento
 
-  if (error) return { error: 'Erro ao cancelar: ' + error.message }
+  if (error) return { error: 'Erro ao cancelar: ' + mensagemErro(error, 'lib/actions/grooming.ts') }
 
   revalidatePath('/dashboard/grooming')
   revalidatePath('/dashboard/reception/calendar')
@@ -297,7 +298,7 @@ export async function updateGroomingStatus(
     .update(patch)
     .eq('id', sessionId)
 
-  if (error) return { error: 'Erro ao atualizar status: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar status: ' + mensagemErro(error, 'lib/actions/grooming.ts') }
 
   revalidatePath('/dashboard/grooming')
   return { success: true }
@@ -333,7 +334,7 @@ export async function addGroomingRecord(data: {
     .select('id')
     .single()
 
-  if (error) return { error: 'Erro ao salvar registro: ' + error.message }
+  if (error) return { error: 'Erro ao salvar registro: ' + mensagemErro(error, 'lib/actions/grooming.ts') }
 
   revalidatePath('/dashboard/grooming')
   return { id: record.id }
@@ -363,7 +364,7 @@ export async function updateGroomingRecord(
     .eq('id', recordId)
     .eq('clinic_id', ctx.clinicId)
 
-  if (error) return { error: 'Erro ao editar registro: ' + error.message }
+  if (error) return { error: 'Erro ao editar registro: ' + mensagemErro(error, 'lib/actions/grooming.ts') }
 
   revalidatePath('/dashboard/grooming')
   return { ok: true }
@@ -404,7 +405,7 @@ export async function getGroomingDocuments(
     .eq('session_id', sessionId)
     .order('created_at', { ascending: false })
 
-  if (error) return { error: 'Erro ao buscar documentos: ' + error.message }
+  if (error) return { error: 'Erro ao buscar documentos: ' + mensagemErro(error, 'lib/actions/grooming.ts') }
   return (data ?? []) as GroomingDocument[]
 }
 
@@ -438,7 +439,7 @@ export async function saveGroomingDocument(data: {
     .select('id')
     .single()
 
-  if (error) return { error: 'Erro ao salvar documento: ' + error.message }
+  if (error) return { error: 'Erro ao salvar documento: ' + mensagemErro(error, 'lib/actions/grooming.ts') }
   return { id: doc.id }
 }
 
@@ -459,7 +460,7 @@ export async function updateGroomingDocumentMetadata(
     })
     .eq('id', docId)
 
-  if (error) return { error: 'Erro ao atualizar metadados: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar metadados: ' + mensagemErro(error, 'lib/actions/grooming.ts') }
   return { success: true }
 }
 
@@ -478,7 +479,7 @@ export async function deleteGroomingDocument(
     .delete()
     .eq('id', docId)
 
-  if (error) return { error: 'Erro ao remover documento: ' + error.message }
+  if (error) return { error: 'Erro ao remover documento: ' + mensagemErro(error, 'lib/actions/grooming.ts') }
   return { success: true }
 }
 
@@ -498,7 +499,7 @@ export async function getGroomingCatalog(): Promise<GroomingCatalogItem[] | { er
     .not('category', 'in', '("vet_service","exam","surgery")')
     .order('name', { ascending: true })
 
-  if (error) return { error: 'Erro ao buscar catálogo: ' + error.message }
+  if (error) return { error: 'Erro ao buscar catálogo: ' + mensagemErro(error, 'lib/actions/grooming.ts') }
   return (data ?? []).map((r: any) => ({ id: r.id, name: r.name, price: r.unit_price ?? 0 }))
 }
 
@@ -521,7 +522,7 @@ export async function updateGroomingPricing(
     .update({ service_prices: servicePrices, discount_percent: discountPercent, price_total })
     .eq('id', sessionId)
 
-  if (error) return { error: 'Erro ao atualizar preço: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar preço: ' + mensagemErro(error, 'lib/actions/grooming.ts') }
 
   revalidatePath('/dashboard/grooming')
   return { success: true, price_total }
@@ -542,7 +543,7 @@ export async function updateGroomingPaymentStatus(
     .update({ payment_status: paymentStatus })
     .eq('id', sessionId)
 
-  if (error) return { error: 'Erro ao atualizar pagamento: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar pagamento: ' + mensagemErro(error, 'lib/actions/grooming.ts') }
 
   revalidatePath('/dashboard/grooming')
   return { success: true }
@@ -566,7 +567,7 @@ export async function confirmGroomingArrival(
     })
     .eq('id', sessionId)
 
-  if (error) return { error: 'Erro ao confirmar chegada: ' + error.message }
+  if (error) return { error: 'Erro ao confirmar chegada: ' + mensagemErro(error, 'lib/actions/grooming.ts') }
 
   revalidatePath('/dashboard/grooming')
   return { success: true }
@@ -605,7 +606,7 @@ export async function getPendingGroomingSessions(): Promise<PendingGroomingPayme
     .neq('current_status', 'archived')
     .order('created_at', { ascending: false })
 
-  if (error) return { error: 'Erro ao buscar sessões: ' + error.message }
+  if (error) return { error: 'Erro ao buscar sessões: ' + mensagemErro(error, 'lib/actions/grooming.ts') }
 
   return (data ?? []).map((s: any) => {
     const p = s.patients as any
@@ -675,7 +676,7 @@ export async function processGroomingPaymentFromCashier(
     .select('id')
     .single()
 
-  if (insertErr || !entry) return { error: 'Erro ao registrar no caixa: ' + (insertErr?.message ?? '') }
+  if (insertErr || !entry) return { error: 'Erro ao registrar no caixa: ' + ((insertErr ? mensagemErro(insertErr, 'lib/actions/grooming.ts') : '')) }
 
   // Mark grooming session as paid and update current_status
   const { error: updateErr } = await supabase
@@ -688,7 +689,7 @@ export async function processGroomingPaymentFromCashier(
     .eq('id', sessionId)
     .eq('clinic_id', clinicId)
 
-  if (updateErr) return { error: 'Caixa registrado mas status não atualizado: ' + updateErr.message }
+  if (updateErr) return { error: 'Caixa registrado mas status não atualizado: ' + mensagemErro(updateErr, 'lib/actions/grooming.ts') }
 
   // Comissão automática do banhista (fire-and-forget)
   const gs = session as any
@@ -728,7 +729,7 @@ export async function archiveGroomingSession(
     .eq('clinic_id', clinicId)
     .eq('status', 'delivered')
 
-  if (error) return { error: 'Erro ao remover da fila: ' + error.message }
+  if (error) return { error: 'Erro ao remover da fila: ' + mensagemErro(error, 'lib/actions/grooming.ts') }
 
   revalidatePath('/dashboard/grooming')
   revalidatePath('/dashboard/cashier')

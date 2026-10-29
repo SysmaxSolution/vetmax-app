@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 
+import { mensagemErro } from '@/lib/errors'
 export type OnboardingState = { error: string } | null
 
 export async function completeOnboarding(
@@ -63,7 +64,7 @@ export async function completeOnboarding(
       if (signUpError.message.includes('already registered') || signUpError.message.includes('already been registered')) {
         return { error: 'Este e-mail já está cadastrado. Faça login normalmente.' }
       }
-      return { error: 'Erro ao criar conta: ' + signUpError.message }
+      return { error: 'Erro ao criar conta: ' + mensagemErro(signUpError, 'lib/actions/onboarding.ts') }
     }
 
     if (!authData.user) return { error: 'Erro inesperado ao criar usuário.' }
@@ -78,7 +79,7 @@ export async function completeOnboarding(
 
     if (profileError) {
       if (profileError.code === '23505') return { error: 'Perfil já cadastrado para este usuário.' }
-      return { error: 'Erro ao criar perfil: ' + profileError.message }
+      return { error: 'Erro ao criar perfil: ' + mensagemErro(profileError, 'lib/actions/onboarding.ts') }
     }
 
     // Registra vínculo multi-clínica

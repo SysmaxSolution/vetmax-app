@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+import { mensagemErro } from '@/lib/errors'
 const MAX_BYTES = 16 * 1024 * 1024 // 16 MB (limite WhatsApp)
 
 export async function uploadWhatsAppAttachment(formData: FormData): Promise<
@@ -33,7 +34,7 @@ export async function uploadWhatsAppAttachment(formData: FormData): Promise<
     .from('patient-attachments')
     .upload(path, bytes, { contentType: file.type, upsert: false })
 
-  if (uploadError) return { error: 'Falha no upload: ' + uploadError.message }
+  if (uploadError) return { error: 'Falha no upload: ' + mensagemErro(uploadError, 'lib/actions/whatsapp-upload.ts') }
 
   const { data: signed } = await admin.storage
     .from('patient-attachments')

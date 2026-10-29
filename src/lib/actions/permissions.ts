@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 export interface UserPermission {
@@ -40,7 +41,7 @@ export async function listUserPermissions(
     .eq('clinic_id', profile.clinic_id)
     .eq('user_id', userId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/permissions.ts') }
   return (data ?? []) as UserPermission[]
 }
 
@@ -91,7 +92,7 @@ export async function upsertUserPermissions(
     .from('user_permissions_granular')
     .upsert(rows, { onConflict: 'clinic_id,user_id,module,action' })
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/permissions.ts') }
   revalidatePath('/dashboard/management')
   return { success: true }
 }

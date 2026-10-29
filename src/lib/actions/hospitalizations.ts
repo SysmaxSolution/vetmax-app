@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { logAudit } from './audit'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type HospitalizationStatus =
@@ -85,7 +86,7 @@ export async function getHospitalizationsBoard(): Promise<HospitalizationBoard |
     .not('status', 'in', '("discharged","cancelled")')
     .order('created_at', { ascending: true })
 
-  if (error) return { error: 'Erro ao buscar internações: ' + error.message }
+  if (error) return { error: 'Erro ao buscar internações: ' + mensagemErro(error, 'lib/actions/hospitalizations.ts') }
 
   const board: HospitalizationBoard = {
     observation:         [],
@@ -221,7 +222,7 @@ export async function createHospitalization(data: {
       .update({ status: 'hospitalized' })
       .eq('id', data.consultation_id)
       .eq('clinic_id', clinicId)
-    if (updateErr) return { error: 'Internação criada, mas falha ao atualizar fila: ' + updateErr.message }
+    if (updateErr) return { error: 'Internação criada, mas falha ao atualizar fila: ' + mensagemErro(updateErr, 'lib/actions/hospitalizations.ts') }
   }
 
   await logAudit({ action: 'CREATE_HOSPITALIZATION', entity_type: 'hospitalizations', entity_id: result.id, details: { patient_id: data.patient_id, status: data.status, reason: data.reason } })
@@ -259,7 +260,7 @@ export async function updateHospitalizationStatus(
     .eq('id', id)
     .eq('clinic_id', clinicId)
 
-  if (error) return { error: 'Erro ao mover internação: ' + error.message }
+  if (error) return { error: 'Erro ao mover internação: ' + mensagemErro(error, 'lib/actions/hospitalizations.ts') }
 
   await logAudit({ action: 'UPDATE_HOSPITALIZATION_STATUS', entity_type: 'hospitalizations', entity_id: id, details: { status } })
 
@@ -285,7 +286,7 @@ export async function getHospitalizationOccupancy(): Promise<
     .eq('clinic_id', clinicId)
     .neq('status', 'discharged')
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/hospitalizations.ts') }
 
   const by_status: Record<string, number> = {}
   for (const h of data ?? []) {
@@ -336,7 +337,7 @@ export async function addClinicalEvolution(data: {
     improvement_level: data.improvement_level,
   }).select('id').single()
 
-  if (error) return { error: 'Erro ao salvar evolução: ' + error.message }
+  if (error) return { error: 'Erro ao salvar evolução: ' + mensagemErro(error, 'lib/actions/hospitalizations.ts') }
 
   // Abatimento automático de estoque para cada medicação da evolução
   if (profile?.clinic_id && insertedRecord?.id && data.medications.length > 0) {
@@ -431,7 +432,7 @@ export async function addHospitalizationLog(data: {
     to_status:          data.to_status,
   })
 
-  if (error) return { error: 'Erro ao registrar log: ' + error.message }
+  if (error) return { error: 'Erro ao registrar log: ' + mensagemErro(error, 'lib/actions/hospitalizations.ts') }
   return { success: true }
 }
 
@@ -457,7 +458,7 @@ export async function confirmDischarge(
     .eq('id', hospitalizationId)
     .eq('clinic_id', clinicId)
 
-  if (hospErr) return { error: 'Erro ao encerrar internação: ' + hospErr.message }
+  if (hospErr) return { error: 'Erro ao encerrar internação: ' + mensagemErro(hospErr, 'lib/actions/hospitalizations.ts') }
 
   if (consultationId) {
     await admin
@@ -602,7 +603,7 @@ export async function updateHospitalizationClinicalData(
     .update(patch)
     .eq('id', hospitalizationId)
     .eq('clinic_id', clinicId)
-  if (error) return { error: 'Erro ao salvar dados clínicos: ' + error.message }
+  if (error) return { error: 'Erro ao salvar dados clínicos: ' + mensagemErro(error, 'lib/actions/hospitalizations.ts') }
 
   // Propaga weight_at_admission para patients.last_known_weight
   if (fields.weight_at_admission && fields.weight_at_admission > 0) {
@@ -660,7 +661,7 @@ export async function getHospitalizationDocuments(
     .eq('hospitalization_id', hospitalizationId)
     .order('created_at', { ascending: false })
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/hospitalizations.ts') }
   return (data ?? []) as HospDocument[]
 }
 
@@ -704,7 +705,7 @@ export async function saveHospitalizationDocument(data: {
     .select('id')
     .single()
 
-  if (error || !doc) return { error: 'Erro ao salvar documento: ' + (error?.message ?? '') }
+  if (error || !doc) return { error: 'Erro ao salvar documento: ' + ((error ? mensagemErro(error, 'lib/actions/hospitalizations.ts') : '')) }
 
   // Log automático no feed da Linha do Tempo (prioriza título se informado)
   const displayName = data.title?.trim() || data.file_name
@@ -750,7 +751,7 @@ export async function updateHospitalizationDocumentMetadata(
     .eq('id', docId)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: 'Erro ao atualizar metadados: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar metadados: ' + mensagemErro(error, 'lib/actions/hospitalizations.ts') }
 
   revalidatePath('/dashboard/hospitalization')
   return { success: true }
@@ -779,14 +780,14 @@ export async function deleteHospitalizationDocument(
     .from('clinical-documents')
     .remove([storagePath])
 
-  if (storageErr) return { error: 'Erro ao remover arquivo: ' + storageErr.message }
+  if (storageErr) return { error: 'Erro ao remover arquivo: ' + mensagemErro(storageErr, 'lib/actions/hospitalizations.ts') }
 
   const { error: dbErr } = await admin
     .from('hospitalization_documents')
     .delete()
     .eq('id', docId)
 
-  if (dbErr) return { error: 'Erro ao remover registro: ' + dbErr.message }
+  if (dbErr) return { error: 'Erro ao remover registro: ' + mensagemErro(dbErr, 'lib/actions/hospitalizations.ts') }
 
   revalidatePath('/dashboard/hospitalization')
   return { success: true }
@@ -817,7 +818,7 @@ export async function getHospitalizationByConsultation(
     .limit(1)
     .maybeSingle()
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/hospitalizations.ts') }
   if (!hosp)  return { error: 'Internação não encontrada.' }
 
   const { data: recs, error: recErr } = await supabase
@@ -826,7 +827,7 @@ export async function getHospitalizationByConsultation(
     .eq('hospitalization_id', hosp.id)
     .order('created_at', { ascending: false })
 
-  if (recErr) return { error: recErr.message }
+  if (recErr) return { error: mensagemErro(recErr, 'lib/actions/hospitalizations.ts') }
 
   return {
     id:            hosp.id,
@@ -860,7 +861,7 @@ export async function sendToVetReview(
     .eq('id', hospitalizationId)
     .eq('clinic_id', clinicId)
 
-  if (hospErr) return { error: 'Erro ao encerrar internação: ' + hospErr.message }
+  if (hospErr) return { error: 'Erro ao encerrar internação: ' + mensagemErro(hospErr, 'lib/actions/hospitalizations.ts') }
 
   // Devolve o animal para a fila do MV
   if (consultationId) {
@@ -870,7 +871,7 @@ export async function sendToVetReview(
       .eq('id', consultationId)
       .eq('clinic_id', clinicId)
 
-    if (consErr) return { error: 'Internação encerrada, mas falha ao mover para revisão: ' + consErr.message }
+    if (consErr) return { error: 'Internação encerrada, mas falha ao mover para revisão: ' + mensagemErro(consErr, 'lib/actions/hospitalizations.ts') }
   }
 
   revalidatePath('/dashboard/hospitalization')
@@ -911,7 +912,7 @@ export async function cancelHospitalization(
     .select('id, consultation_id')
     .maybeSingle()
 
-  if (error) return { error: 'Erro ao cancelar internação: ' + error.message }
+  if (error) return { error: 'Erro ao cancelar internação: ' + mensagemErro(error, 'lib/actions/hospitalizations.ts') }
   if (!data) return { error: 'Internação não encontrada ou já encerrada.' }
 
   // Se veio de uma consulta marcada como "hospitalized", devolve ao consultório

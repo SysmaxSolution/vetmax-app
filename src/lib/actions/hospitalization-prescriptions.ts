@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { consumeStockForApplication, type StockConsumptionResult } from '@/lib/actions/stock-consumption'
 import { formatClinicTime } from '@/lib/time'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
 export type PrescriptionStatus = 'active' | 'paused' | 'finished'
@@ -115,7 +116,7 @@ export async function listHospitalizationPrescriptions(
   }
 
   const { data, error } = await query
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/hospitalization-prescriptions.ts') }
 
   // Resolve last_applied_at + doses_applied no Node (uma query, dado o LEFT JOIN
   // implícito do Supabase nested select).
@@ -190,7 +191,7 @@ export async function createHospitalizationPrescription(
     .select('id')
     .single()
 
-  if (error) return { error: 'Erro ao criar prescrição: ' + error.message }
+  if (error) return { error: 'Erro ao criar prescrição: ' + mensagemErro(error, 'lib/actions/hospitalization-prescriptions.ts') }
   revalidatePath('/dashboard/hospitalization')
   return { id: data.id as string }
 }
@@ -258,7 +259,7 @@ export async function applyHospitalizationDose(
     .select('id')
     .single()
 
-  if (error) return { error: 'Erro ao registrar dose: ' + error.message }
+  if (error) return { error: 'Erro ao registrar dose: ' + mensagemErro(error, 'lib/actions/hospitalization-prescriptions.ts') }
   const administrationId = data.id as string
 
   // ── Baixa automática de estoque (Bloco 3) ───────────────────────────────
@@ -365,7 +366,7 @@ export async function updateHospitalizationPrescriptionStatus(
     .eq('id', id)
     .eq('clinic_id', ctx.clinicId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/hospitalization-prescriptions.ts') }
   revalidatePath('/dashboard/hospitalization')
   return { success: true }
 }

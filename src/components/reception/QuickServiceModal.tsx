@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Sparkles, AlertCircle } from 'lucide-react'
 import { createQuickService } from '@/lib/actions/services'
 import type { SelectedService } from './ServiceComboBox'
@@ -58,7 +59,7 @@ export default function QuickServiceModal({ initialName, onClose, onCreated }: P
     })
   }
 
-  return (
+  return typeof document === 'undefined' ? null : createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -183,6 +184,7 @@ export default function QuickServiceModal({ initialName, onClose, onCreated }: P
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

@@ -32,16 +32,26 @@ export default async function ExamDetailPage({ params }: Props) {
 
   const clinicName = (profile.clinics as unknown as { name: string } | null)?.name ?? 'Minha Clínica'
 
-  const [consultResult, templatesResult, docsResult] = await Promise.all([
+  const [consultResult, templatesResult, docsResult, clinicRow] = await Promise.all([
     getVetConsultation(id),
     getTemplates(),
     getPatientDocuments(id),
+    admin.from('clinics').select('flow_config').eq('id', profile.clinic_id).maybeSingle(),
   ])
+
+  // Fluxo de Rejeição de Exame — opt-in por clínica (padrão desligado).
+  const usesExamRejection =
+    ((clinicRow.data?.flow_config ?? {}) as { usa_fluxo_rejeicao_exame?: boolean })
+      .usa_fluxo_rejeicao_exame === true
 
   if ('error' in consultResult) redirect('/dashboard/exams')
 
-  // Só permite acesso se a consulta está em waiting_exam
-  if (consultResult.status !== 'waiting_exam') redirect('/dashboard/exams')
+  // Permite acesso na fila de exames (aguardando exame) e nos que foram
+  // enviados a laboratório parceiro (aguardando resultado) — para anexar o
+  // resultado, dar alta ou devolver ao médico quando o laudo voltar.
+  if (consultResult.status !== 'waiting_exam' && consultResult.status !== 'awaiting_lab_result') {
+    redirect('/dashboard/exams')
+  }
 
   const templates         = 'error' in templatesResult ? [] : templatesResult
   const initialDocuments  = 'error' in docsResult      ? [] : docsResult
@@ -65,6 +75,7 @@ export default async function ExamDetailPage({ params }: Props) {
         initialAttachments={initialAttachments}
         userRole={profile.role}
         insuranceCard={insuranceCard}
+        usesExamRejection={usesExamRejection}
       />
     </div>
   )

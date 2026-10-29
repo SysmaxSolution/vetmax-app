@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import { registerOutflow, type CashierOutflow } from '@/lib/actions/cashier-sessions'
@@ -66,7 +67,7 @@ export default function CashierOutflowModal({ sessionId, onClose, onSuccess, onT
     onClose()
   }
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5 animate-scale-in">
         <div className="flex items-center justify-between">
@@ -155,6 +156,7 @@ export default function CashierOutflowModal({ sessionId, onClose, onSuccess, onT
           </div>
         </form>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

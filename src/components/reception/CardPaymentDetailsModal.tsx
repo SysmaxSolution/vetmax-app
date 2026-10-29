@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { CreditCard, Loader2, Check, X } from 'lucide-react'
 
 /**
@@ -43,7 +44,7 @@ export default function CardPaymentDetailsModal({ paymentMethod, amount, onCance
     onConfirm({ acquirer: acquirer.trim(), nsu: nsu.trim(), authorization: authorization.trim() })
   }
 
-  return (
+  return typeof document === 'undefined' ? null : createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -157,6 +158,7 @@ export default function CardPaymentDetailsModal({ paymentMethod, amount, onCance
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

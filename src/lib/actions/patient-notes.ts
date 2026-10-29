@@ -16,6 +16,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 export type NoteType = 'observation' | 'death' | 'clinical' | 'behavior' | 'other'
 
 export interface PatientNote {
@@ -74,7 +75,7 @@ export async function createPatientNote(input: {
     })
     .select('id')
     .single()
-  if (error || !data) return { error: 'Erro ao salvar nota: ' + (error?.message ?? '') }
+  if (error || !data) return { error: 'Erro ao salvar nota: ' + ((error ? mensagemErro(error, 'lib/actions/patient-notes.ts') : '')) }
 
   revalidatePath(`/dashboard/patients/${input.patient_id}`)
   return { id: data.id as string }
@@ -99,7 +100,7 @@ export async function listPatientNotes(
     .eq('clinic_id', clinic_id)
     .eq('patient_id', patientId)
     .order('created_at', { ascending: false })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/patient-notes.ts') }
 
   return (data ?? []).map((r: any) => ({
     id:              r.id,
@@ -139,7 +140,7 @@ export async function deletePatientNote(noteId: string): Promise<{ success: true
     .delete()
     .eq('id', noteId)
     .eq('clinic_id', clinic_id)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/patient-notes.ts') }
   return { success: true }
 }
 
@@ -218,7 +219,7 @@ export async function recordPatientDeath(
     })
     .eq('id', input.patient_id)
     .eq('clinic_id', clinic_id)
-  if (updErr) return { error: 'Erro ao registrar óbito: ' + updErr.message }
+  if (updErr) return { error: 'Erro ao registrar óbito: ' + mensagemErro(updErr, 'lib/actions/patient-notes.ts') }
 
   const { data: note, error: noteErr } = await admin
     .from('patient_notes')
@@ -242,7 +243,7 @@ export async function recordPatientDeath(
     })
     .select('id')
     .single()
-  if (noteErr || !note) return { error: 'Óbito registrado, mas falha ao gravar a nota: ' + (noteErr?.message ?? '') }
+  if (noteErr || !note) return { error: 'Óbito registrado, mas falha ao gravar a nota: ' + ((noteErr ? mensagemErro(noteErr, 'lib/actions/patient-notes.ts') : '')) }
 
   revalidatePath(`/dashboard/patients/${input.patient_id}`)
   return { success: true, note_id: note.id as string }
@@ -307,7 +308,7 @@ export async function updatePatientDeath(
       },
     })
     .eq('id', noteId)
-  if (noteErr) return { error: 'Erro ao atualizar a nota: ' + noteErr.message }
+  if (noteErr) return { error: 'Erro ao atualizar a nota: ' + mensagemErro(noteErr, 'lib/actions/patient-notes.ts') }
 
   // Sincroniza o cadastro do pet (data/causa)
   const { error: patErr } = await admin
@@ -318,7 +319,7 @@ export async function updatePatientDeath(
     })
     .eq('id', note.patient_id)
     .eq('clinic_id', clinic_id)
-  if (patErr) return { error: 'Nota atualizada, mas falha ao sincronizar o cadastro: ' + patErr.message }
+  if (patErr) return { error: 'Nota atualizada, mas falha ao sincronizar o cadastro: ' + mensagemErro(patErr, 'lib/actions/patient-notes.ts') }
 
   const { logAudit } = await import('./audit')
   await logAudit({
@@ -376,7 +377,7 @@ export async function revertPatientDeath(
     .delete()
     .eq('id', noteId)
     .eq('clinic_id', clinic_id)
-  if (delErr) return { error: 'Erro ao remover a nota: ' + delErr.message }
+  if (delErr) return { error: 'Erro ao remover a nota: ' + mensagemErro(delErr, 'lib/actions/patient-notes.ts') }
 
   const { error: patErr } = await admin
     .from('patients')
@@ -387,7 +388,7 @@ export async function revertPatientDeath(
     })
     .eq('id', note.patient_id)
     .eq('clinic_id', clinic_id)
-  if (patErr) return { error: 'Nota removida, mas falha ao reativar o pet: ' + patErr.message }
+  if (patErr) return { error: 'Nota removida, mas falha ao reativar o pet: ' + mensagemErro(patErr, 'lib/actions/patient-notes.ts') }
 
   revalidatePath(`/dashboard/patients/${note.patient_id}`)
   revalidatePath('/dashboard/patients')

@@ -1,15 +1,25 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
-  Loader2, CheckCircle2, Building2, Search,
+  Loader2, CheckCircle2, Building2, KeyRound,
   UserCircle2, Phone, CreditCard, Eye, EyeOff, AtSign,
   Stethoscope, Scissors,
 } from 'lucide-react'
-import { signUpWithClinic, searchClinics } from '@/lib/actions/auth'
+import { signUpWithClinic } from '@/lib/actions/auth'
 import { recordAttribution } from '@/lib/actions/attribution'
 import type { BusinessType } from '@/types'
+
+// Espelha a política de senha configurada no projeto Supabase: mínimo 8
+// caracteres, com minúscula, MAIÚSCULA e dígito. Validar na tela evita o
+// cadastro falhar no servidor sem o usuário entender o motivo.
+const REGRAS_SENHA = [
+  { ok: (v: string) => v.length >= 8,   label: 'mínimo 8 caracteres' },
+  { ok: (v: string) => /[a-z]/.test(v), label: 'uma letra minúscula' },
+  { ok: (v: string) => /[A-Z]/.test(v), label: 'uma letra MAIÚSCULA' },
+  { ok: (v: string) => /[0-9]/.test(v), label: 'um número' },
+]
 
 // ─── Formatadores ─────────────────────────────────────────────────────────────
 
@@ -62,14 +72,8 @@ export default function RegisterPage() {
   const [cnpjData, setCnpjData]       = useState<CnpjData | null>(null)
   const [cnpjError, setCnpjError]     = useState('')
 
-  // Clínica existente
-  const [clinicSearch, setClinicSearch]       = useState('')
-  const [clinicResults, setClinicResults]     = useState<{ id: string; name: string }[]>([])
-  const [selectedClinic, setSelectedClinic]   = useState<{ id: string; name: string } | null>(null)
-  const [searchLoading, setSearchLoading]     = useState(false)
-  const [showDropdown, setShowDropdown]       = useState(false)
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const searchContainerRef = useRef<HTMLDivElement>(null)
+  // Clínica existente — adesão por CÓDIGO DE ACESSO (fornecido pelo admin da clínica)
+  const [joinCode, setJoinCode] = useState('')
 
   // Dados pessoais
   const [username, setUsername] = useState('')
@@ -112,34 +116,6 @@ export default function RegisterPage() {
     return () => { cancelled = true }
   }, [cnpj])
 
-  // ── Busca de clínica com debounce ──────────────────────────────────────────
-  useEffect(() => {
-    clearTimeout(searchDebounceRef.current)
-    if (!clinicSearch || clinicSearch.length < 2) {
-      setClinicResults([])
-      setShowDropdown(false)
-      return
-    }
-    setSearchLoading(true)
-    searchDebounceRef.current = setTimeout(async () => {
-      const results = await searchClinics(clinicSearch)
-      setClinicResults(results)
-      setShowDropdown(results.length > 0)
-      setSearchLoading(false)
-    }, 400)
-  }, [clinicSearch])
-
-  // Fecha dropdown ao clicar fora
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
-        setShowDropdown(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
-
   // ── Submit ─────────────────────────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -154,8 +130,8 @@ export default function RegisterPage() {
     formData.set('password', password)
     formData.set('terms_accepted', String(termsAccepted))
 
-    if (clinicMode === 'existing' && selectedClinic) {
-      formData.set('clinic_id', selectedClinic.id)
+    if (clinicMode === 'existing') {
+      formData.set('join_code', joinCode.trim())
     } else {
       if (!businessType) {
         setError('Selecione o segmento da sua clínica antes de continuar.')
@@ -221,6 +197,22 @@ export default function RegisterPage() {
 
   const fieldClass = "w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all"
   const labelClass = "block text-xs font-bold text-slate-500 uppercase mb-2 ml-1"
+
+  // Tudo que impede o envio, em texto. Alimenta o aviso e o disabled do botao,
+  // para os dois nunca discordarem.
+  const pendencias: string[] = [
+    ...(clinicMode === 'new' && !businessType
+      ? ['escolher o segmento (Clínica Veterinária ou Centro de Estética)'] : []),
+    ...(clinicMode === 'new' && !clinicName.trim()
+      ? ['informar o nome da clínica'] : []),
+    ...(clinicMode === 'existing' && joinCode.trim().length < 4
+      ? ['informar o código de acesso da clínica (peça ao administrador dela)'] : []),
+    ...(!fullName.trim() ? ['informar seu nome completo'] : []),
+    ...(!email.trim()    ? ['informar o e-mail'] : []),
+    ...(REGRAS_SENHA.some(r => !r.ok(password))
+      ? ['uma senha com ' + REGRAS_SENHA.filter(r => !r.ok(password)).map(r => r.label).join(', ')] : []),
+    ...(!termsAccepted ? ['aceitar os Termos de Uso, a Política de Privacidade e o DPA'] : []),
+  ]
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4 py-12">
@@ -385,54 +377,25 @@ export default function RegisterPage() {
               </div>
             )}
 
-            {/* Clínica existente */}
+            {/* Clínica existente — só por CÓDIGO DE ACESSO (o admin da clínica fornece) */}
             {clinicMode === 'existing' && (
-              <div ref={searchContainerRef} className="relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2">
-                  {searchLoading
-                    ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
-                    : <Search className="h-4 w-4 text-slate-400" />}
-                </div>
-                <input
-                  value={clinicSearch}
-                  onChange={e => { setClinicSearch(e.target.value); setSelectedClinic(null) }}
-                  onFocus={() => clinicResults.length > 0 && setShowDropdown(true)}
-                  className={`${fieldClass} pl-9`}
-                  placeholder="Buscar clínica pelo nome..."
-                  autoComplete="off"
-                />
-
-                {showDropdown && clinicResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 z-10 mt-1 rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
-                    {clinicResults.map(c => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedClinic(c)
-                          setClinicSearch(c.name)
-                          setShowDropdown(false)
-                        }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-teal-50 hover:text-teal-800 text-left transition-colors"
-                      >
-                        <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-teal-100 text-teal-700 text-xs font-bold">
-                          {c.name.charAt(0).toUpperCase()}
-                        </div>
-                        {c.name}
-                      </button>
-                    ))}
+              <div>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                    <KeyRound className="h-4 w-4 text-slate-400" />
                   </div>
-                )}
-
-                {selectedClinic && (
-                  <p className="mt-2 text-xs text-teal-700 ml-1 flex items-center gap-1">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    Clínica selecionada: <span className="font-semibold">{selectedClinic.name}</span>
-                  </p>
-                )}
-                {!selectedClinic && clinicSearch.length >= 2 && !searchLoading && clinicResults.length === 0 && (
-                  <p className="mt-2 text-xs text-slate-400 ml-1">Nenhuma clínica encontrada com este nome.</p>
-                )}
+                  <input
+                    value={joinCode}
+                    onChange={e => setJoinCode(e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 12))}
+                    className={`${fieldClass} pl-9 font-mono tracking-widest`}
+                    placeholder="CÓDIGO DE ACESSO"
+                    autoComplete="off"
+                  />
+                </div>
+                <p className="mt-2 text-xs text-slate-400 ml-1">
+                  Peça o <span className="font-semibold text-slate-600">código de acesso</span> ao administrador da sua clínica
+                  (Gestão &gt; Usuários). Você entrará com o perfil que ele definir.
+                </p>
               </div>
             )}
           </div>
@@ -518,7 +481,7 @@ export default function RegisterPage() {
                 required
                 minLength={8}
                 className={`${fieldClass} pr-10`}
-                placeholder="Mínimo 8 caracteres"
+                placeholder="Ex.: Clinica2026"
               />
               <button
                 type="button"
@@ -529,6 +492,20 @@ export default function RegisterPage() {
                 {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
+            <ul className="mt-2 ml-1 flex flex-wrap gap-x-3 gap-y-1">
+              {REGRAS_SENHA.map(r => {
+                const atendida = r.ok(password)
+                return (
+                  <li key={r.label}
+                      className={`text-[11px] flex items-center gap-1 ${
+                        atendida ? 'text-teal-600' : password ? 'text-slate-400' : 'text-slate-400'
+                      }`}>
+                    <span className={`inline-block h-1.5 w-1.5 rounded-full ${atendida ? 'bg-teal-500' : 'bg-slate-300'}`} />
+                    {r.label}
+                  </li>
+                )
+              })}
+            </ul>
           </div>
 
           {/* ── Aceite de Termos ──────────────────────────────────────────── */}
@@ -581,15 +558,25 @@ export default function RegisterPage() {
             </div>
           )}
 
+          {/* O que falta — o botao desabilitado sozinho nao diz o motivo */}
+          {pendencias.length > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+              <p className="text-xs font-semibold text-amber-900">Para criar a conta, falta:</p>
+              <ul className="mt-1 space-y-0.5">
+                {pendencias.map(p => (
+                  <li key={p} className="text-xs text-amber-800 flex items-start gap-1.5">
+                    <span className="mt-1.5 inline-block h-1 w-1 rounded-full bg-amber-500 flex-shrink-0" />
+                    {p}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Submit */}
           <button
             type="submit"
-            disabled={
-              loading ||
-              !termsAccepted ||
-              (clinicMode === 'existing' && !selectedClinic) ||
-              (clinicMode === 'new' && !businessType)
-            }
+            disabled={loading || pendencias.length > 0}
             className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-teal-100 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : null}

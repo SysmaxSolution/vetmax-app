@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import {
   X, Upload, Plus, Trash2, Loader, Eye, Code, GripVertical,
   Droplets, ChevronLeft, ChevronRight, Move, Type, FileText,
@@ -179,7 +180,7 @@ function NameFieldPicker({
 }) {
   return (
     <div className="fixed inset-0 z-[70] bg-black/30 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-xl max-w-sm w-full max-h-[60vh] flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="bg-white rounded-xl shadow-xl max-w-sm w-full max-h-[60vh] flex flex-col animate-scale-in" onClick={e => e.stopPropagation()}>
         <div className="px-4 py-3 border-b border-slate-200">
           <h3 className="text-sm font-semibold text-slate-900">Nomear Campo</h3>
           <p className="text-xs text-slate-500 mt-0.5">
@@ -1296,9 +1297,9 @@ export default function ImportTemplateModal({
     editor: 'Visualize e edite o layout do documento',
   }[step]
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className={`rounded-2xl bg-white shadow-2xl overflow-hidden flex flex-col ${
+      <div className={`rounded-2xl bg-white shadow-xl overflow-hidden flex flex-col animate-scale-in ${
         step === 'editor' ? 'w-full max-w-5xl max-h-[95vh]' : 'w-full max-w-2xl max-h-[90vh]'
       }`}>
         {/* Header */}
@@ -1538,24 +1539,24 @@ export default function ImportTemplateModal({
                 <div className="flex items-center bg-white rounded-lg border border-slate-200 p-0.5">
                   <button
                     onClick={() => { setViewMode('preview'); setEditingHtml(false) }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      viewMode === 'preview' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      viewMode === 'preview' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'
                     }`}
                   >
                     <ScanEye className="w-3.5 h-3.5" />Pre-visualizar
                   </button>
                   <button
                     onClick={() => { setViewMode('layout'); setEditingHtml(false) }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      viewMode === 'layout' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      viewMode === 'layout' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'
                     }`}
                   >
                     <LayoutGrid className="w-3.5 h-3.5" />Layout
                   </button>
                   <button
                     onClick={() => { setViewMode('fields'); setEditingHtml(false) }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      viewMode === 'fields' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      viewMode === 'fields' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'
                     }`}
                   >
                     <List className="w-3.5 h-3.5" />Campos
@@ -1752,7 +1753,7 @@ export default function ImportTemplateModal({
             <button
               onClick={handleProcessTemplate}
               disabled={loading || !form.name.trim()}
-              className="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold shadow-sm hover:bg-teal-700 disabled:opacity-60 flex items-center justify-center gap-2"
             >
               {loading && <Loader className="w-4 h-4 animate-spin" />}
               {loading
@@ -1765,7 +1766,7 @@ export default function ImportTemplateModal({
             <button
               onClick={handleSaveTemplate}
               disabled={loading || form.extractedFields.length === 0}
-              className="flex-1 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold shadow-sm hover:bg-teal-700 disabled:opacity-60 flex items-center justify-center gap-2"
             >
               {loading && <Loader className="w-4 h-4 animate-spin" />}
               Confirmar e Salvar
@@ -1782,7 +1783,7 @@ export default function ImportTemplateModal({
               </button>
               <button
                 onClick={handleAddField}
-                className="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+                className="flex-1 px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold shadow-sm hover:bg-teal-700"
               >
                 Adicionar e Voltar
               </button>
@@ -1823,7 +1824,7 @@ export default function ImportTemplateModal({
               <button
                 onClick={handleSaveTemplate}
                 disabled={loading || form.extractedFields.length === 0}
-                className="flex-1 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold shadow-sm hover:bg-teal-700 disabled:opacity-60 flex items-center justify-center gap-2"
               >
                 {loading && <Loader className="w-4 h-4 animate-spin" />}
                 Salvar Template
@@ -1860,7 +1861,7 @@ export default function ImportTemplateModal({
       {/* ── Duplicate Replacement Confirmation ── */}
       {duplicateConfirm && (
         <div className="fixed inset-0 z-[70] bg-black/30 flex items-center justify-center p-4" onClick={() => setDuplicateConfirm(null)}>
-          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full animate-scale-in" onClick={e => e.stopPropagation()}>
             <div className="px-5 py-4 border-b border-slate-200">
               <h3 className="text-sm font-semibold text-slate-900">Campo encontrado em mais locais</h3>
             </div>
@@ -1882,7 +1883,7 @@ export default function ImportTemplateModal({
               </button>
               <button
                 onClick={handleConfirmDuplicateReplace}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700 transition-colors"
               >
                 Substituir todos ({duplicateConfirm.count + 1})
               </button>
@@ -1890,6 +1891,7 @@ export default function ImportTemplateModal({
           </div>
         </div>
       )}
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

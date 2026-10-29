@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import {
   listChartOfAccounts, createChartOfAccount, deleteChartOfAccount,
   updateChartOfAccount, replicateDefaultChartOfAccounts,
@@ -71,7 +72,7 @@ function AccountFormModal({
     })
   }
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="w-full max-w-md rounded-2xl bg-white shadow-xl animate-scale-in">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
@@ -132,8 +133,9 @@ function AccountFormModal({
           </button>
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }
 
 // ─── Account row ──────────────────────────────────────────────────────────────

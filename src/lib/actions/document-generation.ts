@@ -28,6 +28,7 @@ import type { InterpolationContext } from '@/lib/pdf/interpolate-vars'
 import type { LayoutOverlay, ExtractedField, PageDimensionsRecord } from '@/types'
 import { logAudit } from './audit'
 
+import { mensagemErro } from '@/lib/errors'
 const TEMPLATE_BUCKET = 'document-templates'
 const PATIENT_DOC_BUCKET = 'patient-documents'
 
@@ -232,7 +233,7 @@ async function loadFlattenedPdf(
         .from(TEMPLATE_BUCKET)
         .download(path)
       if (dlErr || !pngBlob) {
-        return { error: `Falha ao baixar pagina limpa ${i}: ${dlErr?.message || 'blob vazio'}` }
+        return { error: `Falha ao baixar pagina limpa ${i}: ${mensagemErro(dlErr, 'lib/actions/document-generation.ts') || 'blob vazio'}` }
       }
       const pngBytes = await pngBlob.arrayBuffer()
       const png = await pdfDoc.embedPng(pngBytes)
@@ -255,13 +256,13 @@ async function loadFlattenedPdf(
     .from(TEMPLATE_BUCKET)
     .download(template.original_pdf_path)
   if (dlErr || !pdfBlob) {
-    return { error: 'Erro ao baixar PDF original: ' + (dlErr?.message || '') }
+    return { error: 'Erro ao baixar PDF original: ' + (mensagemErro(dlErr, 'lib/actions/document-generation.ts') || '') }
   }
   try {
     const pdfDoc = await PDFDocument.load(await pdfBlob.arrayBuffer())
     return { pdfDoc, mode: 'legacy' }
   } catch (e) {
-    return { error: 'PDF original invalido: ' + (e instanceof Error ? e.message : '') }
+    return { error: 'PDF original invalido: ' + (e instanceof Error ? mensagemErro(e, 'lib/actions/document-generation.ts') : '') }
   }
 }
 
@@ -424,7 +425,7 @@ export async function generateFilledDocument(
       upsert: false,
     })
   if (upErr) {
-    return { error: 'Erro ao salvar PDF gerado: ' + upErr.message }
+    return { error: 'Erro ao salvar PDF gerado: ' + mensagemErro(upErr, 'lib/actions/document-generation.ts') }
   }
 
   const { error: insErr } = await admin
@@ -448,7 +449,7 @@ export async function generateFilledDocument(
   if (insErr) {
     // rollback parcial: remove o PDF do storage
     await admin.storage.from(PATIENT_DOC_BUCKET).remove([storagePath])
-    return { error: 'Erro ao registrar documento: ' + insErr.message }
+    return { error: 'Erro ao registrar documento: ' + mensagemErro(insErr, 'lib/actions/document-generation.ts') }
   }
 
   // 9. Signed URL para visualizacao imediata
@@ -456,7 +457,7 @@ export async function generateFilledDocument(
     .from(PATIENT_DOC_BUCKET)
     .createSignedUrl(storagePath, 3600)
   if (signErr || !signedData) {
-    return { error: 'PDF gerado mas falha ao criar URL: ' + (signErr?.message || '') }
+    return { error: 'PDF gerado mas falha ao criar URL: ' + (mensagemErro(signErr, 'lib/actions/document-generation.ts') || '') }
   }
 
   await logAudit({

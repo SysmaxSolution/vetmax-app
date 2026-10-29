@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type AuditSuggestion = {
@@ -199,7 +200,7 @@ export async function acknowledgeInsuranceAudit(params: {
 
     return { success: true }
   } catch (err: any) {
-    return { error: err.message }
+    return { error: mensagemErro(err, 'lib/actions/insurance-audit.ts') }
   }
 }
 

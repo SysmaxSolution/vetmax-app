@@ -11,7 +11,7 @@ export default async function RegistryPage() {
   const suppliers = 'error' in suppliersResult ? [] : suppliersResult
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="max-w-4xl mx-auto px-6 py-8 animate-enter">
       <RegistryWorkspace
         initialSuppliers={suppliers}
         userRole={profile.role}

@@ -8,10 +8,11 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ShieldCheck, Eye, Trash2, Clock, FileText, ChevronLeft,
-  MessageCircle, AlertCircle, CheckCircle2, User, PawPrint,
+  MessageCircle, AlertCircle, CheckCircle2, User, PawPrint, Wallet,
 } from 'lucide-react'
 import { requestDeletion, type DataAccessEntry, type RetentionPolicy } from '@/lib/actions/compliance'
 import { Toast } from '@/components/ui/toast'
+import TutorCreditsPanel from '@/components/financial/TutorCreditsPanel'
 
 interface Tutor {
   id:                string
@@ -66,7 +67,7 @@ export default function TutorRightsClient({
   tutor, pets, accessEntries, retentionPolicies, userRole,
 }: Props) {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<'overview' | 'access' | 'retention' | 'delete'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'creditos' | 'access' | 'retention' | 'delete'>('overview')
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   // Estado do formulário de exclusão
@@ -96,6 +97,7 @@ export default function TutorRightsClient({
 
   const TABS = [
     { id: 'overview',  label: 'Visão Geral',      icon: User },
+    { id: 'creditos',  label: 'Créditos',          icon: Wallet },
     { id: 'access',    label: 'Acessos',           icon: Eye },
     { id: 'retention', label: 'Retenção',          icon: Clock },
     { id: 'delete',    label: 'Solicitação',       icon: Trash2 },
@@ -231,6 +233,14 @@ export default function TutorRightsClient({
                 ))}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ── Créditos / Adiantamentos ── */}
+        {activeTab === 'creditos' && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+            <h2 className="text-sm font-bold text-slate-900 mb-4">Créditos e adiantamentos</h2>
+            <TutorCreditsPanel tutorId={tutor.id} />
           </div>
         )}
 

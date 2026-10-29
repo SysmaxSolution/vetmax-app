@@ -3,7 +3,11 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getTenantCtx } from '@/lib/data/context'
+import { fetchSicoobExtrato } from '@/lib/integrations/sicoob'
 
+import { mensagemErro } from '@/lib/errors'
+import { valida } from '@/lib/validation/primitivos'
+import { EsquemaCriarTitulo, EsquemaAtualizarTitulo, EsquemaBaixarTitulo } from '@/lib/validation/financeiro'
 // ─── Types base (G-09) ────────────────────────────────────────────────────────
 
 export type EntryType   = 'receivable' | 'payable'
@@ -25,6 +29,13 @@ export interface FinancialEntry {
   payment_method:       string | null
   tutor_id:             string | null
   patient_id:           string | null
+  beneficiary:          string | null   // fornecedor/favorecido (contas a pagar)
+  /**
+   * Fornecedor do titulo a pagar. A coluna sempre existiu e o select ja traz
+   * (ENTRY_SELECT usa '*'), mas o tipo nao expunha — e por isso a tela nao
+   * tinha como informar o dono do titulo.
+   */
+  supplier_id:          string | null
   category:             string | null
   notes:                string | null
   created_by:           string | null
@@ -48,6 +59,10 @@ export interface FinancialEntry {
   // vínculo com invoice mestre (duplicatas) + flag de ajuste contábil
   invoice_id:           string | null
   is_clinic_discount:   boolean
+  // vínculo com a consulta de origem (OS) — identificação em A Pagar/Receber
+  consultation_id:      string | null
+  os_number:            string | null
+  is_intercompany:      boolean
 }
 
 export interface FinancialSummary {
@@ -83,6 +98,14 @@ export interface CreateEntryData {
   notes?:               string
   professional_id?:     string
   chart_of_accounts_id?: string
+  // Contas a pagar de compra (1.8) — fornecedor, documento, parcela e espécie.
+  beneficiary?:         string | null
+  supplier_id?:         string | null
+  purchase_order_id?:   string | null
+  document_number?:     string | null
+  especie?:             string | null
+  installment_number?:  number | null
+  total_installments?:  number | null
 }
 
 export interface BaixarTituloData {
@@ -98,6 +121,18 @@ export interface BaixarTituloData {
    * com amount_received.
    */
   amount_received?:    number
+  /**
+   * O que fazer com o que passou do valor do título.
+   *
+   * Antes daqui o código CORTAVA em silêncio:
+   *   const amountReceived = Math.max(0, Math.min(data.amount_received, netAmount))
+   * e o comentário chamava isso de "segurança". Tutor pagava R$ 200 num título
+   * de R$ 150 e os R$ 50 desapareciam — sem troco, sem crédito, sem rastro.
+   *
+   *   'troco'   → devolvido na hora; o caixa fica com o valor do título.
+   *   'credito' → fica como adiantamento do tutor (tutor_credits, 'advance').
+   */
+  excedente?:          'troco' | 'credito'
 }
 
 // ─── Types G-10 ───────────────────────────────────────────────────────────────
@@ -242,9 +277,12 @@ export async function createEntry(
   const clinicId = await getClinicId()
   if (!clinicId) return { error: 'Clínica não encontrada.' }
 
-  if (!data.description?.trim()) return { error: 'Descrição obrigatória.' }
-  if (!data.amount || data.amount <= 0) return { error: 'Valor deve ser positivo.' }
-  if (!data.due_date) return { error: 'Data de vencimento obrigatória.' }
+  // Antes daqui só se conferia description/amount/due_date. Passavam NaN,
+  // valor com 3 casas (centavo fantasma no livro), data inexistente, uuid
+  // malformado e desconto maior que o título.
+  const v = valida(EsquemaCriarTitulo, data)
+  if ('error' in v) return v
+  data = v.dados as CreateEntryData
 
   const admin = createAdminClient()
   const { data: entry, error } = await admin
@@ -264,14 +302,21 @@ export async function createEntry(
       notes:                data.notes                || null,
       professional_id:      data.professional_id      || null,
       chart_of_accounts_id: data.chart_of_accounts_id || null,
+      beneficiary:          data.beneficiary          || null,
+      supplier_id:          data.supplier_id          || null,
+      purchase_order_id:    data.purchase_order_id    || null,
+      document_number:      data.document_number      || null,
+      especie:              data.especie              || null,
+      installment_number:   data.installment_number   ?? null,
+      total_installments:   data.total_installments   ?? null,
       created_by:           user.id,
       status:               'pending',
-      // document_number e professional_id preenchidos pelo trigger trg_fe_defaults
+      // document_number (quando null) e professional_id preenchidos pelo trigger trg_fe_defaults
     })
     .select(ENTRY_SELECT)
     .single()
 
-  if (error) return { error: 'Erro ao criar título: ' + error.message }
+  if (error) return { error: 'Erro ao criar título: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return mapEntry(entry as unknown as Record<string, unknown>)
 }
 
@@ -308,7 +353,7 @@ export async function listEntries(
   if (filters.paid_to)   query = query.lte('payment_date', filters.paid_to)
 
   const { data, error } = await query.limit(500)
-  if (error) return { error: 'Erro ao buscar títulos: ' + error.message }
+  if (error) return { error: 'Erro ao buscar títulos: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return (data ?? []).map(row => mapEntry(row as unknown as Record<string, unknown>))
 }
 
@@ -449,6 +494,38 @@ export async function updateEntry(
   const clinicId = await getClinicId()
   if (!clinicId) return { error: 'Não autenticado.' }
 
+  // Edição não revalidava nada: dava para trocar o valor de um título por NaN.
+  const v = valida(EsquemaAtualizarTitulo, data)
+  if ('error' in v) return v
+  data = v.dados as Partial<CreateEntryData>
+
+  // ─── Título baixado é IMUTÁVEL ─────────────────────────────────────────────
+  // Antes daqui não havia filtro nenhum de status: o UPDATE era
+  //   .update(updates).eq('id', id).eq('clinic_id', clinicId)
+  // e alterava valor, vencimento, descrição e tutor de um título JÁ BAIXADO,
+  // sem rastro. Isso muda a data de realização de uma transação que já
+  // aconteceu e desalinha a conciliação bancária.
+  //
+  // O prontuário clínico já tinha imutabilidade (migrations 0411/0412); o
+  // financeiro havia ficado de fora. Para alterar, estorna primeiro — e o
+  // estorno grava a trilha.
+  const admin = createAdminClient()
+  const { data: atual } = await admin
+    .from('financial_entries')
+    .select('status, payment_date, issue_date, due_date')
+    .eq('id', id).eq('clinic_id', clinicId).maybeSingle()
+  if (!atual) return { error: 'Título não encontrado.' }
+  if ((atual as { status?: string }).status === 'paid') {
+    return { error: 'Este título está baixado e não pode ser alterado. Estorne primeiro (Opções → Estornar) — o estorno guarda o histórico e devolve o título para aberto.' }
+  }
+
+  // Vencimento não pode ser anterior à emissão: título não vence antes de existir.
+  const emissao = data.issue_date ?? (atual as { issue_date?: string | null }).issue_date
+  const vence   = data.due_date   ?? (atual as { due_date?: string | null }).due_date
+  if (emissao && vence && String(emissao) > String(vence)) {
+    return { error: 'A data de vencimento não pode ser anterior à data de emissão.' }
+  }
+
   const updates: Record<string, unknown> = {}
   if (data.description          !== undefined) updates.description          = data.description.trim()
   if (data.amount               !== undefined) updates.amount               = data.amount
@@ -463,14 +540,13 @@ export async function updateEntry(
   if (data.professional_id      !== undefined) updates.professional_id      = data.professional_id      || null
   if (data.chart_of_accounts_id !== undefined) updates.chart_of_accounts_id = data.chart_of_accounts_id || null
 
-  const admin = createAdminClient()
   const { error } = await admin
     .from('financial_entries')
     .update(updates)
     .eq('id', id)
     .eq('clinic_id', clinicId)
 
-  if (error) return { error: 'Erro ao atualizar título: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar título: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -501,7 +577,7 @@ export async function deleteEntry(
     .eq('id', id)
     .eq('clinic_id', clinicId)
 
-  if (error) return { error: 'Erro ao excluir título: ' + error.message }
+  if (error) return { error: 'Erro ao excluir título: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -543,6 +619,25 @@ export async function reverseFinancialEntry(
     const entryInterest   = Number((entry as unknown as Record<string, unknown>).interest ?? 0)
     const docNumber       = (entry as unknown as Record<string, unknown>).document_number as string | null
 
+    // TRILHA antes de apagar: o estorno zera payment_date, payment_method,
+    // settlement_bank_id e interest. Sem registrar o estado anterior, a
+    // informação de COMO o título foi baixado desaparece — e é justamente ela
+    // que explica a conciliação bancária daquele dia.
+    const { data: antesDoEstorno } = await admin
+      .from('financial_entries')
+      .select('*')
+      .eq('id', id).eq('clinic_id', clinicId).maybeSingle()
+    if (antesDoEstorno) {
+      await admin.from('audit_logs').insert({
+        clinic_id:   clinicId,
+        user_id:     user.id,
+        action:      'reversed',
+        entity_type: 'financial_entry',
+        entity_id:   id,
+        details:     { estado_anterior: antesDoEstorno, motivo: 'estorno de baixa' },
+      })
+    }
+
     const { error: updErr } = await admin
       .from('financial_entries')
       .update({
@@ -556,7 +651,7 @@ export async function reverseFinancialEntry(
       .eq('id', id)
       .eq('clinic_id', clinicId)
 
-    if (updErr) return { error: 'Erro ao estornar título: ' + updErr.message }
+    if (updErr) return { error: 'Erro ao estornar título: ' + mensagemErro(updErr, 'lib/actions/financial.ts') }
 
     // Lança débito no extrato bancário (estorno do crédito original)
     if (prevBankId && prevPayDate) {
@@ -600,18 +695,26 @@ export async function baixarTitulo(
   id: string,
   data: BaixarTituloData
 ): Promise<{ error?: string }> {
-  if (!data.payment_date)   return { error: 'Data de recebimento obrigatória.' }
-  if (!data.payment_method) return { error: 'Modalidade de recebimento obrigatória.' }
+  const v = valida(EsquemaBaixarTitulo, data)
+  if ('error' in v) return v
+  data = v.dados as BaixarTituloData
 
   const clinicId = await getClinicId()
   if (!clinicId) return { error: 'Não autenticado.' }
+
+  // Rastreabilidade da baixa (pedido da Bruna, treinamento 18/09/2026): quem
+  // clicou em "baixar" fica gravado no próprio título. Antes da migration 0480
+  // este caminho não deixava ator nenhum — `created_by` é o criador do título,
+  // não quem recebeu. Ver src/lib/reports/client-statement-logic.ts.
+  const actor    = await getAuthUser()
+  const settledAt = new Date().toISOString()
 
   const admin = createAdminClient()
 
   // Lê o título completo (precisamos de mais campos para criar entry filho)
   const { data: current } = await admin
     .from('financial_entries')
-    .select('amount, discount, document_number, type, description, tutor_id, patient_id, category, invoice_id, source, due_date, professional_id, chart_of_accounts_id, created_by, is_clinic_discount')
+    .select('amount, discount, document_number, type, description, tutor_id, patient_id, category, invoice_id, source, due_date, issue_date, professional_id, chart_of_accounts_id, created_by, is_clinic_discount')
     .eq('id', id)
     .eq('clinic_id', clinicId)
     .eq('status', 'pending')
@@ -620,16 +723,37 @@ export async function baixarTitulo(
   if (!current) return { error: 'Título não encontrado ou já baixado.' }
   const cur = current as Record<string, unknown>
 
+  // Transação não acontece antes do título existir. Pagar DEPOIS do
+  // vencimento é normal (atraso); antes da EMISSÃO é impossível.
+  const emitidoEm = cur.issue_date ? String(cur.issue_date) : null
+  if (emitidoEm && String(data.payment_date) < emitidoEm) {
+    return { error: `A data de recebimento (${new Date(data.payment_date + 'T12:00:00').toLocaleDateString('pt-BR')}) é anterior à emissão do título (${new Date(emitidoEm + 'T12:00:00').toLocaleDateString('pt-BR')}).` }
+  }
+
   const baseAmount    = Number(cur.amount ?? 0)
   const baseDiscount  = data.discount !== undefined ? data.discount : Number(cur.discount ?? 0)
   const baseInterest  = data.interest ?? 0
   const netAmount     = baseAmount - baseDiscount + baseInterest
   const docNumber     = cur.document_number as string | null
 
-  // Limita amount_received ao netAmount (segurança)
-  const amountReceived = data.amount_received !== undefined
-    ? Math.max(0, Math.min(data.amount_received, netAmount))
-    : netAmount
+  // ─── Excedente: pagou mais que o título ───────────────────────────────────
+  // O código cortava em silêncio com Math.min(..., netAmount) e chamava de
+  // "segurança". Era o contrário: escondia dinheiro. Agora o excedente tem de
+  // ter destino declarado — troco ou crédito.
+  const recebido = data.amount_received !== undefined ? Math.max(0, data.amount_received) : netAmount
+  const tutorId  = (cur.tutor_id as string | null) ?? null
+
+  const { decidirExcedente } = await import('@/lib/financial/excedente')
+  const decisao = decidirExcedente({
+    valorTitulo:   netAmount,
+    valorRecebido: recebido,
+    destino:       data.excedente ?? null,
+    temCliente:    !!tutorId,
+  })
+  if (decisao.erro) return { error: decisao.erro }
+
+  const excesso = decisao.excesso
+  const amountReceived = decisao.baixar
 
   const isPartial = amountReceived < netAmount - 0.01
 
@@ -647,7 +771,7 @@ export async function baixarTitulo(
       })
       .eq('id', id)
       .eq('clinic_id', clinicId)
-    if (updErr) return { error: 'Erro ao atualizar saldo do título: ' + updErr.message }
+    if (updErr) return { error: 'Erro ao atualizar saldo do título: ' + mensagemErro(updErr, 'lib/actions/financial.ts') }
 
     // 2) Cria entry filho paid com a baixa
     await admin
@@ -673,6 +797,11 @@ export async function baixarTitulo(
         settlement_bank_id: data.settlement_bank_id || null,
         notes:              `Baixa parcial de ${id}`,
         created_by:         cur.created_by as string | null,
+        // `created_by` segue sendo o criador do título (herdado do pai); quem
+        // recebeu de fato é o `settled_by` — os dois podem ser pessoas
+        // diferentes e o extrato do cliente mostra o segundo.
+        settled_by:         actor?.id ?? null,
+        settled_at:         settledAt,
       })
 
     // Lança crédito no extrato pelo valor parcial
@@ -701,6 +830,8 @@ export async function baixarTitulo(
     settlement_bank_id: data.settlement_bank_id || null,
     interest:           baseInterest,
     discount:           baseDiscount,
+    settled_by:         actor?.id ?? null,
+    settled_at:         settledAt,
   }
 
   const { error } = await admin
@@ -710,7 +841,43 @@ export async function baixarTitulo(
     .eq('clinic_id', clinicId)
     .eq('status', 'pending')
 
-  if (error) return { error: 'Erro ao baixar título: ' + error.message }
+  if (error) return { error: 'Erro ao baixar título: ' + mensagemErro(error, 'lib/actions/financial.ts') }
+
+  // ─── Destino do excedente ─────────────────────────────────────────────────
+  // Agora o dinheiro a mais tem para onde ir, com rastro. Antes era cortado
+  // em silêncio e simplesmente deixava de existir.
+  if (excesso > 0.005) {
+    if (data.excedente === 'credito' && tutorId) {
+      const { error: credErr } = await admin.from('tutor_credits').insert({
+        clinic_id:  clinicId,
+        tutor_id:   tutorId,
+        amount:     excesso,
+        kind:       'advance',   // adiantamento: saldo a favor do tutor
+        reference:  `Excedente da baixa do título ${docNumber ?? id.slice(0, 8)}`,
+        created_by: actor?.id ?? null,
+      })
+      if (credErr) {
+        // O título já foi baixado. Não dá para fingir que o crédito entrou.
+        return { error: `Título baixado, mas a diferença de R$ ${excesso.toFixed(2)} NÃO foi lançada como crédito: ${mensagemErro(credErr, 'lib/actions/financial.ts')} Lance o crédito manualmente em Financeiro > Créditos.` }
+      }
+    }
+    // Troco ou crédito, o fato fica registrado: é o que explica a diferença
+    // entre o que o tutor entregou e o que o título valia.
+    await admin.from('audit_logs').insert({
+      clinic_id:   clinicId,
+      user_id:     actor?.id ?? null,
+      action:      data.excedente === 'credito' ? 'overpayment_to_credit' : 'overpayment_change_given',
+      entity_type: 'financial_entry',
+      entity_id:   id,
+      details: {
+        valor_do_titulo: netAmount,
+        valor_recebido:  recebido,
+        excedente:       excesso,
+        destino:         data.excedente,
+        tutor_id:        tutorId,
+      },
+    })
+  }
 
   // Lança crédito no extrato bancário
   if (data.settlement_bank_id) {
@@ -728,6 +895,27 @@ export async function baixarTitulo(
   }
 
   return {}
+}
+
+// ─── baixarTitulosBulk ────────────────────────────────────────────────────────
+// Baixa em massa de títulos (A Pagar ou A Receber). Reusa baixarTitulo por id
+// para manter idênticos os efeitos colaterais (baixa integral, lançamento no
+// extrato quando informada a conta). Usado pela seleção múltipla da tela.
+export async function baixarTitulosBulk(
+  ids: string[],
+  data: BaixarTituloData,
+): Promise<{ ok: true; paid: number; failed: number } | { error: string }> {
+  if (!ids.length)            return { error: 'Nenhum título selecionado.' }
+  if (!data.payment_date)     return { error: 'Data obrigatória.' }
+  if (!data.payment_method)   return { error: 'Forma de pagamento obrigatória.' }
+
+  let paid = 0, failed = 0
+  for (const id of ids) {
+    const res = await baixarTitulo(id, data)
+    if (res.error) failed += 1
+    else paid += 1
+  }
+  return { ok: true, paid, failed }
 }
 
 // ─── getFinancialSummary ──────────────────────────────────────────────────────
@@ -808,7 +996,7 @@ export async function listBankAccounts(): Promise<BankAccount[] | { error: strin
     .order('is_default', { ascending: false })
     .order('name')
 
-  if (error) return { error: 'Erro ao buscar contas: ' + error.message }
+  if (error) return { error: 'Erro ao buscar contas: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return (data ?? []) as BankAccount[]
 }
 
@@ -837,7 +1025,7 @@ export async function createBankAccount(
     .select('id, clinic_id, name, bank_name, bank_code, ispb, agency, account, pix_key, is_default, balance, initial_balance, created_at')
     .single()
 
-  if (error) return { error: 'Erro ao criar conta: ' + error.message }
+  if (error) return { error: 'Erro ao criar conta: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return row as BankAccount
 }
 
@@ -866,7 +1054,7 @@ export async function updateBankAccount(
     .eq('id', id)
     .eq('clinic_id', clinicId)
 
-  if (error) return { error: 'Erro ao atualizar conta: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar conta: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -881,7 +1069,7 @@ export async function deleteBankAccount(id: string): Promise<{ error?: string }>
     .eq('id', id)
     .eq('clinic_id', clinicId)
 
-  if (error) return { error: 'Erro ao excluir conta: ' + error.message }
+  if (error) return { error: 'Erro ao excluir conta: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -899,7 +1087,7 @@ export async function listChartOfAccounts(): Promise<ChartOfAccount[] | { error:
     .eq('is_active', true)
     .order('code')
 
-  if (error) return { error: 'Erro ao buscar plano de contas: ' + error.message }
+  if (error) return { error: 'Erro ao buscar plano de contas: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return (data ?? []) as ChartOfAccount[]
 }
 
@@ -926,7 +1114,7 @@ export async function createChartOfAccount(
     .select('id, clinic_id, code, name, type, parent_id, is_system, is_active, created_at')
     .single()
 
-  if (error) return { error: 'Erro ao criar conta: ' + error.message }
+  if (error) return { error: 'Erro ao criar conta: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return row as ChartOfAccount
 }
 
@@ -963,7 +1151,7 @@ export async function updateChartOfAccount(
     .select('id, clinic_id, code, name, type, parent_id, is_system, is_active, created_at')
     .single()
 
-  if (error) return { error: 'Erro ao atualizar conta: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar conta: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return row as ChartOfAccount
 }
 
@@ -988,7 +1176,7 @@ export async function deleteChartOfAccount(id: string): Promise<{ error?: string
     .eq('id', id)
     .eq('clinic_id', clinicId)
 
-  if (error) return { error: 'Erro ao desativar conta: ' + error.message }
+  if (error) return { error: 'Erro ao desativar conta: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -1078,7 +1266,7 @@ export async function replicateDefaultChartOfAccounts(): Promise<
         .insert({ clinic_id: clinicId, code: root.code, name: root.name, type: root.type, parent_id: null, is_system: false })
         .select('id')
         .single()
-      if (error || !newRoot) return { error: `Erro ao criar conta raiz ${root.code}: ${error?.message}` }
+      if (error || !newRoot) return { error: `Erro ao criar conta raiz ${root.code}: ${mensagemErro(error, 'lib/actions/financial.ts')}` }
       parentId = newRoot.id as string
       existingByCode.set(root.code, parentId)
       created++
@@ -1091,7 +1279,7 @@ export async function replicateDefaultChartOfAccounts(): Promise<
       const { error } = await admin
         .from('chart_of_accounts')
         .insert({ clinic_id: clinicId, code: child.code, name: child.name, type: child.type, parent_id: parentId, is_system: false })
-      if (error) return { error: `Erro ao criar conta ${child.code}: ${error.message}` }
+      if (error) return { error: `Erro ao criar conta ${child.code}: ${mensagemErro(error, 'lib/actions/financial.ts')}` }
       created++
     }
   }
@@ -1112,7 +1300,7 @@ export async function listCreditCards(): Promise<CreditCard[] | { error: string 
     .eq('clinic_id', clinicId)
     .order('name')
 
-  if (error) return { error: 'Erro ao buscar cartões: ' + error.message }
+  if (error) return { error: 'Erro ao buscar cartões: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return (data ?? []) as CreditCard[]
 }
 
@@ -1142,7 +1330,7 @@ export async function createCreditCard(
     .select('id, clinic_id, name, administrator, brand, type, installments_max, fee_percent, days_to_receive, requires_nsu, is_active, created_at, interest_percent, interest_amount')
     .single()
 
-  if (error) return { error: 'Erro ao criar cartão: ' + error.message }
+  if (error) return { error: 'Erro ao criar cartão: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return row as CreditCard
 }
 
@@ -1172,7 +1360,7 @@ export async function updateCreditCard(
     .eq('id', id)
     .eq('clinic_id', clinicId)
 
-  if (error) return { error: 'Erro ao atualizar cartão: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar cartão: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -1187,7 +1375,7 @@ export async function deleteCreditCard(id: string): Promise<{ error?: string }> 
     .eq('id', id)
     .eq('clinic_id', clinicId)
 
-  if (error) return { error: 'Erro ao excluir cartão: ' + error.message }
+  if (error) return { error: 'Erro ao excluir cartão: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -1208,7 +1396,7 @@ export async function listEmployees(inclueSalary = false): Promise<Employee[] | 
     .eq('clinic_id', ctx.clinicId)
     .order('name')
 
-  if (error) return { error: 'Erro ao buscar funcionários: ' + error.message }
+  if (error) return { error: 'Erro ao buscar funcionários: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return (data ?? []) as unknown as Employee[]
 }
 
@@ -1240,7 +1428,7 @@ export async function createEmployee(
     .select('id, clinic_id, user_id, name, role, email, phone, cpf, address, hire_date, salary, pix_key, vacation_days, is_active, created_at, updated_at')
     .single()
 
-  if (error) return { error: 'Erro ao criar funcionário: ' + error.message }
+  if (error) return { error: 'Erro ao criar funcionário: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return row as Employee
 }
 
@@ -1272,7 +1460,7 @@ export async function updateEmployee(
     .eq('id', id)
     .eq('clinic_id', ctx.clinicId)
 
-  if (error) return { error: 'Erro ao atualizar funcionário: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar funcionário: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -1288,7 +1476,7 @@ export async function deleteEmployee(id: string): Promise<{ error?: string }> {
     .eq('id', id)
     .eq('clinic_id', ctx.clinicId)
 
-  if (error) return { error: 'Erro ao desativar funcionário: ' + error.message }
+  if (error) return { error: 'Erro ao desativar funcionário: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -1367,6 +1555,12 @@ export interface ReconciliationBatch {
   total_records:   number
   matched_count:   number
   status:          'pending' | 'completed'
+  /**
+   * Linhas que o banco devolveu mas que JA estavam importadas, e por isso nao
+   * entraram de novo. A tela usa para dizer "nada novo no periodo" em vez de
+   * fingir que importou.
+   */
+  skipped?:        number
 }
 
 export interface ExtratoFilters {
@@ -1403,6 +1597,10 @@ export interface ImportStatementsData {
     amount:        number
     description:   string
     type:          'credit' | 'debit'
+    /** Identificador unico da transacao, quando o banco fornece. */
+    tx_id?:        string
+    /** `descInfComplementar`: quem esta do outro lado da transacao. */
+    contraparte?:  string
   }>
 }
 
@@ -1429,7 +1627,7 @@ export async function getExtrato(
     .order('date', { ascending: true })
     .order('imported_at', { ascending: true })
 
-  if (error) return { error: 'Erro ao buscar extrato: ' + error.message }
+  if (error) return { error: 'Erro ao buscar extrato: ' + mensagemErro(error, 'lib/actions/financial.ts') }
 
   const statements = (data ?? []) as BankStatement[]
   const total_entradas = statements.filter(s => s.type === 'credit').reduce((acc, s) => acc + s.amount, 0)
@@ -1502,27 +1700,108 @@ export async function importStatements(
     .select('id, clinic_id, bank_account_id, source, imported_at, total_records, matched_count, status')
     .single()
 
-  if (batchError) return { error: 'Erro ao criar lote: ' + batchError.message }
+  if (batchError) return { error: 'Erro ao criar lote: ' + mensagemErro(batchError, 'lib/actions/financial.ts') }
 
-  // Insere os lançamentos
-  const rows = data.statements.map(s => ({
-    clinic_id:       clinicId,
-    bank_account_id: data.bank_account_id,
-    external_id:     s.external_id || null,
-    date:            s.date,
-    amount:          Math.abs(s.amount),
-    description:     s.description || '',
-    type:            s.type,
-    import_batch_id: batch.id,
-  }))
+  // Importação IDEMPOTENTE. Antes inseria às cegas: o usuário consultava um
+  // período, vinculava alguns títulos, saía da tela, voltava, reimportava o
+  // mesmo período e ganhava cópias — inclusive de lançamento já conciliado, o
+  // que permitia gerar vários títulos do mesmo movimento. Produção tinha 43
+  // grupos duplicados quando isto foi corrigido.
+  const { digitaisDoLote } = await import('@/lib/financial/extrato-digital')
+  const { extrairContraparte } = await import('@/lib/financial/contraparte')
+  const digitais = digitaisDoLote(data.bank_account_id, data.statements)
 
-  const { error: insertError } = await admin
+  // Quais dessas já estão na conta? (a chave única da 0494 é a rede de
+  // segurança para duas importações simultâneas; aqui é para poder CONTAR.)
+  const jaTem = new Set<string>()
+  for (let i = 0; i < digitais.length; i += 500) {
+    const fatia = digitais.slice(i, i + 500)
+    const { data: achadas } = await admin
+      .from('bank_statements')
+      .select('fingerprint')
+      .eq('bank_account_id', data.bank_account_id)
+      .in('fingerprint', fatia)
+    for (const a of (achadas ?? []) as { fingerprint: string | null }[]) {
+      if (a.fingerprint) jaTem.add(a.fingerprint)
+    }
+  }
+
+  const rows = data.statements
+    .map((s, i) => ({ s, fingerprint: digitais[i] }))
+    .filter(x => !jaTem.has(x.fingerprint))
+    .map(({ s, fingerprint }) => ({
+      clinic_id:       clinicId,
+      bank_account_id: data.bank_account_id,
+      external_id:     s.external_id || null,
+      fingerprint,
+      // Quem esta do outro lado. Guarda o cru E o nome extraido: o cru
+      // permite melhorar a extracao depois sem reimportar o extrato.
+      contraparte:      (s as { contraparte?: string }).contraparte ?? null,
+      contraparte_nome: extrairContraparte((s as { contraparte?: string }).contraparte).nome,
+      date:            s.date,
+      amount:          Math.abs(s.amount),
+      description:     s.description || '',
+      type:            s.type,
+      import_batch_id: batch.id,
+    }))
+
+  if (rows.length) {
+    const { error: insertError } = await admin
+      .from('bank_statements')
+      // ignoreDuplicates: se outra importação inserir a mesma digital no meio,
+      // a chave única barra e seguimos sem erro.
+      .upsert(rows, { onConflict: 'bank_account_id,fingerprint', ignoreDuplicates: true })
+    if (insertError) return { error: 'Erro ao inserir lançamentos: ' + mensagemErro(insertError, 'lib/actions/financial.ts') }
+  }
+
+  // O lote registra o que ENTROU, não o que foi consultado.
+  const repetidos = data.statements.length - rows.length
+  if (repetidos > 0) {
+    await admin.from('reconciliation_batches')
+      .update({ total_records: rows.length }).eq('id', batch.id)
+  }
+
+  return { ...(batch as ReconciliationBatch), total_records: rows.length, skipped: repetidos }
+}
+
+/**
+ * O que já está importado para esta conta neste período.
+ *
+ * Existe para a tela de conciliação não precisar reimportar quando o usuário
+ * volta. Antes ela não recarregava nada: parecia que o trabalho tinha sido
+ * perdido, e reimportar duplicava.
+ */
+export async function getImportedStatements(params: {
+  bank_account_id: string; start_date: string; end_date: string
+}): Promise<{
+  statements: Array<{
+    id: string; date: string; amount: number; description: string
+    type: 'credit' | 'debit'; external_id: string | null
+    reconciled_entry_id: string | null; reconciled_at: string | null
+  }>
+  total: number; conciliados: number
+} | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  if (!params.bank_account_id) return { error: 'Conta bancária obrigatória.' }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
     .from('bank_statements')
-    .insert(rows)
+    .select('id, date, amount, description, type, external_id, reconciled_entry_id, reconciled_at')
+    .eq('clinic_id', clinicId)
+    .eq('bank_account_id', params.bank_account_id)
+    .gte('date', params.start_date)
+    .lte('date', params.end_date)
+    .order('date', { ascending: true })
 
-  if (insertError) return { error: 'Erro ao inserir lançamentos: ' + insertError.message }
-
-  return batch as ReconciliationBatch
+  if (error) return { error: mensagemErro(error, 'lib/actions/financial.ts') }
+  const lista = (data ?? []) as Array<{ reconciled_entry_id: string | null }>
+  return {
+    statements: (data ?? []) as never,
+    total: lista.length,
+    conciliados: lista.filter(x => x.reconciled_entry_id != null).length,
+  }
 }
 
 // ─── G-11: reconcileStatements (matching manual) ──────────────────────────────
@@ -1541,7 +1820,7 @@ export async function reconcileStatements(
     .eq('id', statementId)
     .eq('clinic_id', clinicId)
 
-  if (error) return { error: 'Erro ao conciliar: ' + error.message }
+  if (error) return { error: 'Erro ao conciliar: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -1563,7 +1842,7 @@ export async function listBatches(
   if (bank_account_id) query = query.eq('bank_account_id', bank_account_id)
 
   const { data, error } = await query.limit(50)
-  if (error) return { error: 'Erro ao buscar lotes: ' + error.message }
+  if (error) return { error: 'Erro ao buscar lotes: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return (data ?? []) as ReconciliationBatch[]
 }
 
@@ -1583,7 +1862,7 @@ export async function listBatchStatements(
     .eq('import_batch_id', batch_id)
     .order('date', { ascending: true })
 
-  if (error) return { error: 'Erro ao buscar lançamentos: ' + error.message }
+  if (error) return { error: 'Erro ao buscar lançamentos: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return (data ?? []) as BankStatement[]
 }
 
@@ -1663,6 +1942,7 @@ const ENTRY_SELECT = [
   'professional:profiles!professional_id(full_name)',
   'chart_account:chart_of_accounts!chart_of_accounts_id(code, name)',
   'settlement_bank:bank_accounts!settlement_bank_id(name)',
+  'consultation:consultations!consultation_id(os_number)',
 ].join(', ')
 
 function mapEntry(raw: Record<string, unknown>): FinancialEntry {
@@ -1671,6 +1951,7 @@ function mapEntry(raw: Record<string, unknown>): FinancialEntry {
   const professional = raw.professional    as { full_name: string }        | null
   const chartAcc     = raw.chart_account   as { code: string; name: string } | null
   const settleBank   = raw.settlement_bank as { name: string }             | null
+  const consultation = raw.consultation    as { os_number: string | null } | null
   return {
     id:                   raw.id                   as string,
     clinic_id:            raw.clinic_id            as string,
@@ -1686,6 +1967,8 @@ function mapEntry(raw: Record<string, unknown>): FinancialEntry {
     payment_method:       (raw.payment_method      as string | null) ?? null,
     tutor_id:             (raw.tutor_id            as string | null) ?? null,
     patient_id:           (raw.patient_id          as string | null) ?? null,
+    beneficiary:          (raw.beneficiary         as string | null) ?? null,
+    supplier_id:          (raw.supplier_id         as string | null) ?? null,
     category:             (raw.category            as string | null) ?? null,
     notes:                (raw.notes               as string | null) ?? null,
     created_by:           (raw.created_by          as string | null) ?? null,
@@ -1705,6 +1988,9 @@ function mapEntry(raw: Record<string, unknown>): FinancialEntry {
     cashier_outflow_id:   (raw.cashier_outflow_id  as string | null) ?? null,
     invoice_id:           (raw.invoice_id          as string | null) ?? null,
     is_clinic_discount:   Boolean(raw.is_clinic_discount),
+    consultation_id:      (raw.consultation_id     as string | null) ?? null,
+    os_number:            consultation?.os_number  ?? null,
+    is_intercompany:      Boolean(raw.is_intercompany),
   }
 }
 
@@ -1756,4 +2042,793 @@ function autoMatch(
   const unmatched_entries  = entries.filter(e  => !usedEntryIds.has(e.id))
 
   return { matched, unmatched_imported, unmatched_entries }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 1.3 Animais · Conciliação bancária (2 painéis) — modelo N:1
+// Extrato (esquerda) = "voz da verdade". Uma linha do extrato pode ter VÁRIOS
+// títulos do sistema vinculados (ex.: repasse único do cartão = N transações).
+// VÍNCULO (bank_statement_entry_links) ≠ CONCILIAÇÃO (bank_statements.reconciled_at).
+// Selecionar linha → marcar 1+ candidatos → Vincular → Conciliar (parcial). Permite
+// desvincular e desconciliar.
+// ══════════════════════════════════════════════════════════════════════════════
+
+export interface ReconcCandidate {
+  id:              string
+  type:            EntryType
+  description:     string
+  amount:          number
+  due_date:        string
+  payment_date:    string | null
+  status:          EntryStatus
+  category:        string | null
+  document_number: string | null
+  tutor_name:      string | null
+  patient_name:    string | null
+}
+
+const toCandidate = (e: FinancialEntry): ReconcCandidate => ({
+  id: e.id, type: e.type, description: e.description, amount: e.amount,
+  due_date: e.due_date, payment_date: e.payment_date, status: e.status,
+  category: e.category, document_number: e.document_number,
+  tutor_name: e.tutor_name, patient_name: e.patient_name,
+})
+
+export interface StatementWithLinks {
+  id:          string
+  date:        string
+  amount:      number
+  description: string
+  type:        'credit' | 'debit'
+  reconciled:  boolean
+  linked:      ReconcCandidate[]
+  /**
+   * Quem esta do outro lado, do `descInfComplementar` do banco. Antes o
+   * operador so via "PIX RECEBIDO - OUTRA IF", que nao diz de quem e.
+   * Nos creditos vem o nome de quem pagou; nos cartoes, a adquirente.
+   */
+  contraparte: string | null
+}
+
+async function fetchCandidatesByIds(clinicId: string, ids: string[]): Promise<Map<string, ReconcCandidate>> {
+  const map = new Map<string, ReconcCandidate>()
+  if (!ids.length) return map
+  const admin = createAdminClient()
+  const { data } = await admin.from('financial_entries').select(ENTRY_SELECT).eq('clinic_id', clinicId).in('id', ids)
+  for (const raw of (data ?? [])) { const c = toCandidate(mapEntry(raw as unknown as Record<string, unknown>)); map.set(c.id, c) }
+  return map
+}
+
+// Carrega as linhas do extrato do lote com seus vínculos + estado de conciliação.
+export async function getStatementsWithLinks(batchId: string): Promise<StatementWithLinks[] | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  const { data: stmts } = await admin.from('bank_statements')
+    .select('id, date, amount, description, type, reconciled_at, contraparte_nome, contraparte')
+    .eq('clinic_id', clinicId).eq('import_batch_id', batchId)
+    .order('date', { ascending: true })
+  return montarStatementsComVinculos(admin, clinicId, (stmts ?? []) as Record<string, unknown>[])
+}
+
+/**
+ * O extrato JA IMPORTADO da conta no periodo, independente de lote.
+ *
+ * Existe porque a tela carregava so por `import_batch_id`: quando o usuario
+ * saia e voltava, `batch` era nulo e nada aparecia. Parecia que o trabalho
+ * tinha sido perdido — e reimportar duplicava (43 grupos duplicados em
+ * producao antes da 0494). Os dados sempre estiveram gravados; faltava
+ * recarregar.
+ */
+export async function getStatementsWithLinksByPeriod(params: {
+  bank_account_id: string; start_date: string; end_date: string
+}): Promise<StatementWithLinks[] | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  if (!params.bank_account_id) return { error: 'Conta bancária obrigatória.' }
+  const admin = createAdminClient()
+  const { data: stmts, error } = await admin.from('bank_statements')
+    .select('id, date, amount, description, type, reconciled_at, contraparte_nome, contraparte')
+    .eq('clinic_id', clinicId)
+    .eq('bank_account_id', params.bank_account_id)
+    .gte('date', params.start_date)
+    .lte('date', params.end_date)
+    .order('date', { ascending: true })
+  if (error) return { error: mensagemErro(error, 'lib/actions/financial.ts') }
+  return montarStatementsComVinculos(admin, clinicId, (stmts ?? []) as Record<string, unknown>[])
+}
+
+async function montarStatementsComVinculos(
+  admin: ReturnType<typeof createAdminClient>,
+  clinicId: string,
+  list: Record<string, unknown>[],
+): Promise<StatementWithLinks[]> {
+  const stmtIds = list.map(s => s.id as string)
+
+  const linkMap = new Map<string, string[]>()
+  if (stmtIds.length) {
+    const { data: links } = await admin.from('bank_statement_entry_links')
+      .select('statement_id, entry_id').eq('clinic_id', clinicId).in('statement_id', stmtIds)
+    for (const l of (links ?? []) as Record<string, unknown>[]) {
+      const a = linkMap.get(l.statement_id as string) ?? []; a.push(l.entry_id as string); linkMap.set(l.statement_id as string, a)
+    }
+  }
+  const candMap = await fetchCandidatesByIds(clinicId, [...new Set([...linkMap.values()].flat())])
+  return list.map(s => ({
+    id:          s.id as string,
+    date:        s.date as string,
+    amount:      Number(s.amount),
+    description: s.description as string,
+    type:        s.type as 'credit' | 'debit',
+    reconciled:  !!s.reconciled_at,
+    linked:      (linkMap.get(s.id as string) ?? []).map(id => candMap.get(id)).filter(Boolean) as ReconcCandidate[],
+    // Prefere o nome extraido; cai no cru quando nao deu para extrair (ex.:
+    // "EVOLUSERVICES _Deb._Maestro", que e adquirente e nao pessoa).
+    contraparte: ((s.contraparte_nome as string | null) ?? (s.contraparte as string | null)) ?? null,
+  }))
+}
+
+export interface AutoLinkResult {
+  linked:               number
+  unmatched_statements: number
+  unmatched_candidates: number
+}
+
+// Auto-amarração: casa cada linha SEM vínculo com um título JÁ PAGO (crédito→a
+// receber, débito→a pagar) por valor (±0,01) e data de pagamento (±2 dias) e cria
+// o VÍNCULO (não concilia — o usuário confirma depois).
+export async function persistAutoLinks(batchId: string): Promise<AutoLinkResult | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const stmtsRes = await listBatchStatements(batchId)
+  if ('error' in stmtsRes) return stmtsRes
+  return amarrarAutomatico(clinicId, stmtsRes)
+}
+
+/**
+ * Auto-amarração do PERÍODO, não do lote.
+ *
+ * Existe porque a importação virou idempotente (migration 0494): reimportar o
+ * mesmo período passou a criar ZERO linhas novas, o lote sai vazio e
+ * `persistAutoLinks(batchId)` não tinha o que casar. Resultado: linha já
+ * importada mas sem vínculo nunca mais era avaliada — nem quando o título
+ * correspondente aparecia depois.
+ *
+ * Esta versão olha as linhas SEM VÍNCULO do período, independente de lote. É o
+ * caso real: o extrato chega antes do título ser lançado.
+ */
+export async function persistAutoLinksByPeriod(params: {
+  bank_account_id: string; start_date: string; end_date: string
+}): Promise<AutoLinkResult | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  if (!params.bank_account_id) return { error: 'Conta bancária obrigatória.' }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin.from('bank_statements')
+    .select('id, date, amount, description, type')
+    .eq('clinic_id', clinicId)
+    .eq('bank_account_id', params.bank_account_id)
+    .gte('date', params.start_date)
+    .lte('date', params.end_date)
+    .order('date', { ascending: true })
+  if (error) return { error: mensagemErro(error, 'lib/actions/financial.ts') }
+
+  const lista = (data ?? []).map(r => {
+    const x = r as Record<string, unknown>
+    return { id: x.id as string, date: x.date as string, amount: Number(x.amount),
+             description: (x.description as string) ?? '', type: x.type as 'credit' | 'debit' }
+  })
+  return amarrarAutomatico(clinicId, lista)
+}
+
+/** Miolo compartilhado: casa linha sem vínculo com título já pago. */
+async function amarrarAutomatico(
+  clinicId: string,
+  stmtsRes: { id: string; date: string; amount: number; description: string; type: 'credit' | 'debit' }[],
+): Promise<AutoLinkResult | { error: string }> {
+  const admin = createAdminClient()
+
+  const { data: existingLinks } = await admin.from('bank_statement_entry_links')
+    .select('statement_id, entry_id').eq('clinic_id', clinicId)
+  const linkedEntryIds = new Set((existingLinks ?? []).map((r: Record<string, unknown>) => r.entry_id as string))
+  const stmtHasLink = new Set((existingLinks ?? []).map((r: Record<string, unknown>) => r.statement_id as string))
+
+  const stmts = stmtsRes.filter(s => !stmtHasLink.has(s.id))
+  if (!stmts.length) return { linked: 0, unmatched_statements: 0, unmatched_candidates: 0 }
+
+  const dates = stmts.map(s => s.date).sort()
+  const pad = (d: string, days: number) => new Date(new Date(d).getTime() + days * 86400000).toISOString().slice(0, 10)
+  const start = pad(dates[0], -3), end = pad(dates[dates.length - 1], 3)
+
+  const types: EntryType[] = ['receivable', 'payable']
+  const lists = await Promise.all(types.map(t => listEntries({ type: t, status: 'paid', paid_from: start, paid_to: end })))
+  const paid = lists.flatMap(r => Array.isArray(r) ? r : []).filter(e => !linkedEntryIds.has(e.id))
+
+  const usedEntry = new Set<string>()
+  let linked = 0
+  for (const s of stmts) {
+    const wantType: EntryType = s.type === 'credit' ? 'receivable' : 'payable'
+    const sTime = new Date(s.date).getTime()
+    const hit = paid.find(e => {
+      if (usedEntry.has(e.id) || e.type !== wantType) return false
+      if (Math.abs(e.amount - s.amount) >= 0.01) return false
+      // SÓ a data da baixa. O fallback `?? e.due_date` que havia aqui casava
+      // título pago-sem-data com uma transação qualquer pelo vencimento — e há
+      // títulos `paid` com payment_date nulo no banco (3 no de testes). Sem
+      // data de baixa, não há como afirmar que a transação é essa.
+      if (!e.payment_date) return false
+      const eDate = new Date(e.payment_date).getTime()
+      return Math.abs(sTime - eDate) / 86400000 <= 2
+    })
+    if (!hit) continue
+    usedEntry.add(hit.id)
+    await admin.from('bank_statement_entry_links').insert({ clinic_id: clinicId, statement_id: s.id, entry_id: hit.id })
+    linked++
+  }
+  return { linked, unmatched_statements: stmts.length - linked, unmatched_candidates: paid.length - linked }
+}
+
+// Vincular 1+ títulos do sistema a uma linha do extrato (N:1). Idempotente.
+export async function linkEntriesToStatement(statementId: string, entryIds: string[]): Promise<{ ok: true; linked: number } | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  if (!entryIds.length) return { error: 'Selecione ao menos um título.' }
+  const admin = createAdminClient()
+  const rows = entryIds.map(entry_id => ({ clinic_id: clinicId, statement_id: statementId, entry_id }))
+  const { error } = await admin.from('bank_statement_entry_links')
+    .upsert(rows, { onConflict: 'statement_id,entry_id', ignoreDuplicates: true })
+  if (error) return { error: 'Erro ao vincular: ' + mensagemErro(error, 'lib/actions/financial.ts') }
+  return { ok: true, linked: entryIds.length }
+}
+
+// Desvincular UM título de uma linha (se ficar sem vínculo, desfaz a conciliação).
+export async function unlinkEntry(statementId: string, entryId: string): Promise<{ error?: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  const { error } = await admin.from('bank_statement_entry_links').delete()
+    .eq('clinic_id', clinicId).eq('statement_id', statementId).eq('entry_id', entryId)
+  if (error) return { error: 'Erro ao desvincular: ' + mensagemErro(error, 'lib/actions/financial.ts') }
+  const { data: rest } = await admin.from('bank_statement_entry_links')
+    .select('id').eq('clinic_id', clinicId).eq('statement_id', statementId).limit(1)
+  if (!rest || rest.length === 0) {
+    await admin.from('bank_statements').update({ reconciled_at: null }).eq('id', statementId).eq('clinic_id', clinicId)
+  }
+  return {}
+}
+
+// Desvincular TODOS os títulos de uma linha + desconciliar.
+export async function unlinkStatement(statementId: string): Promise<{ error?: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  await admin.from('bank_statement_entry_links').delete().eq('clinic_id', clinicId).eq('statement_id', statementId)
+  const { error } = await admin.from('bank_statements').update({ reconciled_at: null }).eq('id', statementId).eq('clinic_id', clinicId)
+  if (error) return { error: 'Erro ao desvincular: ' + mensagemErro(error, 'lib/actions/financial.ts') }
+  return {}
+}
+
+// Concilia as linhas informadas QUE TÊM vínculo (parcial — não exige todas). As
+// demais ficam pendentes.
+/**
+ * Vincula VÁRIOS lançamentos do extrato a UM título.
+ *
+ * O inverso (`linkEntriesToStatement`) já existia: N títulos → 1 lançamento.
+ * Faltava esta direção, que é o caso do título parcelado ou do repasse que o
+ * banco quebra em várias linhas — um título nosso corresponde a 3 créditos.
+ *
+ * Sem ela, o operador tinha de escolher uma linha e deixar as outras órfãs.
+ */
+export async function linkStatementsToEntry(entryId: string, statementIds: string[]): Promise<{ ok: true; linked: number } | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  if (!entryId) return { error: 'Selecione o título.' }
+  if (!statementIds.length) return { error: 'Selecione ao menos um lançamento do extrato.' }
+
+  const admin = createAdminClient()
+
+  // Confere que tudo pertence à clínica antes de amarrar: id de outra clínica
+  // não entra aqui nem por engano nem de propósito.
+  const { data: e } = await admin.from('financial_entries')
+    .select('id').eq('id', entryId).eq('clinic_id', clinicId).maybeSingle()
+  if (!e) return { error: 'Título não encontrado.' }
+
+  const { data: ss } = await admin.from('bank_statements')
+    .select('id').eq('clinic_id', clinicId).in('id', statementIds)
+  const validos = (ss ?? []).map(r => (r as { id: string }).id)
+  if (!validos.length) return { error: 'Nenhum lançamento válido para vincular.' }
+
+  const rows = validos.map(statement_id => ({ clinic_id: clinicId, statement_id, entry_id: entryId }))
+  const { error } = await admin.from('bank_statement_entry_links')
+    .upsert(rows, { onConflict: 'statement_id,entry_id', ignoreDuplicates: true })
+  if (error) return { error: 'Erro ao vincular: ' + mensagemErro(error, 'lib/actions/financial.ts') }
+
+  return { ok: true, linked: validos.length }
+}
+
+/**
+ * Busca nos títulos para vincular manualmente, quando o automático não casou.
+ *
+ * O automático exige valor exato e data da baixa em ±2 dias. Quando a baixa
+ * foi lançada com data diferente, ou o valor tem juros/desconto, ele não casa
+ * — e antes daqui o operador não tinha como achar o título: a tela listava só
+ * os candidatos do período, sem busca.
+ *
+ * Procura por descrição, valor e data da baixa, nos títulos JÁ BAIXADOS por
+ * padrão (que é o caso do vínculo) e opcionalmente nos abertos.
+ */
+export async function buscarTitulosParaVincular(params: {
+  termo?:        string
+  valor?:        number
+  /** Tolerância sobre o valor, para achar o título com juros/desconto. */
+  valor_margem?: number
+  baixa_de?:     string
+  baixa_ate?:    string
+  tipo?:         EntryType
+  incluir_abertos?: boolean
+  limite?:       number
+}): Promise<ReconcCandidate[] | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+
+  let q = admin.from('financial_entries')
+    .select('id, type, description, amount, discount, interest, due_date, payment_date, status, tutor_id, supplier_id')
+    .eq('clinic_id', clinicId)
+
+  q = params.incluir_abertos ? q.in('status', ['paid', 'pending']) : q.eq('status', 'paid')
+  if (params.tipo) q = q.eq('type', params.tipo)
+
+  const termo = (params.termo ?? '').trim()
+  if (termo) q = q.ilike('description', `%${termo}%`)
+
+  if (typeof params.valor === 'number' && Number.isFinite(params.valor)) {
+    const m = Math.abs(params.valor_margem ?? 0.01)
+    q = q.gte('amount', params.valor - m).lte('amount', params.valor + m)
+  }
+  // Data da BAIXA, não do vencimento: é ela que casa com o extrato.
+  if (params.baixa_de)  q = q.gte('payment_date', params.baixa_de)
+  if (params.baixa_ate) q = q.lte('payment_date', params.baixa_ate)
+
+  const { data, error } = await q
+    .order('payment_date', { ascending: false, nullsFirst: false })
+    .limit(Math.min(params.limite ?? 50, 200))
+  if (error) return { error: mensagemErro(error, 'lib/actions/financial.ts') }
+
+  return (data ?? []).map(r => {
+    const x = r as Record<string, unknown>
+    return {
+      id:           x.id as string,
+      type:         x.type as EntryType,
+      description:  (x.description as string) ?? '',
+      amount:       Number(x.amount),
+      due_date:     x.due_date as string,
+      payment_date: (x.payment_date as string | null) ?? null,
+      status:       x.status as string,
+    } as ReconcCandidate
+  })
+}
+
+/**
+ * Vinculo N para N: cada lancamento marcado com cada titulo marcado.
+ *
+ * O botao principal da tela chamava `linkEntriesToStatement(active.id, ...)`
+ * — amarrava os titulos ao lancamento ATIVO e ignorava a multi-selecao de
+ * lancamentos. Marcando 3 linhas e 2 titulos, uma linha ficava de fora.
+ *
+ * Aqui os dois lados sao plurais, e a conferencia de clinica cobre os dois.
+ */
+export async function linkManyToMany(params: {
+  statement_ids: string[]
+  entry_ids:     string[]
+}): Promise<{ ok: true; linked: number; total_extrato: number; total_sistema: number; diferenca: number } | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  if (!params.statement_ids.length) return { error: 'Selecione ao menos um lançamento do extrato.' }
+  if (!params.entry_ids.length)     return { error: 'Selecione ao menos um título.' }
+
+  const admin = createAdminClient()
+
+  const { data: ss } = await admin.from('bank_statements')
+    .select('id, amount').eq('clinic_id', clinicId).in('id', params.statement_ids)
+  const { data: ee } = await admin.from('financial_entries')
+    .select('id, amount, discount, interest, status').eq('clinic_id', clinicId).in('id', params.entry_ids)
+
+  const linhas  = (ss ?? []) as { id: string; amount: number }[]
+  const titulos = (ee ?? []) as { id: string; amount: number; discount: number | null; interest: number | null; status: string }[]
+  if (!linhas.length)  return { error: 'Nenhum lançamento válido para vincular.' }
+  if (!titulos.length) return { error: 'Nenhum título válido para vincular.' }
+
+  const cent = (v: number) => Math.round(v * 100) / 100
+  const totalExtrato = cent(linhas.reduce((a, x) => a + Math.abs(Number(x.amount)), 0))
+  const totalSistema = cent(titulos.reduce((a, x) => a + (Number(x.amount) - Number(x.discount ?? 0) + Number(x.interest ?? 0)), 0))
+
+  // Produto cartesiano: e o que N para N significa. O upsert ignora o que ja
+  // existe, entao repetir a operacao nao duplica.
+  const rows = linhas.flatMap(l => titulos.map(t => ({
+    clinic_id: clinicId, statement_id: l.id, entry_id: t.id,
+  })))
+  const { error } = await admin.from('bank_statement_entry_links')
+    .upsert(rows, { onConflict: 'statement_id,entry_id', ignoreDuplicates: true })
+  if (error) return { error: 'Erro ao vincular: ' + mensagemErro(error, 'lib/actions/financial.ts') }
+
+  return {
+    ok: true, linked: rows.length,
+    total_extrato: totalExtrato, total_sistema: totalSistema,
+    diferenca: cent(totalExtrato - totalSistema),
+  }
+}
+
+/**
+ * Cria um titulo para a DIFERENCA de uma conciliacao que nao fecha, e o amarra
+ * aos mesmos lancamentos.
+ *
+ * Existe porque o extrato e o sistema nem sempre fecham: tarifa que o banco
+ * cobrou e ninguem lancou, juros recebido, desconto concedido na boca do
+ * caixa. Antes o operador tinha de sair da tela, lancar o titulo a mao,
+ * voltar, procurar e vincular — ou deixava a linha sem conciliar.
+ *
+ * O SINAL decide o tipo: sobrou dinheiro no extrato (entrou mais do que os
+ * titulos somam) -> a receber; faltou -> a pagar.
+ */
+export async function criarTituloDaDiferenca(params: {
+  statement_ids: string[]
+  valor:         number
+  description:   string
+  tipo?:         EntryType
+  due_date?:     string
+  category?:     string
+  tutor_id?:     string
+  supplier_id?:  string
+  chart_of_accounts_id?: string
+  notes?:        string
+}): Promise<{ ok: true; entry_id: string } | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const user = await getAuthUser()
+  if (!user) return { error: 'Não autenticado.' }
+  if (!params.statement_ids.length) return { error: 'Selecione os lançamentos da conciliação.' }
+
+  const valor = Math.round(Math.abs(params.valor) * 100) / 100
+  if (!(valor > 0)) return { error: 'A diferença precisa ser maior que zero.' }
+  if (!params.description?.trim()) return { error: 'Informe a descrição do título da diferença.' }
+
+  const admin = createAdminClient()
+  const { data: ss } = await admin.from('bank_statements')
+    .select('id, date').eq('clinic_id', clinicId).in('id', params.statement_ids).order('date')
+  const linhas = (ss ?? []) as { id: string; date: string }[]
+  if (!linhas.length) return { error: 'Nenhum lançamento válido.' }
+
+  // Data do titulo acompanha a transacao, nao o dia de hoje: e ela que explica
+  // a conciliacao daquele dia.
+  const dataTransacao = linhas[linhas.length - 1].date
+  const tipo: EntryType = params.tipo ?? (params.valor >= 0 ? 'receivable' : 'payable')
+
+  const { data: nova, error } = await admin.from('financial_entries').insert({
+    clinic_id:  clinicId,
+    type:       tipo,
+    description: params.description.trim(),
+    amount:     valor,
+    discount:   0,
+    interest:   0,
+    issue_date: dataTransacao,
+    due_date:   params.due_date || dataTransacao,
+    category:   params.category || null,
+    notes:      params.notes || 'Título gerado pela conciliação bancária (diferença entre extrato e sistema).',
+    tutor_id:   params.tutor_id || null,
+    supplier_id: params.supplier_id || null,
+    chart_of_accounts_id: params.chart_of_accounts_id || null,
+    created_by: user.id,
+    status:     'pending',
+    source:     'manual',
+  }).select('id').single()
+  if (error || !nova) return { error: 'Erro ao criar o título da diferença: ' + mensagemErro(error, 'lib/actions/financial.ts') }
+
+  const entryId = (nova as { id: string }).id
+  const { error: linkErr } = await admin.from('bank_statement_entry_links')
+    .upsert(linhas.map(l => ({ clinic_id: clinicId, statement_id: l.id, entry_id: entryId })),
+            { onConflict: 'statement_id,entry_id', ignoreDuplicates: true })
+  if (linkErr) {
+    // O titulo existe. Nao da para fingir que o vinculo entrou.
+    return { error: `Título da diferença criado, mas NÃO foi vinculado: ${mensagemErro(linkErr, 'lib/actions/financial.ts')} Vincule manualmente.` }
+  }
+
+  return { ok: true, entry_id: entryId }
+}
+
+export async function reconcileLines(statementIds: string[]): Promise<{ ok: true; reconciled: number } | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  if (!statementIds.length) return { error: 'Nada para conciliar.' }
+  const admin = createAdminClient()
+  const { data: links } = await admin.from('bank_statement_entry_links')
+    .select('statement_id').eq('clinic_id', clinicId).in('statement_id', statementIds)
+  const hasLink = new Set((links ?? []).map((r: Record<string, unknown>) => r.statement_id as string))
+  const toRec = statementIds.filter(id => hasLink.has(id))
+  if (!toRec.length) return { error: 'Selecione linhas vinculadas para conciliar.' }
+  const now = new Date().toISOString()
+  const { error } = await admin.from('bank_statements')
+    .update({ reconciled_at: now }).in('id', toRec).eq('clinic_id', clinicId).is('reconciled_at', null)
+  if (error) return { error: 'Erro ao conciliar: ' + mensagemErro(error, 'lib/actions/financial.ts') }
+  return { ok: true, reconciled: toRec.length }
+}
+
+// Desconciliar uma linha (mantém o vínculo).
+export async function unreconcileLine(statementId: string): Promise<{ error?: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  const { error } = await admin.from('bank_statements')
+    .update({ reconciled_at: null }).eq('id', statementId).eq('clinic_id', clinicId)
+  if (error) return { error: 'Erro ao desconciliar: ' + mensagemErro(error, 'lib/actions/financial.ts') }
+  return {}
+}
+
+// Candidatos do painel direito: títulos PAGOS ainda não vinculados (no período) +
+// títulos em ABERTO (para "baixar título em aberto").
+export async function listReconcCandidates(params: {
+  bank_account_id: string
+  start_date:      string
+  end_date:        string
+}): Promise<{ paid: ReconcCandidate[]; open: ReconcCandidate[] } | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+
+  const { data: linkRows } = await admin.from('bank_statement_entry_links')
+    .select('entry_id').eq('clinic_id', clinicId)
+  const linkedIds = new Set((linkRows ?? []).map((r: Record<string, unknown>) => r.entry_id as string))
+
+  const types: EntryType[] = ['receivable', 'payable']
+  const [paidLists, openLists] = await Promise.all([
+    Promise.all(types.map(t => listEntries({ type: t, status: 'paid', paid_from: params.start_date, paid_to: params.end_date }))),
+    Promise.all(types.map(t => listEntries({ type: t, status: 'pending' }))),
+  ])
+
+  const flat = (lists: (FinancialEntry[] | { error: string })[]) =>
+    lists.flatMap(r => Array.isArray(r) ? r : [])
+  const paid = flat(paidLists).filter(e => !linkedIds.has(e.id)).map(toCandidate)
+  const open = flat(openLists).filter(e => !linkedIds.has(e.id)).map(toCandidate)
+  return { paid, open }
+}
+
+// Baixar um título em ABERTO (marca pago) e VINCULAR à linha do extrato.
+export async function settleOpenEntryAndLink(params: {
+  entry_id:        string
+  statement_id:    string
+  bank_account_id: string
+  payment_date:    string
+}): Promise<{ error?: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  const { error: upErr } = await admin.from('financial_entries')
+    .update({ status: 'paid', payment_date: params.payment_date, settlement_bank_id: params.bank_account_id, updated_at: new Date().toISOString() })
+    .eq('id', params.entry_id).eq('clinic_id', clinicId).eq('status', 'pending')
+  if (upErr) return { error: 'Erro ao baixar título: ' + mensagemErro(upErr, 'lib/actions/financial.ts') }
+  const { error: linkErr } = await admin.from('bank_statement_entry_links')
+    .upsert({ clinic_id: clinicId, statement_id: params.statement_id, entry_id: params.entry_id }, { onConflict: 'statement_id,entry_id', ignoreDuplicates: true })
+  if (linkErr) return { error: 'Erro ao vincular: ' + mensagemErro(linkErr, 'lib/actions/financial.ts') }
+  return {}
+}
+
+// Inserir um título não lançado a partir da linha do extrato + VINCULAR.
+export async function insertEntryFromStatement(params: {
+  statement_id:          string
+  bank_account_id:       string
+  category?:             string
+  chart_of_accounts_id?: string
+  description?:          string
+}): Promise<{ ok: true; entry_id: string } | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  const user = await getAuthUser()
+
+  const { data: stmt } = await admin.from('bank_statements')
+    .select('id, amount, description, type, date')
+    .eq('id', params.statement_id).eq('clinic_id', clinicId).single()
+  if (!stmt) return { error: 'Lançamento do extrato não encontrado.' }
+
+  const type: EntryType = stmt.type === 'credit' ? 'receivable' : 'payable'
+  const { data: fe, error: feErr } = await admin.from('financial_entries').insert({
+    clinic_id: clinicId, type,
+    description: params.description || stmt.description || 'Lançamento do extrato',
+    amount: Math.abs(Number(stmt.amount)),
+    due_date: stmt.date, payment_date: stmt.date, issue_date: stmt.date,
+    status: 'paid', source: 'manual',
+    category: params.category ?? null,
+    chart_of_accounts_id: params.chart_of_accounts_id ?? null,
+    settlement_bank_id: params.bank_account_id,
+    created_by: user?.id ?? null,
+  }).select('id').single()
+  if (feErr || !fe) return { error: 'Falha ao inserir título: ' + ((feErr ? mensagemErro(feErr, 'lib/actions/financial.ts') : '')) }
+
+  const { error: linkErr } = await admin.from('bank_statement_entry_links')
+    .insert({ clinic_id: clinicId, statement_id: params.statement_id, entry_id: fe.id })
+  if (linkErr) return { error: 'Título criado, mas falha ao vincular: ' + mensagemErro(linkErr, 'lib/actions/financial.ts') }
+  return { ok: true, entry_id: fe.id }
+}
+
+// ─── EXTRATO (movimentações efetivas) ─────────────────────────────────────────
+// Lista os títulos BAIXADOS (pagos) no contas a receber/pagar — as movimentações
+// efetivas de caixa/banco — com o status de conciliação de cada um (conciliado se
+// vinculado a uma linha do extrato já conciliada; senão vinculado ou pendente).
+export interface ExtratoMovement {
+  id:              string
+  date:            string
+  description:     string
+  amount:          number
+  type:            EntryType
+  category:        string | null
+  document_number: string | null
+  tutor_name:      string | null
+  patient_name:    string | null
+  bank_name:       string | null
+  status:          'reconciled' | 'linked' | 'pending'
+}
+export interface EffectiveExtratoResult {
+  movements:      ExtratoMovement[]
+  total_entradas: number
+  total_saidas:   number
+  saldo:          number
+}
+export async function getEffectiveExtrato(params: {
+  start_date: string; end_date: string; bank_account_id?: string
+}): Promise<EffectiveExtratoResult | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+
+  const types: EntryType[] = ['receivable', 'payable']
+  const lists = await Promise.all(types.map(t => listEntries({ type: t, status: 'paid', paid_from: params.start_date, paid_to: params.end_date })))
+  let entries = lists.flatMap(r => Array.isArray(r) ? r : [])
+  if (params.bank_account_id) entries = entries.filter(e => e.settlement_bank_id === params.bank_account_id)
+
+  // estado de conciliação por título
+  const { data: links } = await admin.from('bank_statement_entry_links')
+    .select('entry_id, statement_id').eq('clinic_id', clinicId)
+  const linkRows = (links ?? []) as Record<string, unknown>[]
+  const stmtIds = [...new Set(linkRows.map(l => l.statement_id as string))]
+  const reconStmt = new Set<string>()
+  if (stmtIds.length) {
+    const { data: st } = await admin.from('bank_statements').select('id, reconciled_at').in('id', stmtIds)
+    for (const s of (st ?? []) as Record<string, unknown>[]) if (s.reconciled_at) reconStmt.add(s.id as string)
+  }
+  const linkedEntry = new Set(linkRows.map(l => l.entry_id as string))
+  const reconciledEntry = new Set(linkRows.filter(l => reconStmt.has(l.statement_id as string)).map(l => l.entry_id as string))
+
+  const movements: ExtratoMovement[] = entries.map(e => ({
+    id: e.id, date: e.payment_date ?? e.due_date, description: e.description, amount: e.amount,
+    type: e.type, category: e.category, document_number: e.document_number,
+    tutor_name: e.tutor_name, patient_name: e.patient_name, bank_name: e.settlement_bank_name,
+    status: (reconciledEntry.has(e.id) ? 'reconciled' : linkedEntry.has(e.id) ? 'linked' : 'pending') as ExtratoMovement['status'],
+  })).sort((a, b) => a.date.localeCompare(b.date))
+
+  const total_entradas = movements.filter(m => m.type === 'receivable').reduce((s, m) => s + m.amount, 0)
+  const total_saidas   = movements.filter(m => m.type === 'payable').reduce((s, m) => s + m.amount, 0)
+  return { movements, total_entradas, total_saidas, saldo: total_entradas - total_saidas }
+}
+
+// ─── 1.4 · Visão cruzada por CNPJ (empresa faturante) ─────────────────────────
+// Consolida, por empresa, o recebido/pago no período (atribuído pela conta
+// bancária da empresa via settlement_bank_id) + o saldo de crédito por empresa
+// (tutor_credits.company_id, incl. transferências inter-CNPJ).
+export interface CompanyOverview {
+  company_id:         string | null
+  company_name:       string
+  recebido:           number
+  pago:               number
+  saldo:              number
+  credito_inserido:   number
+  credito_utilizado:  number
+  credito_disponivel: number
+}
+export async function getCrossCompanyOverview(params: {
+  start_date: string; end_date: string
+}): Promise<{ companies: CompanyOverview[] } | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+
+  const [{ data: comps }, { data: accts }] = await Promise.all([
+    admin.from('companies').select('id, name').eq('clinic_id', clinicId),
+    admin.from('bank_accounts').select('id, company_id').eq('clinic_id', clinicId),
+  ])
+  const compName    = new Map<string, string>((comps ?? []).map((c: Record<string, unknown>) => [c.id as string, c.name as string]))
+  const acctCompany = new Map<string, string | null>((accts ?? []).map((a: Record<string, unknown>) => [a.id as string, (a.company_id as string | null) ?? null]))
+
+  const types: EntryType[] = ['receivable', 'payable']
+  const lists = await Promise.all(types.map(t => listEntries({ type: t, status: 'paid', paid_from: params.start_date, paid_to: params.end_date })))
+  const entries = lists.flatMap(r => Array.isArray(r) ? r : [])
+  const { data: credits } = await admin.from('tutor_credits').select('company_id, amount, kind, created_at').eq('clinic_id', clinicId)
+
+  const map = new Map<string | null, CompanyOverview>()
+  const ensure = (cid: string | null): CompanyOverview => {
+    if (!map.has(cid)) map.set(cid, {
+      company_id: cid, company_name: cid ? (compName.get(cid) ?? 'Empresa') : 'Sem empresa/conta',
+      recebido: 0, pago: 0, saldo: 0, credito_inserido: 0, credito_utilizado: 0, credito_disponivel: 0,
+    })
+    return map.get(cid)!
+  }
+  for (const c of (comps ?? []) as Record<string, unknown>[]) ensure(c.id as string)
+
+  for (const e of entries) {
+    // Elimina movimento interno inter-CNPJ e "utilização de crédito" (não é caixa
+    // novo) das colunas de recebido/pago consolidadas.
+    if (e.is_intercompany || e.payment_method === 'credit_balance') continue
+    const cid = e.settlement_bank_id ? (acctCompany.get(e.settlement_bank_id) ?? null) : null
+    const row = ensure(cid)
+    if (e.type === 'receivable') row.recebido += e.amount; else row.pago += e.amount
+  }
+  const inPeriod = (iso: string) => iso.slice(0, 10) >= params.start_date && iso.slice(0, 10) <= params.end_date
+  for (const cr of (credits ?? []) as Record<string, unknown>[]) {
+    const cid = (cr.company_id as string | null) ?? null
+    const row = ensure(cid)
+    const amt = Number(cr.amount)
+    row.credito_disponivel += amt
+    if (inPeriod(cr.created_at as string)) {
+      if (cr.kind === 'advance') row.credito_inserido += amt
+      if (cr.kind === 'usage')   row.credito_utilizado += Math.abs(amt)
+    }
+  }
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  for (const row of map.values()) {
+    row.recebido = r2(row.recebido); row.pago = r2(row.pago); row.saldo = r2(row.recebido - row.pago)
+    row.credito_inserido = r2(row.credito_inserido); row.credito_utilizado = r2(row.credito_utilizado); row.credito_disponivel = r2(row.credito_disponivel)
+  }
+  return { companies: [...map.values()].sort((a, b) => a.company_name.localeCompare(b.company_name)) }
+}
+
+// ─── 1.3 · Buscar extrato do banco (Sicoob) por período e auto-vincular ───────
+// Puxa o extrato da conta corrente Sicoob (API v4) no período informado, importa
+// como lote e roda a auto-amarração — o usuário só confirma a conciliação.
+export async function importBankStatementFromSicoob(params: {
+  bank_account_id: string; start_date: string; end_date: string
+}): Promise<{ ok: true; batch_id: string; imported: number; linked: number; warnings: string[] } | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  const { data: acct } = await admin.from('bank_accounts')
+    .select('account, name, agency, bank_code').eq('id', params.bank_account_id).eq('clinic_id', clinicId).single()
+  if (!acct) return { error: 'Conta bancária não encontrada.' }
+  const conta = String((acct as { account?: string }).account ?? '').trim()
+  if (!conta) return { error: 'A conta selecionada não tem número cadastrado (necessário para buscar no Sicoob).' }
+
+  // A configuração vem da CLÍNICA (ambiente, client_id, certificado), não de
+  // variável de ambiente — senão "Produção" na tela não significa nada.
+  const { resolverConfigSicoob } = await import('@/lib/integrations/sicoob-config')
+  const resolucao = await resolverConfigSicoob(admin, clinicId, {
+    agency:    (acct as { agency?: string | null }).agency ?? null,
+    account:   (acct as { account?: string | null }).account ?? null,
+    bank_code: (acct as { bank_code?: string | null }).bank_code ?? null,
+  })
+  if ('error' in resolucao) return { error: resolucao.error }
+
+  let res: { statements: { date: string; amount: number; description: string; type: 'credit' | 'debit'; external_id?: string }[]; warnings: string[] }
+  try { res = await fetchSicoobExtrato({ conta, start_date: params.start_date, end_date: params.end_date, config: resolucao.config }) }
+  catch (e) { return { error: `Sicoob: ${mensagemErro(e, 'lib/actions/financial.ts')}` } }
+  if (!res.statements.length) return { error: `Nenhum lançamento retornado pelo Sicoob no período.${res.warnings.length ? ' (' + res.warnings.join(' · ') + ')' : ''}` }
+
+  const imp = await importStatements({ bank_account_id: params.bank_account_id, source: 'sicoob_api', statements: res.statements })
+  if ('error' in imp) return { error: imp.error }
+  // Auto-amarracao do PERIODO, nao do lote: com a importacao idempotente o
+  // lote sai vazio ao reimportar, e a linha antiga sem vinculo nunca mais
+  // seria avaliada — nem quando o titulo aparece depois.
+  const auto = await persistAutoLinksByPeriod({
+    bank_account_id: params.bank_account_id, start_date: params.start_date, end_date: params.end_date,
+  })
+  const linked = 'error' in auto ? 0 : auto.linked
+
+  // Diz a verdade sobre o que entrou: reimportar o mesmo periodo agora e
+  // inofensivo, e a tela precisa mostrar isso em vez de "N importados".
+  const repetidos = imp.skipped ?? 0
+  const avisos = [...resolucao.avisos, ...res.warnings]
+  if (repetidos > 0) {
+    avisos.push(repetidos === res.statements.length
+      ? `Nenhum lançamento novo: as ${repetidos} linhas do período já estavam importadas.`
+      : `${repetidos} lançamento(s) do período já estavam importados e não entraram de novo.`)
+  }
+  return { ok: true, batch_id: imp.id, imported: imp.total_records, linked, warnings: avisos }
 }

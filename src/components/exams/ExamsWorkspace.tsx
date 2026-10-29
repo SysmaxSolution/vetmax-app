@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useFocusedVoiceCapture } from '@/hooks/useFocusedVoiceCapture'
 import { getClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 import Link from 'next/link'
@@ -13,6 +14,8 @@ import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
 import { PetAvatar } from '@/components/ui/PetAvatar'
 import AttendanceCardMenu from '@/components/shared/AttendanceCardMenu'
+import ReceptionWaitingPanel from '@/components/shared/ReceptionWaitingPanel'
+import SampleScanLookup from '@/components/exams/SampleScanLookup'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -88,6 +91,20 @@ function ExamCard({
             </span>
           )}
         </div>
+        {item.status === 'awaiting_lab_result' && (
+          <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">
+              <FlaskConical className="h-3 w-3" />
+              Aguardando resultado de laboratório parceiro
+            </span>
+            {item.lab_partner_name && (
+              <span className="text-xs text-slate-500">{item.lab_partner_name}</span>
+            )}
+            {item.lab_return_deadline && (
+              <span className="text-xs text-slate-400">· retorno até {new Date(item.lab_return_deadline + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+            )}
+          </div>
+        )}
         <div className="mt-1 flex items-center gap-1.5">
           <Clock className="h-3.5 w-3.5 text-amber-500" />
           <span className="text-xs text-amber-600 font-medium">{calcWaiting(item.created_at)}</span>
@@ -157,6 +174,8 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
   const [examSuccess, setExamSuccess] = useState('')
   const [examError, setExamError] = useState('')
   const [localQueue, setLocalQueue] = useState<ExamQueueItem[]>(queue)
+  // re-sincroniza a fila quando o router.refresh() (realtime/auto-refresh) traz novos dados
+  useEffect(() => { setLocalQueue(queue) }, [queue])
   const [localExamRequests, setLocalExamRequests] = useState<ExamRequest[]>(examRequests)
   const [resultModalId, setResultModalId] = useState<string | null>(null)
   const [resultText, setResultText] = useState('')
@@ -242,6 +261,10 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
             Solicitar Exame
           </button>
         </div>
+
+        {/* Aguardando na recepção (marcados como exame) — chamar para a fila */}
+        <ReceptionWaitingPanel mode="exams" />
+        <SampleScanLookup />
 
         {/* Tab Switcher */}
         <div className="flex gap-1 rounded-xl bg-slate-100 p-1 w-fit">
@@ -437,7 +460,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
       </main>
 
       {/* Modal: Solicitar Exame */}
-      {showNewExamModal && (
+      {showNewExamModal && typeof document !== 'undefined' && createPortal(
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4 animate-scale-in">
             <div className="flex items-center justify-between">
@@ -540,11 +563,12 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Modal: Registrar Resultado */}
-      {resultModalId && (
+      {resultModalId && typeof document !== 'undefined' && createPortal(
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4 animate-scale-in">
             <div className="flex items-center justify-between">
@@ -595,11 +619,12 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Modal: Internar Paciente */}
-      {hospItem && (
+      {hospItem && typeof document !== 'undefined' && createPortal(
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4 animate-scale-in">
             <div className="flex items-center justify-between">
@@ -658,7 +683,8 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

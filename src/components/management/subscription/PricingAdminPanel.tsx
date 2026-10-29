@@ -149,7 +149,7 @@ export default function PricingAdminPanel({ catalog, config, onToast }: Props) {
                     <button
                       onClick={() => setRow(r.module_key, { available: !r.available })}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                        r.available ? 'bg-purple-600' : 'bg-slate-300'
+                        r.available ? 'bg-teal-600' : 'bg-slate-300'
                       }`}
                       role="switch"
                       aria-checked={r.available}
@@ -169,7 +169,7 @@ export default function PricingAdminPanel({ catalog, config, onToast }: Props) {
       <button
         onClick={handleSave}
         disabled={saving}
-        className="mt-4 flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700 disabled:opacity-60"
+        className="mt-4 flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-60"
       >
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
         Salvar pricing

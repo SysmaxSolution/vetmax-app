@@ -13,6 +13,7 @@
  */
 
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Plus, Copy, AlertCircle } from 'lucide-react'
 import type { ExtractedField, FieldType } from '@/types'
 
@@ -113,7 +114,7 @@ export default function NewFieldDialog({
 
   // ── Render ──────────────────────────────────────────────────────────────
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div
       className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center px-4"
       onClick={onCancel}
@@ -121,7 +122,7 @@ export default function NewFieldDialog({
       <form
         onClick={e => e.stopPropagation()}
         onSubmit={handleSubmit}
-        className="bg-white rounded-xl shadow-2xl w-full max-w-md p-5 animate-in fade-in zoom-in-95 duration-150"
+        className="bg-white rounded-xl shadow-xl w-full max-w-md p-5 animate-scale-in"
       >
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -292,7 +293,7 @@ export default function NewFieldDialog({
               'flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ' +
               (isRepeatMode
                 ? 'text-white bg-amber-600 hover:bg-amber-700'
-                : 'text-white bg-blue-600 hover:bg-blue-700')
+                : 'text-white bg-teal-600 hover:bg-teal-700')
             }
           >
             {isRepeatMode
@@ -301,6 +302,7 @@ export default function NewFieldDialog({
           </button>
         </div>
       </form>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

@@ -7,6 +7,10 @@ export type CnpjResult = {
   cnpj: string
   razao_social: string
   nome_fantasia: string
+  // dados complementares (podem vir vazios dependendo do provedor)
+  address?: string
+  phone?:   string
+  email?:   string
 } | {
   ok: false
   reason: 'not_found' | 'network'
@@ -26,15 +30,24 @@ async function fetchJson<T>(url: string, signal: AbortSignal): Promise<{ data: T
 
 type PublicaCnpjResponse = {
   razao_social?: string
-  estabelecimento?: { nome_fantasia?: string }
+  estabelecimento?: {
+    nome_fantasia?: string
+    tipo_logradouro?: string; logradouro?: string; numero?: string; bairro?: string
+    cidade?: { nome?: string }; estado?: { sigla?: string }
+    ddd1?: string; telefone1?: string; email?: string
+  }
   detail?: string
 }
 
 type BrasilApiCnpjResponse = {
   razao_social?: string
   nome_fantasia?: string
+  logradouro?: string; numero?: string; bairro?: string; municipio?: string; uf?: string
+  ddd_telefone_1?: string; email?: string
   message?: string
 }
+
+const joinAddr = (parts: (string | null | undefined)[]) => parts.filter(Boolean).join(', ')
 
 export async function lookupCnpj(rawCnpj: string): Promise<CnpjResult> {
   const digits = (rawCnpj ?? '').replace(/\D/g, '')
@@ -47,11 +60,19 @@ export async function lookupCnpj(rawCnpj: string): Promise<CnpjResult> {
     // 1ª tentativa: publica.cnpj.ws (gratuita, dados completos)
     const p = await fetchJson<PublicaCnpjResponse>(`https://publica.cnpj.ws/cnpj/${digits}`, ctrl.signal)
     if (p && p.status === 200 && p.data?.razao_social) {
+      const e = p.data.estabelecimento ?? {}
       return {
         ok: true,
         cnpj: digits,
         razao_social: p.data.razao_social ?? '',
-        nome_fantasia: p.data.estabelecimento?.nome_fantasia ?? '',
+        nome_fantasia: e.nome_fantasia ?? '',
+        address: joinAddr([
+          [e.tipo_logradouro, e.logradouro].filter(Boolean).join(' '),
+          e.numero, e.bairro,
+          e.cidade?.nome ? `${e.cidade.nome}/${e.estado?.sigla ?? ''}` : null,
+        ]),
+        phone: e.ddd1 && e.telefone1 ? `${e.ddd1}${e.telefone1}` : '',
+        email: e.email ?? '',
       }
     }
     // 404 confirmado → CNPJ realmente não existe
@@ -63,11 +84,18 @@ export async function lookupCnpj(rawCnpj: string): Promise<CnpjResult> {
       ctrl.signal,
     )
     if (b && b.status === 200 && b.data?.razao_social) {
+      const d = b.data
       return {
         ok: true,
         cnpj: digits,
-        razao_social: b.data.razao_social ?? '',
-        nome_fantasia: b.data.nome_fantasia ?? '',
+        razao_social: d.razao_social ?? '',
+        nome_fantasia: d.nome_fantasia ?? '',
+        address: joinAddr([
+          d.logradouro, d.numero, d.bairro,
+          d.municipio ? `${d.municipio}/${d.uf ?? ''}` : null,
+        ]),
+        phone: d.ddd_telefone_1 ?? '',
+        email: d.email ?? '',
       }
     }
     const brasilNotFound = b?.status === 404

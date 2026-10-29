@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 export interface PartnerClinic {
   id: string
   clinic_id: string
@@ -81,7 +82,7 @@ export async function listPartnerClinics(filters?: {
   if (filters?.q?.trim()) query = query.ilike('name', `%${filters.q.trim()}%`)
 
   const { data, error } = await query.order('name', { ascending: true })
-  if (error) return { error: `Erro ao listar clínicas parceiras: ${error.message}` }
+  if (error) return { error: `Erro ao listar clínicas parceiras: ${mensagemErro(error, 'lib/actions/partner-clinics.ts')}` }
   return (data ?? []) as PartnerClinic[]
 }
 
@@ -127,7 +128,7 @@ export async function upsertPartnerClinic(
       .eq('clinic_id', ctx.clinic_id)
       .select('id')
       .single()
-    if (error) return { error: `Erro ao atualizar: ${error.message}` }
+    if (error) return { error: `Erro ao atualizar: ${mensagemErro(error, 'lib/actions/partner-clinics.ts')}` }
     revalidatePath('/dashboard/registry')
     return { id: data.id as string }
   }
@@ -137,7 +138,7 @@ export async function upsertPartnerClinic(
     .insert(payload)
     .select('id')
     .single()
-  if (error) return { error: `Erro ao cadastrar: ${error.message}` }
+  if (error) return { error: `Erro ao cadastrar: ${mensagemErro(error, 'lib/actions/partner-clinics.ts')}` }
   revalidatePath('/dashboard/registry')
   return { id: data.id as string }
 }
@@ -156,7 +157,7 @@ export async function setPartnerClinicActive(
     .update({ is_active, updated_at: new Date().toISOString() })
     .eq('id', id)
     .eq('clinic_id', ctx.clinic_id)
-  if (error) return { error: `Erro: ${error.message}` }
+  if (error) return { error: `Erro: ${mensagemErro(error, 'lib/actions/partner-clinics.ts')}` }
   revalidatePath('/dashboard/registry')
   return { ok: true }
 }
@@ -173,4 +174,71 @@ export async function listPriceTablesLite(): Promise<{ id: string; name: string;
     .eq('is_active', true)
     .order('slot', { ascending: true })
   return (data ?? []) as { id: string; name: string; slot: number }[]
+}
+
+// ─── 1.11 · Comissão da parceira/laboratório por serviço/produto (% ou valor) ──
+export type PartnerCommScope = 'all' | 'product' | 'service' | 'package'
+export type PartnerCommType  = 'percent' | 'fixed'
+export interface PartnerCommission {
+  id:              string
+  item_type:       PartnerCommScope
+  item_id:         string | null
+  item_name:       string | null
+  commission_type: PartnerCommType
+  value:           number
+}
+
+export async function listPartnerCommissions(partnerClinicId: string): Promise<PartnerCommission[] | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx && ctx.error) return { error: ctx.error }
+  const admin = createAdminClient()
+  const { data } = await admin.from('partner_clinic_commissions')
+    .select('id, item_type, item_id, item_name, commission_type, value')
+    .eq('clinic_id', ctx.clinic_id).eq('partner_clinic_id', partnerClinicId)
+    .order('created_at', { ascending: true })
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string, item_type: r.item_type as PartnerCommScope, item_id: (r.item_id as string) ?? null,
+    item_name: (r.item_name as string) ?? null, commission_type: r.commission_type as PartnerCommType, value: Number(r.value),
+  }))
+}
+
+export async function addPartnerCommission(input: {
+  partner_clinic_id: string
+  item_type:         PartnerCommScope
+  item_id?:          string | null
+  item_name?:        string | null
+  commission_type:   PartnerCommType
+  value:             number
+}): Promise<{ ok: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx && ctx.error) return { error: ctx.error }
+  if (!CAN_MANAGE.includes(ctx.role)) return { error: 'Sem permissão.' }
+  if (!(input.value >= 0)) return { error: 'Valor inválido.' }
+  if (input.commission_type === 'percent' && input.value > 100) return { error: 'Percentual não pode passar de 100%.' }
+  const itemId = input.item_type === 'all' ? null : (input.item_id ?? null)
+  if (input.item_type !== 'all' && !itemId) return { error: 'Selecione o item.' }
+  const admin = createAdminClient()
+  // substitui regra existente do mesmo item (ou a regra 'all')
+  const del = admin.from('partner_clinic_commissions').delete()
+    .eq('clinic_id', ctx.clinic_id).eq('partner_clinic_id', input.partner_clinic_id)
+  await (itemId ? del.eq('item_id', itemId) : del.is('item_id', null).eq('item_type', 'all'))
+  const { error } = await admin.from('partner_clinic_commissions').insert({
+    clinic_id: ctx.clinic_id, partner_clinic_id: input.partner_clinic_id,
+    item_type: input.item_type, item_id: itemId, item_name: input.item_name ?? null,
+    commission_type: input.commission_type, value: input.value,
+  })
+  if (error) return { error: mensagemErro(error, 'lib/actions/partner-clinics.ts') }
+  revalidatePath('/dashboard/management')
+  return { ok: true }
+}
+
+export async function deletePartnerCommission(id: string): Promise<{ error?: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx && ctx.error) return { error: ctx.error }
+  if (!CAN_MANAGE.includes(ctx.role)) return { error: 'Sem permissão.' }
+  const admin = createAdminClient()
+  const { error } = await admin.from('partner_clinic_commissions').delete().eq('id', id).eq('clinic_id', ctx.clinic_id)
+  if (error) return { error: mensagemErro(error, 'lib/actions/partner-clinics.ts') }
+  revalidatePath('/dashboard/management')
+  return {}
 }

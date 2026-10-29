@@ -17,6 +17,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+import { limitarPorIp } from '@/lib/api/rate-limit'
 interface DriftBody {
   input_snippet?: string
   output_raw?:    string
@@ -26,6 +27,9 @@ interface DriftBody {
 }
 
 export async function POST(req: Request) {
+  const barrado = await limitarPorIp(req, { escopo: 'tel:drift', limite: 60 })
+  if (barrado) return barrado
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ ok: false }, { status: 401 })

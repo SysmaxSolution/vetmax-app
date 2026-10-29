@@ -4,6 +4,8 @@ import LaudoPrintable from '@/components/canva/LaudoPrintable'
 import { buildPreviewContext } from '@/lib/canva/resolve-context'
 import { hydrateCanvasState, type CanvasState } from '@/lib/canva/canvas-state'
 import type { CanvaContentJson, CanvaTemplateConfig, CanvaBlockStyle } from '@/lib/canva/types'
+import { listClinicFonts } from '@/lib/actions/clinic-fonts'
+import { buildDocVerificationContext } from '@/lib/canva/doc-verification'
 
 interface Props {
   params: Promise<{ templateId: string }>
@@ -38,7 +40,16 @@ export default async function PreviewTemplatePage({ params, searchParams }: Prop
   if (!tpl) redirect('/dashboard/management?canva_preview_error=template_not_found')
 
   const canvasState: CanvasState = hydrateCanvasState(tpl.canvas_state)
-  const resolveContext = await buildPreviewContext(supabase, profile.clinic_id, user.id)
+  const [resolveContext, clinicFonts] = await Promise.all([
+    buildPreviewContext(supabase, profile.clinic_id, user.id),
+    listClinicFonts(),
+  ])
+  // QR de exemplo para o admin ver o rodapé como vai sair (código fictício —
+  // documentos reais ganham código próprio na emissão).
+  resolveContext.doc = await buildDocVerificationContext({
+    verifyCode: 'EXEMPLO2026',
+    origin: process.env.NEXT_PUBLIC_SITE_URL ?? 'https://sysvetmax-dev.vercel.app',
+  })
 
   const config: CanvaTemplateConfig = {
     background_image_url: tpl.background_image_url ?? canvasState.page.backgroundImageUrl ?? null,
@@ -85,6 +96,7 @@ export default async function PreviewTemplatePage({ params, searchParams }: Prop
         crmv:         String(vet.crmv ?? ''),
       }}
       autoPrint={auto === '1'}
+      clinicFonts={clinicFonts}
     />
   )
 }

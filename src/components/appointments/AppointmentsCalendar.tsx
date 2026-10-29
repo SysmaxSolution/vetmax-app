@@ -14,9 +14,10 @@ import { getPatientById, type PatientsListItem } from '@/lib/actions/timeline'
 import PatientFullModal from '@/components/patients/PatientFullModal'
 import UnavailabilityModal from '@/components/appointments/UnavailabilityModal'
 import {
-  ChevronLeft, ChevronRight, Loader2, X,
+  ChevronLeft, ChevronRight, X,
   Clock, User, Scissors, Stethoscope, CalendarOff, Trash2, MessageCircle,
 } from 'lucide-react'
+import { Spinner } from '@/components/ui/Spinner'
 
 // ─── Localizer pt-BR ──────────────────────────────────────────────────────────
 
@@ -51,16 +52,16 @@ const REASON_LABELS: Record<string, string> = {
 }
 
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
-  scheduled:       { label: 'Agendado',          cls: 'bg-blue-100 text-blue-700' },
+  scheduled:       { label: 'Agendado',          cls: 'bg-sky-100 text-sky-700' },
   confirmed:       { label: 'Confirmado',         cls: 'bg-teal-100 text-teal-700' },
   arrived:         { label: 'Em Atendimento',     cls: 'bg-amber-100 text-amber-700' },
-  completed:       { label: 'Concluído',          cls: 'bg-green-100 text-green-700' },
+  completed:       { label: 'Concluído',          cls: 'bg-emerald-100 text-emerald-700' },
   cancelled:       { label: 'Cancelado',          cls: 'bg-red-100 text-red-700' },
   received:        { label: 'Recebido',           cls: 'bg-slate-100 text-slate-600' },
-  bathing:         { label: 'Banho',              cls: 'bg-blue-100 text-blue-700' },
+  bathing:         { label: 'Banho',              cls: 'bg-sky-100 text-sky-700' },
   grooming_status: { label: 'Tosa',               cls: 'bg-indigo-100 text-indigo-700' },
   waiting_pickup:  { label: 'Aguard. Retirada',   cls: 'bg-amber-100 text-amber-700' },
-  delivered:       { label: 'Entregue',           cls: 'bg-green-100 text-green-700' },
+  delivered:       { label: 'Entregue',           cls: 'bg-emerald-100 text-emerald-700' },
 }
 
 const ROLE_ICONS: Record<string, React.ReactNode> = {
@@ -205,14 +206,14 @@ function CustomToolbar({ date, view, onNavigate, onView, loading, onNewEvent }: 
           <ChevronRight className="h-4 w-4" />
         </button>
         <h2 className="text-sm font-semibold text-slate-800 ml-1 capitalize">{label}</h2>
-        {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
+        {loading && <Spinner size="sm" className="text-slate-400" />}
       </div>
 
       <div className="flex items-center gap-2">
         {/* Botão Evento */}
         <button
           onClick={onNewEvent}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-xs font-semibold text-white shadow-sm transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-xs font-semibold text-white shadow-sm transition-colors focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
           title="Bloquear horários do profissional"
         >
           <CalendarOff className="h-3.5 w-3.5" />
@@ -220,14 +221,14 @@ function CustomToolbar({ date, view, onNavigate, onView, loading, onNewEvent }: 
         </button>
 
         {/* Seletor de vista */}
-        <div className="flex rounded-xl overflow-hidden border border-slate-200 bg-slate-50 text-xs font-semibold">
+        <div className="flex rounded-lg overflow-hidden border border-slate-200 bg-slate-50 text-xs font-semibold">
           {VIEWS.map((v, i) => (
             <button
               key={v.key}
               onClick={() => onView(v.key)}
-              className={`px-4 py-2 transition-all ${i > 0 ? 'border-l border-slate-200' : ''} ${
+              className={`px-4 py-2 transition-colors ${i > 0 ? 'border-l border-slate-200' : ''} ${
                 view === v.key
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-teal-600 text-white'
                   : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
@@ -258,7 +259,7 @@ function EventDetailCard({ event, onClose, onOpenPet, loadingPetEdit }: {
   const dateStr = format(new Date(event.datetime.replace(' ', 'T')), "dd 'de' MMMM yyyy", { locale: ptBR })
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden animate-in slide-in-from-bottom-2 duration-200">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden animate-enter">
       {/* Faixa colorida topo */}
       <div className="h-1.5" style={{ backgroundColor: color }} />
 
@@ -276,10 +277,10 @@ function EventDetailCard({ event, onClose, onOpenPet, loadingPetEdit }: {
               ? <Scissors className="h-4 w-4 text-teal-600" />
               : <Stethoscope className="h-4 w-4 text-blue-600" />
             }
-            <span className="font-bold text-slate-900 text-base group-hover:text-blue-600 group-hover:underline">
+            <span className="font-bold text-slate-900 text-base group-hover:text-teal-600 group-hover:underline">
               {event.petName}
             </span>
-            {loadingPetEdit && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
+            {loadingPetEdit && <Spinner size="sm" className="text-slate-400" />}
           </button>
           <button
             onClick={onClose}
@@ -305,7 +306,7 @@ function EventDetailCard({ event, onClose, onOpenPet, loadingPetEdit }: {
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
               <Clock className="h-3 w-3" /> Horário
             </p>
-            <p className="text-sm font-medium text-slate-800">{time}</p>
+            <p className="text-sm font-medium text-slate-800 font-mono tabular-nums">{time}</p>
             <p className="text-xs text-slate-400">{dateStr}</p>
           </div>
 
@@ -449,7 +450,7 @@ export default function AppointmentsCalendar({ initialEvents, initialDate, profe
           </span>
         ))}
         {view === 'day' && professionals.length > 0 && (
-          <span className="ml-auto text-xs text-blue-600 font-semibold">
+          <span className="ml-auto text-xs text-teal-600 font-semibold">
             {resources.length} colunas · Visão por Profissional
           </span>
         )}
@@ -473,7 +474,7 @@ export default function AppointmentsCalendar({ initialEvents, initialDate, profe
           }}
           eventPropGetter={(evt: RBCEvent) => ({
             style: {
-              backgroundColor: evt.kind === 'unavailability' ? '#9ca3af' : eventColor(evt.resource),
+              backgroundColor: evt.kind === 'unavailability' ? '#94a3b8' : eventColor(evt.resource),
               borderRadius:    '6px',
               border:          'none',
               color:           '#fff',
@@ -592,7 +593,7 @@ function UnavailabilityDetailCard({
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden animate-in slide-in-from-bottom-2 duration-200">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden animate-enter">
       <div className="h-1.5 bg-rose-500" />
       <div className="p-5 space-y-4">
         <div className="flex items-start justify-between gap-3">
@@ -622,7 +623,7 @@ function UnavailabilityDetailCard({
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
               <Clock className="h-3 w-3" /> Horário
             </p>
-            <p className="text-sm font-medium text-slate-800">{timeStr}</p>
+            <p className="text-sm font-medium text-slate-800 font-mono tabular-nums">{timeStr}</p>
             <p className="text-xs text-slate-400">{dateStr}</p>
           </div>
         </div>
@@ -643,7 +644,7 @@ function UnavailabilityDetailCard({
             disabled={deleting}
             className="flex items-center gap-1.5 text-xs font-semibold text-rose-600 hover:text-rose-700 disabled:opacity-50"
           >
-            {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            {deleting ? <Spinner size="sm" /> : <Trash2 className="h-3.5 w-3.5" />}
             Excluir{occurrence.recurrence !== 'none' && ' série'}
           </button>
         </div>

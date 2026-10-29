@@ -295,7 +295,7 @@ function ConnectedSection({ instanceName, onReconnect, connecting, onToast }: {
               type="button"
               onClick={handleSaveAlertTime}
               disabled={savingAlert}
-              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 text-white text-sm font-semibold shadow-sm rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-60"
             >
               {savingAlert ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               {savingAlert ? 'Salvando...' : 'Salvar'}
@@ -449,7 +449,7 @@ function BotPersonalityForm({ onToast }: { onToast: (type: 'success' | 'error', 
         <button
           type="submit"
           disabled={saving}
-          className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-5 py-2.5 bg-teal-600 text-white text-sm font-semibold shadow-sm rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-60"
         >
           {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</> : <><Save className="w-4 h-4" /> Salvar configurações</>}
         </button>
@@ -539,7 +539,7 @@ function DisconnectedView({ state, qrBase64, instanceName, countdown, connecting
       <button
         onClick={onConnect}
         disabled={connecting}
-        className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+        className="flex items-center gap-2 px-5 py-2.5 bg-teal-600 text-white text-sm font-semibold shadow-sm rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-60"
       >
         {connecting
           ? <><Loader2 className="w-4 h-4 animate-spin" /> Criando instância...</>

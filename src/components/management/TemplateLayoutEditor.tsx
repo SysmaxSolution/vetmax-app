@@ -547,7 +547,7 @@ export default function TemplateLayoutEditor({
               className={
                 'flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium border rounded-lg transition-colors ' +
                 (drawMode
-                  ? 'text-white bg-blue-600 border-blue-700 hover:bg-blue-700'
+                  ? 'text-white bg-teal-600 border-teal-700 hover:bg-teal-700'
                   : 'text-purple-700 bg-purple-50 border-purple-200 hover:bg-purple-100')
               }
             >

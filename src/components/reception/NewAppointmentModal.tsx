@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Search, CalendarDays, Scissors, Tag, DollarSign, Loader2, Save, Calendar, MessageCircle, Gift, Check } from 'lucide-react'
 import { getPatientsList, type PatientsListItem } from '@/lib/actions/timeline'
 import { createAppointment } from '@/lib/actions/appointments'
@@ -354,7 +355,7 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
     }
   }
 
-  return (
+  return typeof document === 'undefined' ? null : createPortal(
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 overflow-y-auto"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
@@ -864,6 +865,7 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
           </form>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

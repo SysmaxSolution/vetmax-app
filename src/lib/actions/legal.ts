@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getTenantCtx } from '@/lib/data/context'
 import { headers } from 'next/headers'
 
+import { mensagemErro } from '@/lib/errors'
 export type LegalDocumentType =
   | 'terms_privacy_dpa'
   | 'subscription_terms'
@@ -55,7 +56,7 @@ export async function recordLegalAcceptance(
     acceptance_method: 'clickwrap_checkbox',
   })
 
-  if (error) return { error: 'Erro ao registrar aceite: ' + error.message }
+  if (error) return { error: 'Erro ao registrar aceite: ' + mensagemErro(error, 'lib/actions/legal.ts') }
   return { ok: true }
 }
 

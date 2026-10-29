@@ -151,7 +151,7 @@ export default function AppearanceTab({ isSysmax = false, initialLayoutVersion =
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-2 px-4 py-1.5 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-700 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-2 px-4 py-1.5 bg-teal-600 text-white text-sm font-semibold shadow-sm rounded-lg hover:bg-teal-700 disabled:opacity-60 transition-colors"
           >
             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
             Salvar
@@ -177,7 +177,7 @@ export default function AppearanceTab({ isSysmax = false, initialLayoutVersion =
               <button
                 onClick={handleSaveLayout}
                 disabled={savingLayout}
-                className="flex items-center gap-2 px-4 py-1.5 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors flex-shrink-0"
+                className="flex items-center gap-2 px-4 py-1.5 bg-teal-600 text-white text-sm font-semibold shadow-sm rounded-lg hover:bg-teal-700 disabled:opacity-60 transition-colors flex-shrink-0"
               >
                 {savingLayout ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                 Aplicar

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type PatientVaccine = {
@@ -74,7 +75,7 @@ export async function getPatientVaccines(
     .eq('clinic_id', profile.clinic_id)
     .order('date_administered', { ascending: false })
 
-  if (error) return { error: 'Erro ao buscar vacinas: ' + error.message }
+  if (error) return { error: 'Erro ao buscar vacinas: ' + mensagemErro(error, 'lib/actions/vaccines.ts') }
   return (data ?? []) as PatientVaccine[]
 }
 
@@ -117,7 +118,7 @@ export async function addVaccine(data: {
     .select(VACCINE_SELECT)
     .single()
 
-  if (error || !result) return { error: 'Erro ao registrar vacina: ' + (error?.message ?? '') }
+  if (error || !result) return { error: 'Erro ao registrar vacina: ' + ((error ? mensagemErro(error, 'lib/actions/vaccines.ts') : '')) }
 
   revalidatePath(`/dashboard/vet/${data.consultation_id}`)
   return result as PatientVaccine
@@ -161,7 +162,7 @@ export async function addVaccineStandalone(data: {
     .select(VACCINE_SELECT)
     .single()
 
-  if (error || !result) return { error: 'Erro ao registrar vacina: ' + (error?.message ?? '') }
+  if (error || !result) return { error: 'Erro ao registrar vacina: ' + ((error ? mensagemErro(error, 'lib/actions/vaccines.ts') : '')) }
   revalidatePath('/dashboard/patients')
   return result as PatientVaccine
 }
@@ -199,7 +200,7 @@ export async function updateVaccine(
     .select(VACCINE_SELECT)
     .single()
 
-  if (error || !result) return { error: 'Erro ao atualizar vacina: ' + (error?.message ?? '') }
+  if (error || !result) return { error: 'Erro ao atualizar vacina: ' + ((error ? mensagemErro(error, 'lib/actions/vaccines.ts') : '')) }
 
   revalidatePath(`/dashboard/vet/${consultationId}`)
   return result as PatientVaccine
@@ -229,7 +230,7 @@ export async function deleteVaccine(
     .eq('id', id)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: 'Erro ao remover vacina: ' + error.message }
+  if (error) return { error: 'Erro ao remover vacina: ' + mensagemErro(error, 'lib/actions/vaccines.ts') }
 
   revalidatePath(`/dashboard/vet/${consultationId}`)
   return { success: true }

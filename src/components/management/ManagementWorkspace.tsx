@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useActionState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
@@ -10,6 +10,7 @@ import {
 import { useRef } from 'react'
 import { deleteTemplate } from '@/lib/actions/templates'
 import { createInvitation, createAndSendInvitation, revokeInvitation } from '@/lib/actions/invitations'
+import ClinicJoinCodeCard from './ClinicJoinCodeCard'
 import { uploadClinicLogo, removeClinicLogo } from '@/lib/actions/clinic-settings'
 import type { DocumentTemplate, TemplateType, UserRole, Invitation, InvitationRole } from '@/types'
 import type { ClinicConfig, ClinicSettingsConfig } from '@/lib/actions/clinic-settings'
@@ -18,6 +19,8 @@ import ImportTemplateModal from './ImportTemplateModal'
 import CanvasEditor from '@/components/canva/editor/CanvasEditor'
 import NewCanvasTemplateDialog from '@/components/canva/editor/NewCanvasTemplateDialog'
 import DuplicateTemplateModal from './DuplicateTemplateModal'
+import DocumentIdentityModal from './DocumentIdentityModal'
+import { BadgeCheck } from 'lucide-react'
 import { hydrateCanvasState, type CanvasState } from '@/lib/canva/canvas-state'
 import { Toast } from '@/components/ui/toast'
 import ConveniosTab from './ConveniosTab'
@@ -54,7 +57,7 @@ const MODULE_LABELS_PT: Record<string, string> = {
   whatsapp:              'WhatsApp',
   whatsapp_intelligent:  'WhatsApp IA',
   mentor:                'Mentor IA',
-  petlove_reconciliation: 'Conciliação Petlove',
+  petlove_reconciliation: 'Conciliação de Convênios',
   internal_chat:         'Chat Interno',
 }
 import PremiumPaywall from '@/components/paywall/PremiumPaywall'
@@ -190,6 +193,7 @@ export default function ManagementWorkspace({
   const [canvaEditing,    setCanvaEditing]    = useState<DocumentTemplate | null>(null)
   const [duplicatingTemplate, setDuplicatingTemplate] = useState<DocumentTemplate | null>(null)
   const [showNewBlankDialog, setShowNewBlankDialog] = useState(false)
+  const [showIdentityModal, setShowIdentityModal] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
@@ -514,8 +518,13 @@ export default function ManagementWorkspace({
               <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
                 {templates.length} modelo{templates.length !== 1 ? 's' : ''}
               </span>
+              <button onClick={() => setShowIdentityModal(true)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-violet-200 bg-violet-50 text-violet-700 text-sm font-semibold hover:bg-violet-100 transition-colors"
+                title="Cabeçalho, rodapé, cores, fonte e página padrão herdados por todos os modelos">
+                <BadgeCheck className="w-4 h-4" /><span className="hidden sm:inline">Identidade documental</span>
+              </button>
               <button onClick={() => setShowNewBlankDialog(true)}
-                className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 transition-colors"
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold shadow-sm hover:bg-teal-700 transition-colors"
                 title="Cria um modelo em branco e abre o editor visual">
                 <Sparkles className="w-4 h-4" /><span className="hidden sm:inline">Novo Modelo em Branco</span>
               </button>
@@ -634,7 +643,7 @@ export default function ManagementWorkspace({
               </div>
               {!isEditingClinic && (
                 <button onClick={() => setIsEditingClinic(true)}
-                  className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+                  className="text-sm text-teal-600 hover:text-teal-700 font-medium">
                   Editar
                 </button>
               )}
@@ -712,9 +721,9 @@ export default function ManagementWorkspace({
                 </div>
               ) : (
                 <button onClick={() => logoFileRef.current?.click()} disabled={uploadingLogo}
-                  className="flex flex-col items-center justify-center w-full rounded-xl border-2 border-dashed border-slate-200 py-8 gap-3 hover:border-blue-400 hover:bg-blue-50/30 transition-colors disabled:opacity-50">
+                  className="flex flex-col items-center justify-center w-full rounded-xl border-2 border-dashed border-slate-200 py-8 gap-3 hover:border-teal-400 hover:bg-teal-50/30 transition-colors disabled:opacity-50">
                   {uploadingLogo
-                    ? <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
+                    ? <Loader2 className="h-8 w-8 text-teal-600 animate-spin" />
                     : <Upload className="h-8 w-8 text-slate-400" />}
                   <div className="text-center">
                     <p className="text-sm font-medium text-slate-700">
@@ -777,6 +786,9 @@ export default function ManagementWorkspace({
               <p className="mt-2 text-xs text-red-600">Limite atingido. Contate a SisMax Solutions para expandir sua licença.</p>
             )}
           </div>
+
+          {/* Código de acesso da clínica (adesão segura no cadastro) */}
+          <ClinicJoinCodeCard />
 
           {/* Convite gerado */}
           {generatedUrl && (
@@ -850,14 +862,14 @@ export default function ManagementWorkspace({
                           for (const m of activeModules) next[m] = true
                           return next
                         })}
-                        className="text-[11px] px-2 py-1 rounded-md text-emerald-700 hover:bg-emerald-100"
+                        className="text-[11px] px-2 py-1 rounded-lg text-emerald-700 hover:bg-emerald-100"
                       >
                         Liberar tudo
                       </button>
                       <button
                         type="button"
                         onClick={() => setInviteModuleAccess({})}
-                        className="text-[11px] px-2 py-1 rounded-md text-rose-700 hover:bg-rose-100"
+                        className="text-[11px] px-2 py-1 rounded-lg text-rose-700 hover:bg-rose-100"
                       >
                         Limpar
                       </button>
@@ -954,7 +966,7 @@ export default function ManagementWorkspace({
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold text-slate-900">{u.full_name}</p>
                       {u.id === currentUserId && (
-                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Você</span>
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">Você</span>
                       )}
                     </div>
                     {/* CRMV: exibe para vets, editável via inline */}
@@ -1181,6 +1193,18 @@ export default function ManagementWorkspace({
         />
       )}
 
+      {/* Identidade documental da clínica (herdada pelos modelos Canvas) */}
+      {showIdentityModal && (
+        <DocumentIdentityModal
+          clinic={{
+            name: clinicName, cnpj: clinicCnpj, phone: clinicPhone, address: clinicAddress,
+            city: clinicData?.city ?? null, state: clinicData?.state ?? null, logo_url: logoUrl,
+          }}
+          onClose={() => setShowIdentityModal(false)}
+          onSaved={() => setToast({ type: 'success', message: 'Identidade documental salva. Modelos novos já herdam; nos existentes use "Identidade da Clínica" no editor.' })}
+        />
+      )}
+
       {/* Modal de duplicação — apenas para Sysmax Suporte */}
       {duplicatingTemplate && isSysmax && (
         <DuplicateTemplateModal
@@ -1269,7 +1293,7 @@ function EditField({ label, value, onChange, placeholder }: {
     <div>
       <label className="block text-xs font-semibold text-slate-500 mb-1">{label}</label>
       <input type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent" />
     </div>
   )
 }

@@ -238,7 +238,7 @@ export default function ErrorMonitoringDashboard() {
               onClick={handleResolveAll}
               disabled={resolvingAll || loading}
               title="Marcar todos os erros como corrigidos"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-sm font-semibold shadow-sm hover:bg-teal-700 disabled:opacity-60 transition-colors"
             >
               {resolvingAll
                 ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -660,7 +660,7 @@ function PlanCard({
               type="button"
               onClick={() => onApplyNow(plan.id)}
               disabled={applyingNow === plan.id}
-              className="self-start inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
+              className="self-start inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
               title="Re-disparar aplicação caso o background tenha falhado"
             >
               {applyingNow === plan.id
@@ -700,7 +700,7 @@ function PlanCard({
           <button
             onClick={() => onApprove(plan.id)}
             disabled={isBusy || isSending}
-            className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+            className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg bg-teal-600 text-white shadow-sm hover:bg-teal-700 disabled:opacity-60 transition-colors"
           >
             {isBusy
               ? <RefreshCw className="w-4 h-4 animate-spin" />
