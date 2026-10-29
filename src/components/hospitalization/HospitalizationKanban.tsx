@@ -31,10 +31,8 @@ import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificatio
 import MedicationAlertBadge from './MedicationAlertBadge'
 import MedicationApplicationModal from './MedicationApplicationModal'
 import { useMedicationScheduler } from '@/hooks/useMedicationScheduler'
-import {
-  listHospitalizationPrescriptions,
-  type HospPrescription,
-} from '@/lib/actions/hospitalization-prescriptions'
+import { listHospitalizationPrescriptions } from '@/lib/actions/hospitalization-prescriptions'
+import type { HospPrescription } from '@/types/hospitalization-prescriptions'
 import { getOpenBalances } from '@/lib/actions/hospitalization-charges'
 import { listHospitalizationTasks, type HospTask } from '@/lib/actions/hospitalization-tasks'
 import { speciesLabel } from '@/lib/species'

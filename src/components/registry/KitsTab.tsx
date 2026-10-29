@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import { Loader2, Plus, Pencil, X, Trash2, Package, CheckCircle2 } from 'lucide-react'
 import { listServiceKits, createServiceKit, updateServiceKit, getServiceKit, deleteServiceKit } from '@/lib/actions/surgery-kits'
 import type { ServiceKitSummary, KitItem } from '@/types/surgery-kits'
-import { getPharmacyStockV2, type StockItemV2 } from '@/lib/actions/stock'
+import { getPharmacyStockV2 } from '@/lib/actions/stock'
+import type { StockItemV2 } from '@/types/stock'
 
 /**
  * Cadastro de Kits Cirúrgicos (Cadastros). Cria um kit nomeado e vincula

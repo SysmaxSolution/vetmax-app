@@ -3,7 +3,8 @@
 import { useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Upload, Download, X, AlertTriangle, Check, Loader2, FileText } from 'lucide-react'
-import { bulkImportStockItems, type BulkImportRow } from '@/lib/actions/stock'
+import { bulkImportStockItems } from '@/lib/actions/stock'
+import type { BulkImportRow } from '@/types/stock'
 import { PRODUCT_CATEGORIES, SERVICE_CATEGORIES, type StockCategory } from '@/lib/stock-constants'
 
 // ─── Templates ────────────────────────────────────────────────────────────────

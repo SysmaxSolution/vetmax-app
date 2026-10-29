@@ -8,34 +8,6 @@ import { logAudit } from './audit'
 import { mensagemErro } from '@/lib/errors'
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type StockItem = {
-  id: string
-  clinic_id: string
-  medication_name: string
-  quantity: number
-  unit: string
-  min_stock_level: number
-  last_restock: string | null
-  created_at: string
-  updated_at: string
-}
-
-export type StockMovement = {
-  id: string
-  clinic_id: string
-  stock_item_id: string | null
-  medication_name: string
-  movement_type: 'DEBIT' | 'CREDIT' | 'ADJUSTMENT'
-  quantity_change: number
-  quantity_before: number | null
-  quantity_after: number | null
-  source: 'CONSULTATION' | 'HOSPITALIZATION' | 'MANUAL_ADJUSTMENT' | 'INITIAL_STOCK' | 'RESTOCK' | null
-  reference_id: string | null
-  notes: string | null
-  created_by: string | null
-  created_at: string
-}
-
 // ─── Helpers Internos ────────────────────────────────────────────────────────
 
 async function getClinicAndUser() {
@@ -311,68 +283,12 @@ export async function deleteStockItem(stockItemId: string): Promise<{ success: t
 // ─── Funções para tabela stock_items ─────────────────────────────────────────
 
 import type { StockCategory } from '@/lib/stock-constants'
+import type { StockItem, StockMovement, StockItemV2, BulkImportRow } from '@/types/stock'
 // ATENÇÃO (HF 05/06): NUNCA re-exporte tipos (`export type { X } from ...`)
 // de um arquivo 'use server' — o Turbopack registra todo export como server
 // action em runtime e o re-export vira ReferenceError, derrubando TODAS as
 // actions deste módulo (era a causa do "não salva" em Estoque > Serviços).
 // Consumidores importam StockCategory direto de '@/lib/stock-constants'.
-
-export type StockItemV2 = {
-  id:           string
-  clinic_id:    string
-  name:         string
-  category:     StockCategory
-  quantity:     number
-  unit:         string
-  min_quantity: number
-  unit_price:   number
-  last_restock: string | null
-  created_at:   string
-  updated_at:   string
-  // migration 0099
-  is_controlled: boolean
-  /** Aparece nas telas de venda. Falso = insumo ou uso e consumo. */
-  is_sellable:   boolean
-  // migration 0441 — Livro de Controlados
-  substance:     string | null
-  concentration: string | null
-  is_human_use:  boolean
-  control_class: string | null
-  brand:         string | null
-  sku:           string | null
-  barcode:       string | null
-  batch_number:  string | null
-  expiry_date:   string | null
-  supplier:      string | null
-  // migration 0100
-  is_service:    boolean
-  // migration 0111 (fiscal)
-  ncm:              string | null
-  ncm_description:  string | null
-  cfop:             string | null
-  unit_com:         string | null
-  supplier_id:      string | null
-  // migration 0215 (Item 5: split convênio Petlove)
-  default_insurance_price: number | null
-  // migration 0221 (Épico A 04/06: taxa % sobre coparticipação no cartão)
-  insurance_card_interest_percent: number
-  // migration 0363 (NFS-e Fase 3: códigos de serviço por item)
-  nfse_item_lista_servico:          string | null
-  nfse_codigo_tributario_municipio: string | null
-  // migration 0422 (Sprint Animais: composição de preço simples)
-  cost_price:        number | null
-  entry_tax_percent: number | null
-  margin_percent:    number | null
-  // migration 0424 (Sprint Animais: composição de preço completa)
-  purchase_price:            number | null
-  supplier_discount_percent: number | null
-  entry_tax_icms:    number | null
-  entry_tax_st:      number | null
-  entry_tax_ipi:     number | null
-  entry_tax_freight: number | null
-  entry_tax_ibs_cbs: number | null
-  sale_tax_percent:  number | null
-}
 
 const STOCK_V2_FIELDS = 'id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at, is_controlled, is_sellable, substance, concentration, is_human_use, control_class, brand, sku, barcode, batch_number, expiry_date, supplier, is_service, ncm, ncm_description, cfop, unit_com, supplier_id, default_insurance_price, insurance_card_interest_percent, nfse_item_lista_servico, nfse_codigo_tributario_municipio, cost_price, entry_tax_percent, margin_percent, purchase_price, supplier_discount_percent, entry_tax_icms, entry_tax_st, entry_tax_ipi, entry_tax_freight, entry_tax_ibs_cbs, sale_tax_percent'
 
@@ -587,7 +503,7 @@ export async function restockItemV2(
   itemId:      string,
   quantityToAdd: number,
   notes?:      string,
-  opts?:       { expiryDate?: string | null; batchNumber?: string | null },
+  opts?:       { expiryDate?: string | null; batchNumber?: string | null; supplier?: string | null; documentNumber?: string | null },
 ): Promise<{ success: true; new_quantity: number } | { error: string }> {
   const ctx = await getClinicAndUser()
   if (!ctx) return { error: 'Não autenticado.' }
@@ -604,6 +520,7 @@ export async function restockItemV2(
   if (!current) return { error: 'Item não encontrado.' }
 
   const qtyBefore = Number(current.quantity)
+  if (!(quantityToAdd > 0)) return { error: 'A quantidade da entrada deve ser maior que zero.' }
 
   // Retroalimentação FIFO: a entrada de saldo cria um NOVO lote em stock_batches
   // com a validade informada, mantendo a roda do FIFO girando. Se o item ainda
@@ -638,8 +555,11 @@ export async function restockItemV2(
 
   if (error) return { error: 'Erro ao repor estoque: ' + mensagemErro(error, 'lib/actions/stock.ts') }
 
+  // O movimento aponta para o item (antes saía sem stock_item_id e não entrava
+  // na razão do Livro de Controlados) e leva o HISTÓRICO da entrada.
   await admin.from('stock_movements').insert({
     clinic_id:       ctx.clinic_id,
+    stock_item_id:   itemId,
     medication_name: current.name,
     movement_type:   'CREDIT',
     quantity_change: quantityToAdd,
@@ -648,6 +568,10 @@ export async function restockItemV2(
     source:          'RESTOCK',
     notes:           notes ?? null,
     created_by:      ctx.user.id,
+    counterparty:    opts?.supplier?.trim() || null,
+    document_number: opts?.documentNumber?.trim() || null,
+    batch_number:    opts?.batchNumber?.trim() || null,
+    expires_at:      opts?.expiryDate || null,
   })
 
   revalidatePath('/dashboard/pharmacy')
@@ -724,23 +648,6 @@ export async function deleteStockItemV2(itemId: string): Promise<{ success: true
 }
 
 // ─── Importação em massa (CSV) ────────────────────────────────────────────────
-
-export type BulkImportRow = {
-  name:          string
-  category:      StockCategory
-  quantity:      number
-  unit:          string
-  unit_price:    number
-  min_quantity:  number
-  is_service:    boolean
-  is_controlled: boolean
-  brand:         string | null
-  sku:           string | null
-  barcode:       string | null
-  batch_number:  string | null
-  expiry_date:   string | null
-  supplier:      string | null
-}
 
 export async function bulkImportStockItems(
   rows: BulkImportRow[]

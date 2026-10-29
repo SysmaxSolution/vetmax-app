@@ -13,6 +13,42 @@ import type {
   ReconciliationItem,
 } from '@/types/stock-consumption'
 
+// ─── Livro de Controlados: HISTÓRICO do movimento ───────────────────────────
+
+/**
+ * Grava no movimento a fotografia que a folha do Livro de Registro Específico
+ * exige (pet, tutor, procedimento, OS, documento) e o(s) lote(s) consumidos.
+ * Nunca derruba a baixa: falha aqui vira movimento sem histórico, que o livro
+ * ainda imprime com a observação original.
+ */
+async function gravarHistoricoDoLivro(
+  admin: ReturnType<typeof createAdminClient>,
+  clinicId: string,
+  movementId: string,
+  book: ConsumeStockPayload['book'],
+): Promise<void> {
+  const { data: rastro } = await admin
+    .from('stock_movement_batches')
+    .select('batch:stock_batches ( batch_number )')
+    .eq('clinic_id', clinicId)
+    .eq('movement_id', movementId)
+  const lotes = [...new Set((rastro ?? []).map(r => {
+    const b = Array.isArray(r.batch) ? r.batch[0] : r.batch
+    return (b as { batch_number?: string | null } | null)?.batch_number ?? null
+  }).filter((x): x is string => !!x))]
+  const patch: Record<string, string | null> = {}
+  if (lotes.length) patch.batch_number = lotes.join(' / ')
+  if (book) {
+    if (book.os_number !== undefined)       patch.os_number       = book.os_number ?? null
+    if (book.patient_name !== undefined)    patch.patient_name    = book.patient_name ?? null
+    if (book.tutor_name !== undefined)      patch.tutor_name      = book.tutor_name ?? null
+    if (book.procedure_name !== undefined)  patch.procedure_name  = book.procedure_name ?? null
+    if (book.document_number !== undefined) patch.document_number = book.document_number ?? null
+  }
+  if (Object.keys(patch).length === 0) return
+  await admin.from('stock_movements').update(patch).eq('id', movementId).eq('clinic_id', clinicId)
+}
+
 // ─── Action ──────────────────────────────────────────────────────────────────
 
 /**
@@ -66,6 +102,10 @@ export async function consumeStockForApplication(
   // RPC retorna setof — em chamada via Supabase JS chega como array de 1.
   const row = Array.isArray(data) ? data[0] : data
   if (!row) return { error: 'RPC não retornou linha (estado inconsistente).' }
+
+  // HISTÓRICO do Livro de Controlados: gravado como fotografia no movimento,
+  // junto com o(s) lote(s) que a RPC consumiu (rastro de stock_movement_batches).
+  await gravarHistoricoDoLivro(admin, profile.clinic_id as string, row.movement_id as string, payload.book ?? null)
 
   revalidatePath('/dashboard/pharmacy')
   revalidatePath('/dashboard/hospitalization')
@@ -124,6 +164,21 @@ export async function returnStockConsumption(
 
   const row = Array.isArray(data) ? data[0] : data
   if (!row) return { error: 'RPC de devolução não retornou linha (estado inconsistente).' }
+
+  // A devolução entra no livro com o mesmo HISTÓRICO da saída que ela desfaz.
+  const { data: origem } = await admin
+    .from('stock_movements')
+    .select('os_number, patient_name, tutor_name, procedure_name, document_number')
+    .eq('id', movementId)
+    .eq('clinic_id', profile.clinic_id)
+    .maybeSingle()
+  if (origem) {
+    await gravarHistoricoDoLivro(admin, profile.clinic_id as string, row.movement_id as string, {
+      os_number: origem.os_number as string | null, patient_name: origem.patient_name as string | null,
+      tutor_name: origem.tutor_name as string | null, procedure_name: origem.procedure_name as string | null,
+      document_number: origem.document_number as string | null,
+    })
+  }
 
   revalidatePath('/dashboard/pharmacy')
   revalidatePath('/dashboard/vet')

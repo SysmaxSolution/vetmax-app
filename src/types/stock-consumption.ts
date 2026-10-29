@@ -26,6 +26,22 @@ export interface ConsumeStockPayload {
   /** UUID do registro de origem (ex.: applied_medications.id, hospitalization_dose_administrations.id). */
   reference_id?:    string | null
   notes?:           string | null
+  /**
+   * HISTÓRICO do Livro de Controlados (Portaria 344): quem recebeu, em que
+   * procedimento, em qual OS, com qual notificação de receita. Gravado como
+   * fotografia no movimento — o livro é registro legal e não pode mudar porque
+   * um cadastro foi renomeado depois.
+   */
+  book?:            LivroHistorico | null
+}
+
+export interface LivroHistorico {
+  os_number?:       string | null
+  patient_name?:    string | null
+  tutor_name?:      string | null
+  procedure_name?:  string | null
+  /** Notificação de receita (saída) ou NF-e (entrada). */
+  document_number?: string | null
 }
 
 export interface StockConsumptionResult {

@@ -160,9 +160,24 @@ export async function applyKitToSurgery(kitId: string, surgeryId: string): Promi
 
   const { data: surgery } = await admin
     .from('surgeries')
-    .select('id, procedure_name, patient_id, patients ( name )')
+    .select('id, procedure_name, patient_id, consultation_id, patients ( name, tutors ( name ) )')
     .eq('id', surgeryId).eq('clinic_id', ctx.clinicId).single()
   if (!surgery) return { error: 'Cirurgia nao encontrada.' }
+
+  // HISTÓRICO do Livro de Controlados: nº da OS vem da consulta que originou a cirurgia.
+  let osNumero: string | null = null
+  if (surgery.consultation_id) {
+    const { data: cons } = await admin.from('consultations').select('os_number').eq('id', surgery.consultation_id as string).eq('clinic_id', ctx.clinicId).maybeSingle()
+    osNumero = cons?.os_number == null ? null : String(cons.os_number)
+  }
+  const petLivro = Array.isArray(surgery.patients) ? surgery.patients[0] : surgery.patients
+  const tutorLivro = petLivro ? (Array.isArray((petLivro as { tutors?: unknown }).tutors) ? ((petLivro as { tutors: { name?: string }[] }).tutors[0]) : ((petLivro as { tutors?: { name?: string } | null }).tutors)) : null
+  const livro = {
+    os_number:      osNumero,
+    patient_name:   (petLivro as { name?: string } | null)?.name ?? null,
+    tutor_name:     (tutorLivro as { name?: string } | null)?.name ?? null,
+    procedure_name: ((surgery as { procedure_name?: string | null }).procedure_name ?? null) || `Cirurgia — kit ${kit.name as string}`,
+  }
 
   const { data: items } = await admin
     .from('service_kit_items')
@@ -230,6 +245,7 @@ export async function applyKitToSurgery(kitId: string, surgeryId: string): Promi
         source:          'CONSULTATION',
         reference_id:    applicationId,
         notes:           contexto,
+        book:            livro,
       })
       if ('error' in res) {
         // Falha isolada de um insumo nao derruba a aplicacao do kit, mas fica

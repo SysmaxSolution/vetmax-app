@@ -5,7 +5,7 @@ import { Printer, Pill, Biohazard, Clock, FlaskConical, Stethoscope, Utensils, C
 import { medicationTickStore } from '@/lib/medication-tick'
 import { formatClinicTime, formatClinicDate } from '@/lib/time'
 import type { HospitalizationCard } from '@/lib/actions/hospitalizations'
-import type { HospPrescription } from '@/lib/actions/hospitalization-prescriptions'
+import type { HospPrescription } from '@/types/hospitalization-prescriptions'
 import type { HospTask, TaskKind } from '@/lib/actions/hospitalization-tasks'
 
 /**

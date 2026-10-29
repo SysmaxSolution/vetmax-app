@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore, useMemo } from 'react'
 import { medicationTickStore } from '@/lib/medication-tick'
-import type { HospPrescription } from '@/lib/actions/hospitalization-prescriptions'
+import type { HospPrescription } from '@/types/hospitalization-prescriptions'
 
 /**
  * Scheduler client-side de prescrições de internação.
