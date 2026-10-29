@@ -5,7 +5,7 @@
 // Best-effort por princípio: uma falha de WhatsApp/e-mail NUNCA pode derrubar
 // o registro da rejeição, senão o laboratório fica sem conseguir marcar o exame.
 
-import { Resend } from 'resend'
+import { enviarEmailRegistrado } from '@/lib/email/registrar-envio'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { evolutionSendText } from '@/lib/evolution-api-client'
 import { sendTutorPortalWhatsApp } from '@/lib/actions/tutor-portal'
@@ -96,8 +96,6 @@ export async function notifyExamRejection(
     if (instanceId && apiUrl && apiKey) creds = { apiUrl, instanceId, apiKey }
   } catch { /* segue sem WhatsApp */ }
 
-  const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
-
   for (const r of recipients) {
     const msg = buildRejectionMessage({
       petName: input.petName, examName: input.examName, reason: input.reason,
@@ -124,15 +122,14 @@ export async function notifyExamRejection(
       } catch { /* best-effort */ }
     }
 
-    if (r.email && resend) {
-      try {
-        const { error } = await resend.emails.send({
-          from: FROM, to: r.email,
-          subject: `Exame não realizado — ${input.petName} (${input.clinicName})`,
-          html: emailHtml(input, r.canDecide, input.partnerLink),
-        })
-        if (!error) { out.sent.push({ kind: r.kind, channel: 'email', name: r.name }); reached = true }
-      } catch { /* best-effort */ }
+    if (r.email) {
+      // Registrado em email_deliveries: se o provedor recusar, fica o motivo e o webhook completa depois.
+      const res = await enviarEmailRegistrado({
+        clinicId: input.clinicId, kind: 'exame_rejeitado', from: FROM, to: r.email,
+        subject: `Exame não realizado — ${input.petName} (${input.clinicName})`,
+        html: emailHtml(input, r.canDecide, input.partnerLink),
+      })
+      if (res.ok) { out.sent.push({ kind: r.kind, channel: 'email', name: r.name }); reached = true }
     }
 
     if (!reached) out.failed.push({ kind: r.kind, name: r.name, why: 'Sem telefone/e-mail utilizável.' })

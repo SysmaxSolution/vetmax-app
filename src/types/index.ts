@@ -415,6 +415,10 @@ export interface Invitation {
   accepted_at: string | null
   expires_at: string
   created_at: string
+  /** Último e-mail de convite a este endereço (email_deliveries): queued|sent|delivered|delayed|bounced|complained|failed|suppressed. null = nunca enviado. */
+  delivery_status?: string | null
+  delivery_error?: string | null
+  delivery_at?: string | null
 }
 
 // ── M9 — Solicitação de agendamento via WhatsApp ─────────────────────────────
