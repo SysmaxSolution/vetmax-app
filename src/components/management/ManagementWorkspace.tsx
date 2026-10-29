@@ -5,11 +5,13 @@ import { useSearchParams } from 'next/navigation'
 import {
   BarChart3, Plus, Trash2, Building2, Users, Save, X,
   FileText, CheckCircle2, Mail, Copy, Check, Link as LinkIcon, Shield,
-  Upload, Image, Loader2, Send, Pencil, Sparkles,
+  Upload, Image, Loader2, Send, Pencil, Sparkles, AlertTriangle,
 } from 'lucide-react'
 import { useRef } from 'react'
 import { deleteTemplate } from '@/lib/actions/templates'
 import { createInvitation, createAndSendInvitation, revokeInvitation } from '@/lib/actions/invitations'
+import { textoDoStatus, tomDoStatus } from '@/lib/email/email-status'
+import { getClientAppUrl } from '@/lib/app-url'
 import ClinicJoinCodeCard from './ClinicJoinCodeCard'
 import { uploadClinicLogo, removeClinicLogo } from '@/lib/actions/clinic-settings'
 import type { DocumentTemplate, TemplateType, UserRole, Invitation, InvitationRole } from '@/types'
@@ -330,6 +332,8 @@ export default function ManagementWorkspace({
   const [sendInviteState, sendInviteAction, sendInvitePending] = useActionState(createAndSendInvitation, null)
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null)
   const [emailSentSuccess, setEmailSentSuccess] = useState(false)
+  /** Motivo quando o e-mail do convite não saiu; null = enviado ou só link gerado. */
+  const [emailFailure, setEmailFailure] = useState<string | null>(null)
   const [copiedToken, setCopiedToken] = useState(false)
   const [revokingId, setRevokingId] = useState<string | null>(null)
   const inviteFormRef = useRef<HTMLFormElement>(null)
@@ -442,6 +446,7 @@ export default function ManagementWorkspace({
     if (inviteState && 'url' in inviteState) {
       setGeneratedUrl(inviteState.url)
       setEmailSentSuccess(false)
+      setEmailFailure(null)
       setShowInviteForm(false)
     }
   }, [inviteState])
@@ -451,11 +456,13 @@ export default function ManagementWorkspace({
     if (sendInviteState && 'url' in sendInviteState) {
       setGeneratedUrl(sendInviteState.url)
       setEmailSentSuccess(!!sendInviteState.emailSent)
+      // A falha fica fixa no quadro do link (o toast some em segundos e passava despercebido).
+      setEmailFailure(sendInviteState.emailSent ? null : (sendInviteState.emailError ?? 'O e-mail não pôde ser enviado.'))
       setShowInviteForm(false)
       if (sendInviteState.emailSent) {
         setToast({ type: 'success', message: 'Convite enviado por e-mail com sucesso!' })
       } else {
-        setToast({ type: 'error', message: 'Link gerado, mas falha ao enviar e-mail. Copie e envie manualmente.' })
+        setToast({ type: 'error', message: 'Link gerado, mas o e-mail não foi enviado. Copie o link e envie por WhatsApp.' })
       }
     }
     if (sendInviteState && 'error' in sendInviteState) {
@@ -792,22 +799,27 @@ export default function ManagementWorkspace({
 
           {/* Convite gerado */}
           {generatedUrl && (
-            <div className="bg-teal-50 border border-teal-200 rounded-xl px-5 py-4">
+            <div className={`rounded-xl px-5 py-4 border ${emailFailure ? 'bg-amber-50 border-amber-300' : 'bg-teal-50 border-teal-200'}`}>
               <div className="flex items-start gap-3">
-                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-teal-600">
-                  <LinkIcon className="w-4 h-4 text-white" />
+                <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${emailFailure ? 'bg-amber-500' : 'bg-teal-600'}`}>
+                  {emailFailure ? <AlertTriangle className="w-4 h-4 text-white" /> : <LinkIcon className="w-4 h-4 text-white" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-teal-900 mb-1">
-                    {emailSentSuccess ? 'Convite enviado por e-mail!' : 'Link de convite gerado!'}
+                  <p className={`text-sm font-semibold mb-1 ${emailFailure ? 'text-amber-900' : 'text-teal-900'}`}>
+                    {emailFailure ? 'O e-mail do convite NÃO foi enviado' : emailSentSuccess ? 'Convite enviado por e-mail!' : 'Link de convite gerado!'}
                   </p>
+                  {emailFailure && (
+                    <p className="text-xs text-amber-800 mb-2">
+                      {emailFailure} O link abaixo continua válido: copie e envie por WhatsApp para a pessoa convidada.
+                    </p>
+                  )}
                   {emailSentSuccess && (
                     <p className="text-xs text-teal-700 mb-1 flex items-center gap-1">
                       <Check className="w-3 h-3" /> E-mail de convite enviado com sucesso
                     </p>
                   )}
-                  <p className="text-xs text-teal-700 break-all font-mono bg-teal-100 rounded px-2 py-1">{generatedUrl}</p>
-                  <p className="text-xs text-teal-600 mt-1">Válido por 7 dias. Compartilhe apenas com a pessoa convidada.</p>
+                  <p className={`text-xs break-all font-mono rounded px-2 py-1 ${emailFailure ? 'text-amber-900 bg-amber-100' : 'text-teal-700 bg-teal-100'}`}>{generatedUrl}</p>
+                  <p className={`text-xs mt-1 ${emailFailure ? 'text-amber-700' : 'text-teal-600'}`}>Válido por 7 dias. Compartilhe apenas com a pessoa convidada.</p>
                 </div>
                 <div className="flex flex-col gap-2">
                   <button onClick={handleCopyLink}
@@ -1137,13 +1149,33 @@ export default function ManagementWorkspace({
                           Expira {new Date(inv.expires_at).toLocaleDateString('pt-BR')}
                         </span>
                       </div>
+                      {/* Estado do e-mail do convite (email_deliveries): o admin vê se chegou sem perguntar ao convidado. */}
+                      <p className={`text-xs mt-1 ${
+                        tomDoStatus(inv.delivery_status) === 'ok' ? 'text-emerald-700'
+                        : tomDoStatus(inv.delivery_status) === 'erro' ? 'text-red-600'
+                        : tomDoStatus(inv.delivery_status) === 'atencao' ? 'text-amber-700' : 'text-slate-400'}`}>
+                        {textoDoStatus(inv.delivery_status)}
+                        {inv.delivery_at ? ` · ${new Date(inv.delivery_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}
+                        {tomDoStatus(inv.delivery_status) === 'erro' && inv.delivery_error ? ` — ${inv.delivery_error}` : ''}
+                        {tomDoStatus(inv.delivery_status) !== 'ok' ? ' · copie o link e envie por WhatsApp' : ''}
+                      </p>
                     </div>
-                    <button
-                      onClick={() => handleRevoke(inv.id)}
-                      disabled={revokingId === inv.id}
-                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => { navigator.clipboard.writeText(`${getClientAppUrl()}/invite/${inv.token}`); setToast({ type: 'success', message: 'Link do convite copiado. Envie por WhatsApp para a pessoa convidada.' }) }}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-teal-700 hover:bg-teal-50 rounded-lg transition-colors"
+                        title="Copiar o link do convite">
+                        <Copy className="w-3.5 h-3.5" /> Copiar link
+                      </button>
+                      <button
+                        onClick={() => handleRevoke(inv.id)}
+                        disabled={revokingId === inv.id}
+                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                        title="Revogar convite">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

@@ -234,6 +234,7 @@ export async function uploadImagingFile(
         to: study.referring_vet_email, vetName: study.referring_vet_name,
         clinicName: meta.clinicName, petName: meta.petName,
         modality: study.modality, studyTitle: study.title, linkUrl: link,
+        clinicId: ctx.clinicId, referenceId: studyId,
       })
       if (!res.error) {
         emailedVet = true
@@ -302,6 +303,7 @@ export async function attachLaudoToStudy(
       to: study.referring_vet_email, vetName: study.referring_vet_name,
       clinicName: meta.clinicName, petName: meta.petName,
       modality: study.modality, studyTitle: study.title, linkUrl: link,
+      clinicId: ctx.clinicId, referenceId: studyId,
     })
     if (!res.error) {
       emailedVet = true

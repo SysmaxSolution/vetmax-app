@@ -6,11 +6,7 @@ import { getAppUrl } from '@/lib/app-url'
 import type { InvitationRole, Invitation } from '@/types'
 
 import { sendInviteEmail } from '@/lib/actions/send-invite-email'
-
-export type InvitationState = { error: string } | { url: string; token: string; emailSent?: boolean } | null
-
-/** Lista de módulos a pré-configurar para o convidado no onboarding. */
-export type InvitationModuleAccess = Array<{ module_name: string; enabled: boolean }>
+import type { InvitationState, InvitationModuleAccess } from '@/types/invitations'
 
 export async function createInvitation(
   _prevState: InvitationState,
@@ -127,7 +123,27 @@ export async function getClinicInvitations(): Promise<Invitation[]> {
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false })
 
-  return (data as Invitation[]) ?? []
+  const convites = (data as Invitation[]) ?? []
+  if (convites.length === 0) return convites
+
+  // Último e-mail de convite enviado a cada endereço: o admin vê na lista se o
+  // convite chegou, foi devolvido ou nem saiu, em vez de descobrir pelo convidado.
+  const { data: envios } = await admin
+    .from('email_deliveries')
+    .select('recipient, status, error, last_event_at, created_at')
+    .eq('clinic_id', profile.clinic_id)
+    .eq('kind', 'convite')
+    .in('recipient', convites.map(c => c.email.toLowerCase()))
+    .order('created_at', { ascending: false })
+  const ultimo = new Map<string, { status: string; error: string | null; at: string }>()
+  for (const e of envios ?? []) {
+    const r = e.recipient as string
+    if (!ultimo.has(r)) ultimo.set(r, { status: e.status as string, error: (e.error as string | null) ?? null, at: ((e.last_event_at ?? e.created_at) as string) })
+  }
+  return convites.map(c => {
+    const u = ultimo.get(c.email.toLowerCase())
+    return { ...c, delivery_status: u?.status ?? null, delivery_error: u?.error ?? null, delivery_at: u?.at ?? null }
+  })
 }
 
 export async function revokeInvitation(invitationId: string): Promise<{ error?: string }> {
@@ -243,10 +259,14 @@ export async function createAndSendInvitation(
     inviterName: profile?.full_name ?? 'Administrador',
     role,
     inviteUrl:   result.url,
+    clinicId:    (profile?.clinic_id as string | undefined) ?? null,
+    invitedBy:   user?.id ?? null,
   })
 
+  // O link continua válido mesmo sem e-mail; a tela precisa dizer isso com clareza.
   return {
     ...result,
-    emailSent: !emailResult.error,
+    emailSent:  !emailResult.error,
+    emailError: emailResult.error,
   }
 }

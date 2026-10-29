@@ -1,11 +1,7 @@
 // E-mails transacionais do fluxo de imagem (Resend). Módulo server-only, sem
 // 'use server' (é importado apenas pela server action imaging.ts). Segue o
 // padrão visual de send-invite-email.ts.
-import { Resend } from 'resend'
-
-function getResend() {
-  return new Resend(process.env.RESEND_API_KEY ?? '')
-}
+import { enviarEmailRegistrado } from '@/lib/email/registrar-envio'
 
 const FROM = 'SysVetMax <noreply@sysmaxsolutions.com>'
 
@@ -17,6 +13,9 @@ interface ImagingEmailParams {
   modality?:   string | null
   studyTitle?: string | null
   linkUrl:     string
+  /** Para o registro em email_deliveries (clínica dona do estudo e id do estudo). */
+  clinicId?:   string | null
+  referenceId?: string | null
 }
 
 function shell(inner: string): string {
@@ -72,17 +71,12 @@ export async function sendImagesReadyEmail(p: ImagingEmailParams): Promise<{ err
     <p style="margin:16px 0 0;color:#94a3b8;font-size:12px;text-align:center;line-height:1.5;">
       Link de acesso seguro. Não compartilhe com terceiros não autorizados.
     </p>`
-  try {
-    const { error } = await getResend().emails.send({
-      from: FROM, to: p.to,
-      subject: `Imagens disponíveis — ${p.petName} (${p.clinicName})`,
-      html: shell(inner),
-    })
-    if (error) { console.error('[imaging-email:images]', error); return { error: 'Falha ao enviar e-mail.' } }
-    return {}
-  } catch (err) {
-    console.error('[imaging-email:images]', err); return { error: 'Erro no serviço de e-mail.' }
-  }
+  const res = await enviarEmailRegistrado({
+    clinicId: p.clinicId ?? null, referenceId: p.referenceId ?? null, kind: 'imagens_disponiveis', from: FROM, to: p.to,
+    subject: `Imagens disponíveis — ${p.petName} (${p.clinicName})`,
+    html: shell(inner),
+  })
+  return res.ok ? {} : { error: res.error }
 }
 
 /** E-mail #2 — laudo liberado. */
@@ -100,15 +94,10 @@ export async function sendLaudoReadyEmail(p: ImagingEmailParams): Promise<{ erro
     <p style="margin:16px 0 0;color:#94a3b8;font-size:12px;text-align:center;line-height:1.5;">
       Link de acesso seguro. Não compartilhe com terceiros não autorizados.
     </p>`
-  try {
-    const { error } = await getResend().emails.send({
-      from: FROM, to: p.to,
-      subject: `Laudo liberado — ${p.petName} (${p.clinicName})`,
-      html: shell(inner),
-    })
-    if (error) { console.error('[imaging-email:laudo]', error); return { error: 'Falha ao enviar e-mail.' } }
-    return {}
-  } catch (err) {
-    console.error('[imaging-email:laudo]', err); return { error: 'Erro no serviço de e-mail.' }
-  }
+  const res = await enviarEmailRegistrado({
+    clinicId: p.clinicId ?? null, referenceId: p.referenceId ?? null, kind: 'laudo_liberado', from: FROM, to: p.to,
+    subject: `Laudo liberado — ${p.petName} (${p.clinicName})`,
+    html: shell(inner),
+  })
+  return res.ok ? {} : { error: res.error }
 }
