@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
 import { mensagemErro } from '@/lib/errors'
+import { normalizarCrmv } from '@/lib/crmv'
 import { urlAssinatura, caminhoAssinatura, BUCKET_ASSINATURAS } from '@/lib/storage/assinatura'
 import type { ClinicUserFull, AdminUpdateUserPayload, UserModuleAccessRow } from '@/types/user-management'
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -31,7 +32,14 @@ export async function adminUpdateUser(
   if (fields.full_name  !== undefined) patch.full_name  = fields.full_name?.trim() || null
   if (fields.last_name  !== undefined) patch.last_name  = fields.last_name?.trim() || null
   if (fields.role       !== undefined) patch.role       = fields.role
-  if (fields.crmv       !== undefined) patch.crmv       = fields.crmv?.trim().toUpperCase() || null
+  if (fields.crmv       !== undefined) {
+    // "28856" sozinho estoura a CHECK do banco (precisa da sigla do estado).
+    // Completa com a UF da clínica em vez de devolver erro de sistema.
+    const { data: cli } = await supabase.from('clinics').select('state').eq('id', profile.clinic_id).maybeSingle()
+    const r = normalizarCrmv(fields.crmv, (cli as { state?: string | null } | null)?.state)
+    if ('error' in r) return { error: r.error }
+    patch.crmv = r.crmv
+  }
   if (fields.mapa_code  !== undefined) patch.mapa_code  = fields.mapa_code?.trim().toUpperCase() || null
   if (fields.phone      !== undefined) patch.phone      = fields.phone?.trim() || null
   if (fields.specialties !== undefined) patch.specialties = fields.specialties
@@ -286,7 +294,15 @@ export async function updateOwnProfile(data: {
   if (data.full_name   !== undefined) patch.full_name   = data.full_name.trim() || null
   if (data.nickname    !== undefined) patch.nickname    = data.nickname.trim()  || null
   if (data.phone       !== undefined) patch.phone       = data.phone.trim()     || null
-  if (data.crmv        !== undefined) patch.crmv        = data.crmv.trim().toUpperCase() || null
+  if (data.crmv        !== undefined) {
+    const { data: meu } = await supabase.from('profiles').select('clinic_id').eq('id', user.id).maybeSingle()
+    const { data: cli } = meu?.clinic_id
+      ? await supabase.from('clinics').select('state').eq('id', meu.clinic_id).maybeSingle()
+      : { data: null }
+    const r = normalizarCrmv(data.crmv, (cli as { state?: string | null } | null)?.state)
+    if ('error' in r) return { error: r.error }
+    patch.crmv = r.crmv
+  }
   if (data.specialties !== undefined) patch.specialties = data.specialties
   if ('photo_url' in data)            patch.photo_url   = data.photo_url
 
