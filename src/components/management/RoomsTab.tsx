@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { Plus, Loader2, DoorOpen, ToggleLeft, ToggleRight, Pencil, Check, X } from 'lucide-react'
-import { createRoom, updateRoom, toggleRoomActive, type Room, type RoomType } from '@/lib/actions/rooms'
+import { createRoom, updateRoom, toggleRoomActive } from '@/lib/actions/rooms'
+import type { Room, RoomType } from '@/types/rooms'
 
 const ROOM_TYPE_OPTIONS: { value: RoomType; label: string; color: string }[] = [
   { value: 'consultation',    label: 'Consultório',  color: 'bg-blue-100 text-blue-700' },
@@ -26,6 +27,8 @@ export default function RoomsTab({ initialRooms }: Props) {
   const [newName, setNewName] = useState('')
   const [newType, setNewType] = useState<RoomType>('consultation')
   const [newCapacity, setNewCapacity] = useState('1')
+  const [newSchedulable, setNewSchedulable] = useState(false)
+  const [newSector, setNewSector] = useState('')
 
   // Edit state
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -37,7 +40,7 @@ export default function RoomsTab({ initialRooms }: Props) {
     setSaving(true)
     setError(null)
 
-    const result = await createRoom(newName.trim(), newType, parseInt(newCapacity) || 1)
+    const result = await createRoom(newName.trim(), newType, parseInt(newCapacity) || 1, { schedulable: newSchedulable, sector: newSector.trim() || null })
     setSaving(false)
 
     if ('error' in result) {
@@ -53,6 +56,9 @@ export default function RoomsTab({ initialRooms }: Props) {
         daily_rate: 0,
         operational_status: 'active',
         default_care_level: null,
+        schedulable: newSchedulable,
+        sector: newSector.trim() || null,
+        color: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }])
@@ -68,6 +74,18 @@ export default function RoomsTab({ initialRooms }: Props) {
     if (!('error' in result)) {
       setRooms(prev => prev.map(r => r.id === id ? { ...r, active: !active } : r))
     }
+  }
+
+  // Recurso de agenda (0527): a sala/aparelho vira coluna da agenda; pede o setor na primeira vez.
+  async function alternarAgenda(room: Room) {
+    const ligar = !room.schedulable
+    let sector = room.sector ?? ''
+    if (ligar && !sector) sector = (window.prompt('Setor desta sala/aparelho na agenda (ex.: Imagem, Cirurgia):', '') ?? '').trim()
+    setSaving(true); setError(null)
+    const result = await updateRoom(room.id, { schedulable: ligar, sector: sector || null })
+    setSaving(false)
+    if ('error' in result) { setError(result.error); return }
+    setRooms(prev => prev.map(r => r.id === room.id ? { ...r, schedulable: ligar, sector: sector || null } : r))
   }
 
   async function handleSaveEdit(id: string) {
@@ -146,6 +164,14 @@ export default function RoomsTab({ initialRooms }: Props) {
                 onChange={e => setNewCapacity(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
               />
+              <label className="flex items-center gap-2 text-xs text-slate-700 whitespace-nowrap">
+                <input type="checkbox" checked={newSchedulable} onChange={e => setNewSchedulable(e.target.checked)} className="rounded border-slate-300 text-teal-600" />
+                Aparece na agenda
+              </label>
+              {newSchedulable && (
+                <input type="text" value={newSector} onChange={e => setNewSector(e.target.value)} placeholder="Setor (ex.: Imagem)"
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none" />
+              )}
             </div>
           </div>
 
@@ -223,8 +249,15 @@ export default function RoomsTab({ initialRooms }: Props) {
                   {room.capacity > 1 && (
                     <span className="text-[10px] text-slate-400">{room.capacity} vagas</span>
                   )}
+                  {room.schedulable && (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-teal-100 text-teal-700" title="Aparece como coluna da agenda">Agenda{room.sector ? ` · ${room.sector}` : ''}</span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => void alternarAgenda(room)} title={room.schedulable ? 'Tirar da agenda' : 'Mostrar na agenda (sala/aparelho vira coluna)'}
+                    className={`text-[10px] font-semibold px-2 py-1 rounded-lg border ${room.schedulable ? 'border-teal-300 bg-teal-50 text-teal-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}>
+                    {room.schedulable ? 'Na agenda' : 'Agenda'}
+                  </button>
                   <button onClick={() => startEdit(room)} className="text-slate-400 hover:text-teal-600 transition-colors">
                     <Pencil className="h-3.5 w-3.5" />
                   </button>

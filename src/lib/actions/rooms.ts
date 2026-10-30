@@ -5,23 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
 import { mensagemErro } from '@/lib/errors'
-export type RoomType = 'consultation' | 'surgery' | 'grooming' | 'exam' | 'hospitalization'
-export type RoomOperationalStatus = 'active' | 'maintenance'
-export type RoomCareLevel = 'enfermaria' | 'semi_intensiva' | 'uti' | 'isolamento'
-
-export interface Room {
-  id: string
-  clinic_id: string
-  name: string
-  type: RoomType
-  capacity: number
-  active: boolean
-  daily_rate: number
-  operational_status: RoomOperationalStatus
-  default_care_level: RoomCareLevel | null
-  created_at: string
-  updated_at: string
-}
+import type { RoomType, RoomOperationalStatus, RoomCareLevel, Room } from '@/types/rooms'
 
 export async function getRooms(): Promise<Room[] | { error: string }> {
   const supabase = await createClient()
@@ -30,7 +14,7 @@ export async function getRooms(): Promise<Room[] | { error: string }> {
 
   const { data, error } = await supabase
     .from('rooms')
-    .select('id, clinic_id, name, type, capacity, active, daily_rate, operational_status, default_care_level, created_at, updated_at')
+    .select('id, clinic_id, name, type, capacity, active, daily_rate, operational_status, default_care_level, schedulable, sector, color, created_at, updated_at')
     .order('name')
 
   if (error) return { error: mensagemErro(error, 'lib/actions/rooms.ts') }
@@ -39,6 +23,9 @@ export async function getRooms(): Promise<Room[] | { error: string }> {
     daily_rate:         Number((r as { daily_rate?: number }).daily_rate ?? 0),
     operational_status: ((r as { operational_status?: RoomOperationalStatus }).operational_status ?? 'active'),
     default_care_level: ((r as { default_care_level?: RoomCareLevel | null }).default_care_level ?? null),
+    schedulable:        (r as { schedulable?: boolean }).schedulable === true,
+    sector:             ((r as { sector?: string | null }).sector ?? null),
+    color:              ((r as { color?: string | null }).color ?? null),
   }))
 }
 
@@ -46,7 +33,7 @@ export async function createRoom(
   name: string,
   type: RoomType,
   capacity: number = 1,
-  extra?: { daily_rate?: number; operational_status?: RoomOperationalStatus; default_care_level?: RoomCareLevel | null }
+  extra?: { daily_rate?: number; operational_status?: RoomOperationalStatus; default_care_level?: RoomCareLevel | null; schedulable?: boolean; sector?: string | null; color?: string | null }
 ): Promise<{ id: string } | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -69,6 +56,9 @@ export async function createRoom(
       daily_rate:         extra?.daily_rate && extra.daily_rate > 0 ? extra.daily_rate : 0,
       operational_status: extra?.operational_status ?? 'active',
       default_care_level: extra?.default_care_level ?? null,
+      schedulable:        extra?.schedulable === true,
+      sector:             extra?.sector?.trim() || null,
+      color:              extra?.color?.trim() || null,
     })
     .select('id')
     .single()
@@ -81,7 +71,7 @@ export async function createRoom(
 
 export async function updateRoom(
   id: string,
-  updates: { name?: string; type?: RoomType; capacity?: number; active?: boolean; daily_rate?: number; operational_status?: RoomOperationalStatus; default_care_level?: RoomCareLevel | null }
+  updates: { name?: string; type?: RoomType; capacity?: number; active?: boolean; daily_rate?: number; operational_status?: RoomOperationalStatus; default_care_level?: RoomCareLevel | null; schedulable?: boolean; sector?: string | null; color?: string | null }
 ): Promise<{ success: true } | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

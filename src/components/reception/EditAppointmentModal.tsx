@@ -10,7 +10,7 @@ import { sendWhatsAppMessage } from '@/lib/actions/whatsapp'
 import { DateInput, TimePicker } from '@/components/ui/DatePicker'
 import { localDateTimeToISO } from '@/lib/utils/datetime'
 import TimeWheelPicker from '@/components/ui/TimeWheelPicker'
-import type { BookedRange } from '@/lib/actions/appointment-slots'
+import type { BookedRange } from '@/types/appointment-slots'
 
 const SPECIES_EMOJI: Record<string, string> = {
   dog: '🐶', cat: '🐱', bird: '🐦', exotic: '🦜',

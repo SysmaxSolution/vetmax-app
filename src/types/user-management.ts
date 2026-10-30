@@ -18,6 +18,8 @@ export interface ClinicUserFull {
   address:                     string | null
   is_active:                   boolean | null
   room:                        string | null
+  /** Setor da agenda (Imagem, Clínica, Cirurgia…). */
+  sector:                      string | null
   electronic_signature_url:    string | null
   electronic_signature_path?:   string | null
   appointment_interval_minutes: number | null
@@ -36,6 +38,7 @@ export interface AdminUpdateUserPayload {
   address?:                     string | null
   is_active?:                   boolean
   room?:                        string | null
+  sector?:                      string | null
   photo_url?:                   string | null
   electronic_signature_url?:    string | null
   appointment_interval_minutes?: number | null

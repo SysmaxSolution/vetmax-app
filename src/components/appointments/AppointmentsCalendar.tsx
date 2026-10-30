@@ -8,7 +8,8 @@ import {
 } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
-import { getUnifiedEventsForRange, type UnifiedCalendarEvent, type CalendarProfessional } from '@/lib/actions/calendar'
+import { getUnifiedEventsForRange } from '@/lib/actions/calendar'
+import type { UnifiedCalendarEvent, CalendarProfessional, ScheduleResource } from '@/types/calendar'
 import { listUnavailabilitiesInRange, deleteUnavailability } from '@/lib/actions/unavailabilities'
 import { getPatientById, type PatientsListItem } from '@/lib/actions/timeline'
 import PatientFullModal from '@/components/patients/PatientFullModal'
@@ -127,17 +128,26 @@ type RBCEvent =
       resource:    UnavailabilityOccurrence
     }
 
-function toRBCEvents(raw: UnifiedCalendarEvent[]): RBCEvent[] {
+/** Modo da vista Dia: coluna por pessoa (padrão), por recurso (sala/aparelho) ou por setor (os dois). */
+export type ModoAgenda = 'pessoas' | 'recursos' | 'setor'
+
+function colunaDoEvento(e: UnifiedCalendarEvent, modo: ModoAgenda): string {
+  if (modo === 'recursos') return e.roomId ?? UNASSIGNED_ID
+  if (modo === 'setor')    return e.professionalId ?? e.roomId ?? UNASSIGNED_ID
+  return e.professionalId ?? UNASSIGNED_ID
+}
+
+function toRBCEvents(raw: UnifiedCalendarEvent[], modo: ModoAgenda = 'pessoas'): RBCEvent[] {
   return raw.map(e => {
     const start      = new Date(e.datetime.replace(' ', 'T'))
     const durationMs = (e.durationMinutes ?? (e.type === 'grooming' ? 120 : 60)) * 60000
     return {
       kind:       'appointment' as const,
       id:         e.id,
-      title:      `${e.petName} — ${serviceLabel(e)}`,
+      title:      `${e.petName} — ${e.appointmentTypeName ?? serviceLabel(e)}${modo !== 'recursos' && e.roomName ? ` · ${e.roomName}` : ''}`,
       start,
       end:        new Date(start.getTime() + durationMs),
-      resourceId: e.professionalId ?? UNASSIGNED_ID,
+      resourceId: colunaDoEvento(e, modo),
       resource:   e,
     }
   })
@@ -164,9 +174,16 @@ interface ToolbarProps {
   onView:      (view: View) => void
   loading:     boolean
   onNewEvent:  () => void
+  /** Modo da vista Dia (0527) — só aparece quando há recurso de agenda cadastrado. */
+  modo:        ModoAgenda
+  onModo:      (m: ModoAgenda) => void
+  temRecursos: boolean
+  setores:     string[]
+  setorSel:    string
+  onSetor:     (s: string) => void
 }
 
-function CustomToolbar({ date, view, onNavigate, onView, loading, onNewEvent }: ToolbarProps) {
+function CustomToolbar({ date, view, onNavigate, onView, loading, onNewEvent, modo, onModo, temRecursos, setores, setorSel, onSetor }: ToolbarProps) {
   const label = useMemo(() => {
     if (view === 'month') return format(date, 'MMMM yyyy', { locale: ptBR })
     if (view === 'week') {
@@ -210,6 +227,26 @@ function CustomToolbar({ date, view, onNavigate, onView, loading, onNewEvent }: 
       </div>
 
       <div className="flex items-center gap-2">
+        {/* Modo da vista Dia: Pessoas | Recursos | Setor (0527) */}
+        {view === 'day' && temRecursos && (
+          <div className="flex items-center gap-1">
+            <div className="flex rounded-lg overflow-hidden border border-slate-200 bg-slate-50 text-[11px] font-semibold">
+              {([['pessoas', 'Pessoas'], ['recursos', 'Salas/Aparelhos'], ['setor', 'Setor']] as [ModoAgenda, string][]).map(([k, l], i) => (
+                <button key={k} onClick={() => onModo(k)}
+                  className={`px-3 py-2 transition-colors ${i > 0 ? 'border-l border-slate-200' : ''} ${modo === k ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            {modo === 'setor' && (
+              <select value={setorSel} onChange={e => onSetor(e.target.value)}
+                className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-[11px] font-semibold text-slate-700">
+                <option value="">Todos os setores</option>
+                {setores.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            )}
+          </div>
+        )}
         {/* Botão Evento */}
         <button
           onClick={onNewEvent}
@@ -318,6 +355,14 @@ function EventDetailCard({ event, onClose, onOpenPet, loadingPetEdit }: {
               {event.professionalName || 'Não atribuído'}
             </p>
           </div>
+          {(event.roomName || event.appointmentTypeName) && (
+            <div className="space-y-0.5 col-span-2">
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Sala / aparelho · Tipo</p>
+              <p className="text-sm font-medium text-slate-800">
+                {event.roomName ?? '—'}{event.appointmentTypeName ? ` · ${event.appointmentTypeName}` : ''}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Status + badge */}
@@ -360,12 +405,23 @@ interface Props {
   initialEvents: UnifiedCalendarEvent[]
   initialDate:   Date
   professionals: CalendarProfessional[]
+  /** Salas/aparelhos marcados como recurso de agenda (0527). Vazio = agenda só por pessoa. */
+  schedResources?: ScheduleResource[]
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
-export default function AppointmentsCalendar({ initialEvents, initialDate, professionals }: Props) {
-  const [events,         setEvents]         = useState<RBCEvent[]>(() => toRBCEvents(initialEvents))
+export default function AppointmentsCalendar({ initialEvents, initialDate, professionals, schedResources = [] }: Props) {
+  // Eventos crus: a coluna de cada um depende do modo (pessoa/recurso/setor).
+  const [rawEvents,      setRawEvents]      = useState<UnifiedCalendarEvent[]>(initialEvents)
+  const [modo,           setModo]           = useState<ModoAgenda>(() => {
+    try { const m = localStorage.getItem('sysvet:agenda-modo'); return (m === 'recursos' || m === 'setor') && schedResources.length ? m : 'pessoas' } catch { return 'pessoas' }
+  })
+  const [setorSel,       setSetorSel]       = useState<string>(() => { try { return localStorage.getItem('sysvet:agenda-setor') ?? '' } catch { return '' } })
+  const events = useMemo(() => toRBCEvents(rawEvents, modo), [rawEvents, modo])
+  const setores = useMemo(() => [...new Set([...professionals.map(p => p.sector), ...schedResources.map(r => r.sector)].filter((s): s is string => !!s))].sort((a, b) => a.localeCompare(b, 'pt-BR')), [professionals, schedResources])
+  function mudarModo(m: ModoAgenda) { setModo(m); try { localStorage.setItem('sysvet:agenda-modo', m) } catch { /* sem storage */ } }
+  function mudarSetor(s: string) { setSetorSel(s); try { localStorage.setItem('sysvet:agenda-setor', s) } catch { /* sem storage */ } }
   const [unavailEvents,  setUnavailEvents]  = useState<RBCEvent[]>([])
   const [view,           setView]           = useState<View>('month')
   const [date,           setDate]           = useState(initialDate)
@@ -386,11 +442,22 @@ export default function AppointmentsCalendar({ initialEvents, initialDate, profe
 
   const allEvents = useMemo<RBCEvent[]>(() => [...events, ...unavailEvents], [events, unavailEvents])
 
-  // Lista de recursos (profissionais + coluna geral)
-  const resources = useMemo<Resource[]>(() => [
-    { id: UNASSIGNED_ID, title: 'Geral' },
-    ...professionals.map(p => ({ id: p.id, title: p.name, role: p.role })),
-  ], [professionals])
+  // Colunas da vista Dia conforme o modo: pessoas (padrão), recursos ou setor (pessoas + recursos do setor).
+  const resources = useMemo<Resource[]>(() => {
+    const pessoas = professionals.map(p => ({ id: p.id, title: p.name, role: p.role }))
+    const salas   = schedResources.map(r => ({ id: r.id, title: r.name, role: 'room' }))
+    if (modo === 'recursos') return [{ id: UNASSIGNED_ID, title: 'Sem sala/aparelho' }, ...salas]
+    if (modo === 'setor') {
+      const filtra = <T extends { id: string }>(lista: T[], setorDe: (x: T) => string | null | undefined) =>
+        setorSel ? lista.filter(x => (setorDe(x) ?? '') === setorSel) : lista
+      return [
+        { id: UNASSIGNED_ID, title: 'Geral' },
+        ...filtra(professionals, p => p.sector).map(p => ({ id: p.id, title: p.name, role: p.role })),
+        ...filtra(schedResources, r => r.sector).map(r => ({ id: r.id, title: r.name, role: 'room' })),
+      ]
+    }
+    return [{ id: UNASSIGNED_ID, title: 'Geral' }, ...pessoas]
+  }, [professionals, schedResources, modo, setorSel])
 
   const fetchRange = useCallback(async (newDate: Date, newView: View) => {
     setLoading(true)
@@ -411,7 +478,7 @@ export default function AppointmentsCalendar({ initialEvents, initialDate, profe
       getUnifiedEventsForRange(startStr, endStr),
       listUnavailabilitiesInRange(startStr, endStr),
     ])
-    if (!('error' in evResult)) setEvents(toRBCEvents(evResult))
+    if (!('error' in evResult)) setRawEvents(evResult)
     if (Array.isArray(unavailResult)) setUnavailEvents(toRBCUnavailabilities(unavailResult))
     setLoading(false)
   }, [])
@@ -449,9 +516,9 @@ export default function AppointmentsCalendar({ initialEvents, initialDate, profe
             {l.label}
           </span>
         ))}
-        {view === 'day' && professionals.length > 0 && (
+        {view === 'day' && resources.length > 1 && (
           <span className="ml-auto text-xs text-teal-600 font-semibold">
-            {resources.length} colunas · Visão por Profissional
+            {resources.length} colunas · {modo === 'recursos' ? 'Visão por Sala/Aparelho' : modo === 'setor' ? `Visão por Setor${setorSel ? ` · ${setorSel}` : ''}` : 'Visão por Profissional'}
           </span>
         )}
       </div>
@@ -515,6 +582,12 @@ export default function AppointmentsCalendar({ initialEvents, initialDate, profe
                 onView={props.onView}
                 loading={loading}
                 onNewEvent={() => setShowEventModal(true)}
+                modo={modo}
+                onModo={mudarModo}
+                temRecursos={schedResources.length > 0}
+                setores={setores}
+                setorSel={setorSel}
+                onSetor={mudarSetor}
               />
             ),
           }}

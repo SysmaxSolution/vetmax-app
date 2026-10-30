@@ -39,6 +39,7 @@ export async function adminUpdateUser(
   if (fields.address    !== undefined) patch.address    = fields.address?.trim() || null
   if (fields.is_active  !== undefined) patch.is_active  = fields.is_active
   if (fields.room       !== undefined) patch.room       = fields.room?.trim() || null
+  if (fields.sector     !== undefined) patch.sector     = fields.sector?.trim() || null
   if ('photo_url' in fields)                    patch.photo_url                    = fields.photo_url
   if ('electronic_signature_url' in fields)    patch.electronic_signature_url    = fields.electronic_signature_url
   if ('appointment_interval_minutes' in fields) patch.appointment_interval_minutes = fields.appointment_interval_minutes

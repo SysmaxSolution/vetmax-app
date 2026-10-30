@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { BedDouble, Wrench, Loader2, Biohazard, PawPrint, Plus, GripVertical } from 'lucide-react'
-import { getRooms, type Room } from '@/lib/actions/rooms'
+import { getRooms } from '@/lib/actions/rooms'
+import type { Room } from '@/types/rooms'
 import type { HospitalizationCard } from '@/lib/actions/hospitalizations'
 
 /**
