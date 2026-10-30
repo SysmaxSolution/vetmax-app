@@ -4,7 +4,7 @@
 // Analítico: títulos, com dias de atraso e cliente/fornecedor. Filtro por faixa.
 
 import { useState, useTransition } from 'react'
-import { useEmpresasFiltro } from './EmpresasFiltroContext'
+import { useEmpresasFiltro, FiltroEmpresasRelatorio } from './EmpresasFiltroContext'
 import { getAgingReport, type AgingReport as AgingData } from '@/lib/actions/reports-g13'
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -39,6 +39,7 @@ export default function AgingReport() {
   return (
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-start sm:items-end print:hidden">
+        <FiltroEmpresasRelatorio />
         <div className="flex rounded-xl border border-slate-200 overflow-hidden text-sm">
           {(['receivable', 'payable'] as const).map(t => (
             <button key={t} onClick={() => { setType(t); run(t) }}

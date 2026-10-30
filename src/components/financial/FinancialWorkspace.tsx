@@ -469,6 +469,15 @@ export default function FinancialWorkspace({
     return list
   }, [entries, search, filterStatus, dueFrom, dueTo, docFilter, nameFilter, launchFrom, launchTo, valorMin, valorMax, parcelaFilter, isTitulos])
 
+  // Quantos filtros avançados estão aplicados — o painel fica fechado por
+  // padrão e some da vista; sem este aviso o operador acha que o sistema
+  // "perdeu" títulos que na verdade estão filtrados.
+  const filtrosAtivos = useMemo(() => (
+    [docFilter.trim(), nameFilter.trim(), parcelaFilter.trim(), launchFrom, launchTo,
+     dueFrom, dueTo, valorMin.trim(), valorMax.trim()].filter(Boolean).length
+    + (empresasSel.length > 0 ? 1 : 0)
+  ), [docFilter, nameFilter, parcelaFilter, launchFrom, launchTo, dueFrom, dueTo, valorMin, valorMax, empresasSel])
+
   // Seleção só de pendentes; limpa ao trocar de aba
   useEffect(() => { setSelected(new Set()) }, [activeTab])
 
@@ -525,6 +534,13 @@ export default function FinancialWorkspace({
     setEmpresasSel(ids); salvarFiltroDeEmpresas(ids); refresh(ids)
   }
   const padraoId = empresas.find(e => e.is_default)?.id ?? null
+  // O filtro de empresa fica JUNTO dos demais filtros de cada aba (pedido do
+  // Diretor em 30/10/2026): nos títulos entra na grade de filtros avançados;
+  // nas outras abas é entregue à barra de filtros da própria aba. No cabeçalho
+  // ele parecia um controle de tela, não um filtro da consulta.
+  const filtroEmpresasNode = empresas.length > 1
+    ? <FiltroDeEmpresas empresas={empresas} value={empresasSel} onChange={mudarEmpresas} label="Empresa" />
+    : null
   // Contas das empresas selecionadas (conta sem empresa acompanha a padrão) —
   // alimenta Extrato e Conciliação, que continuam com o filtro de conta.
   const contasVisiveis = useMemo(
@@ -604,7 +620,6 @@ export default function FinancialWorkspace({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <FiltroDeEmpresas empresas={empresas} value={empresasSel} onChange={mudarEmpresas} />
             {isTitulos && (
               <>
                 <button
@@ -684,6 +699,9 @@ export default function FinancialWorkspace({
               >
                 <Filter className="h-4 w-4" />
                 <span className="hidden sm:inline">Filtros</span>
+                {filtrosAtivos > 0 && (
+                  <span className="rounded-full bg-teal-600 px-1.5 text-[10px] font-bold text-white">{filtrosAtivos}</span>
+                )}
                 <ChevronDown className={`h-3 w-3 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
               </button>
             </div>
@@ -712,7 +730,8 @@ export default function FinancialWorkspace({
 
             {showFilters && (
               <div className="space-y-3 pt-2 border-t border-slate-100">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className={`grid grid-cols-1 gap-3 ${filtroEmpresasNode ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
+                  {filtroEmpresasNode}
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 mb-1.5">Nº do documento</label>
                     <input value={docFilter} onChange={e => setDocFilter(e.target.value)} placeholder="NF, OS, boleto…"
@@ -902,22 +921,22 @@ export default function FinancialWorkspace({
 
         {/* ── Extrato Bancário ───────────────────────────────────────────── */}
         {isExtrato && (
-          <ExtratoTab bankAccounts={contasVisiveis} empresas={empresasSel} />
+          <ExtratoTab bankAccounts={contasVisiveis} empresas={empresasSel} filtroEmpresas={filtroEmpresasNode} />
         )}
 
         {/* ── Conciliação ────────────────────────────────────────────────── */}
         {isConciliacao && (
-          <ConciliacaoTab bankAccounts={contasVisiveis} />
+          <ConciliacaoTab bankAccounts={contasVisiveis} filtroEmpresas={filtroEmpresasNode} />
         )}
 
         {/* ── Créditos de clientes ───────────────────────────────────────── */}
         {isCreditos && <CreditsTab />}
 
         {/* ── PAGFOR — Pagamento a Fornecedores ──────────────────────────── */}
-        {isPagfor && <PagforTab empresas={empresasSel} />}
+        {isPagfor && <PagforTab empresas={empresasSel} filtroEmpresas={filtroEmpresasNode} />}
 
         {/* ── Boletos (Cobrança Bancária Sicoob) ─────────────────────────── */}
-        {isBoletos && <BoletosTab empresas={empresasSel} padraoId={padraoId} />}
+        {isBoletos && <BoletosTab empresas={empresasSel} padraoId={padraoId} filtroEmpresas={filtroEmpresasNode} />}
 
         {/* ── Visão cruzada por CNPJ (1.4) ───────────────────────────────── */}
         {isCnpjs && <CrossCompanyTab />}

@@ -3,7 +3,7 @@
 // Fluxo de Caixa (realizado × projetado), por mês, com saldo acumulado.
 
 import { useState, useTransition } from 'react'
-import { useEmpresasFiltro } from './EmpresasFiltroContext'
+import { useEmpresasFiltro, FiltroEmpresasRelatorio } from './EmpresasFiltroContext'
 import { getCashflowProjection, type CashflowReport } from '@/lib/actions/reports-g13'
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -32,6 +32,7 @@ export default function CashflowProjectionReport() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap gap-3 items-end print:hidden">
+        <FiltroEmpresasRelatorio />
         <div><label className="block text-xs font-medium text-slate-600 mb-1">De</label>
           <input type="date" value={from} onChange={e => setFrom(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>
         <div><label className="block text-xs font-medium text-slate-600 mb-1">Até</label>

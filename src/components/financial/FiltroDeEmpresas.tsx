@@ -39,9 +39,12 @@ interface Props {
   value:     string[]
   onChange:  (ids: string[]) => void
   className?: string
+  /** Com rótulo, vira um campo igual aos demais filtros da tela (documento,
+   *  cliente, parcela…) em vez de um botão solto no cabeçalho. */
+  label?:    string
 }
 
-export default function FiltroDeEmpresas({ empresas, value, onChange, className = '' }: Props) {
+export default function FiltroDeEmpresas({ empresas, value, onChange, className = '', label }: Props) {
   const [aberto, setAberto] = useState(false)
   const raiz = useRef<HTMLDivElement>(null)
 
@@ -65,24 +68,31 @@ export default function FiltroDeEmpresas({ empresas, value, onChange, className 
 
   return (
     <div ref={raiz} className={`relative ${className}`}>
+      {label && (
+        <label className="block text-xs font-semibold text-slate-500 mb-1.5">{label}</label>
+      )}
       <button
         type="button"
         onClick={() => setAberto(a => !a)}
         aria-haspopup="listbox"
         aria-expanded={aberto}
-        className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-          todas ? 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+        className={`flex items-center gap-1.5 rounded-lg border text-sm font-medium transition-colors ${
+          label ? 'w-full justify-between px-3 py-2' : 'px-3 py-2'
+        } ${
+          todas ? `border-slate-200 ${label ? 'bg-slate-50' : 'bg-white'} text-slate-700 hover:bg-slate-100`
                 : 'border-teal-300 bg-teal-50 text-teal-800 hover:bg-teal-100'
         }`}
       >
-        <Building2 className="h-4 w-4 text-slate-400" />
-        <span className="max-w-[180px] truncate">{rotuloDaSelecao(value, empresas)}</span>
-        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${aberto ? 'rotate-180' : ''}`} />
+        <span className="flex min-w-0 items-center gap-1.5">
+          <Building2 className="h-4 w-4 shrink-0 text-slate-400" />
+          <span className={`truncate ${label ? '' : 'max-w-[180px]'}`}>{rotuloDaSelecao(value, empresas)}</span>
+        </span>
+        <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${aberto ? 'rotate-180' : ''}`} />
       </button>
 
       {aberto && (
         <div role="listbox" aria-multiselectable="true"
-          className="absolute right-0 z-30 mt-1 w-72 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
+          className={`absolute z-30 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg ${label ? 'left-0' : 'right-0'}`}>
           <button type="button" role="option" aria-selected={todas} onClick={() => onChange([])}
             className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm ${todas ? 'bg-teal-50 text-teal-800 font-semibold' : 'text-slate-700 hover:bg-slate-50'}`}>
             Todas as empresas

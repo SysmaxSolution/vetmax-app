@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { useEmpresasFiltro } from './EmpresasFiltroContext'
+import { useEmpresasFiltro, FiltroEmpresasRelatorio } from './EmpresasFiltroContext'
 import { getFinancialReport, type FinancialReportSummary } from '@/lib/actions/reports-g13'
 
 const fmt = (v: number) =>
@@ -83,6 +83,7 @@ export default function FinancialReport() {
     <div className="space-y-5">
       {/* Filters */}
       <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-start sm:items-end">
+        <FiltroEmpresasRelatorio />
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">De</label>
           <input type="date" value={from} onChange={e => setFrom(e.target.value)}
