@@ -7,7 +7,7 @@ import { cookies } from 'next/headers'
 
 
 import { mensagemErro, mensagemErroCadastro } from '@/lib/errors'
-export type AuthState = { error: string } | { selectClinic: true; clinics: { id: string; name: string; role: string }[] } | null
+import type { AuthState } from '@/types/auth'
 
 // E-mail do superadmin SysMax — acesso interno a qualquer clínica
 const SYSMAX_EMAIL = 'sysmax@sysmaxsolutions.com'
@@ -30,12 +30,26 @@ export async function login(
 ): Promise<AuthState> {
   const supabase = await createClient()
 
+  const emailInformado = String(formData.get('email') ?? '').trim()
   const { data: authData, error } = await supabase.auth.signInWithPassword({
-    email: formData.get('email') as string,
+    email: emailInformado,
     password: formData.get('password') as string,
   })
 
-  if (error) return { error: 'E-mail ou senha incorretos.' }
+  if (error) {
+    // Quem se cadastrou e ainda não clicou no link do e-mail recebia
+    // "E-mail ou senha incorretos" e saía tentando redefinir a senha
+    // (Animais, 29 e 30/10/2026). O motivo real precisa aparecer.
+    const codigo = (error as { code?: string }).code ?? ''
+    if (codigo === 'email_not_confirmed' || /not confirmed/i.test(error.message ?? '')) {
+      return {
+        error: 'Falta confirmar seu e-mail. Abra a mensagem "Confirme seu e-mail" que enviamos e clique no botão — veja também a caixa de spam e a aba Promoções.',
+        precisaConfirmar: true,
+        email: emailInformado,
+      }
+    }
+    return { error: 'E-mail ou senha incorretos.' }
+  }
 
   const admin = createAdminClient()
   const isSysmax = authData.user.email?.toLowerCase() === SYSMAX_EMAIL
@@ -426,4 +440,32 @@ export async function completeAuthSession(): Promise<AuthState> {
     case 'pharmacist':   redirect('/dashboard/pharmacy')
     default:             redirect('/dashboard')
   }
+}
+
+/**
+ * Reenvia o e-mail de confirmação de cadastro.
+ *
+ * O link vale 24 horas; quem se cadastra no fim do expediente e só abre o
+ * e-mail no dia seguinte precisa de um novo sem depender do suporte.
+ */
+export async function reenviarConfirmacaoDeCadastro(
+  email: string,
+): Promise<{ ok: true } | { error: string }> {
+  const alvo = email.trim().toLowerCase()
+  if (!alvo || !alvo.includes('@')) return { error: 'Informe o e-mail usado no cadastro.' }
+  const supabase = await createClient()
+  const { getAppUrl } = await import('@/lib/app-url')
+  const { error } = await supabase.auth.resend({
+    type: 'signup',
+    email: alvo,
+    options: { emailRedirectTo: `${getAppUrl()}/auth/callback` },
+  })
+  if (error) {
+    const codigo = (error as { code?: string }).code ?? ''
+    if (codigo === 'over_email_send_rate_limit') {
+      return { error: 'Já enviamos há pouco. Aguarde alguns minutos e tente de novo.' }
+    }
+    return { error: mensagemErro(error, 'lib/actions/auth.ts') }
+  }
+  return { ok: true }
 }
