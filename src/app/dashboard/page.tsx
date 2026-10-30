@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import { garantirPerfilDoCadastro } from '@/lib/server/garantir-perfil'
 import { escolherModuloInicial, type AcessoDeModulo } from '@/lib/dashboard/modulo-inicial'
 import { pathForModule } from '@/config/path-modules'
 
@@ -12,12 +13,21 @@ export default async function DashboardPage() {
   if (!user) redirect('/login')
 
   const admin = createAdminClient()
-  const { data: profile } = await admin
+  const lerPerfil = async () => (await admin
     .from('profiles')
     .select('role, clinic_id, is_sysmax')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()).data
 
+  let profile = await lerPerfil()
+  // Cadastro que ficou pelo caminho: o e-mail foi confirmado mas o perfil não
+  // chegou a ser criado (Animais, 29/10/2026 — quatro pessoas sumiram de
+  // Gestão > Usuários). Em vez de mandar para /onboarding, que só aceita
+  // convite, concluímos o cadastro aqui e a pessoa entra.
+  if (!profile?.clinic_id) {
+    await garantirPerfilDoCadastro(user)
+    profile = await lerPerfil()
+  }
   if (!profile?.clinic_id) redirect('/onboarding')
 
   // Pouso: primeiro módulo que a clínica tem ativo E que o usuário pode abrir.
