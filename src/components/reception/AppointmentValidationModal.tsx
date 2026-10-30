@@ -74,7 +74,7 @@ export default function AppointmentValidationModal({
           <p className="flex items-center gap-2 text-slate-700">
             <PawPrint className="h-4 w-4 text-slate-400" />
             <span className="font-medium">{petLabel}</span>
-            <span className="text-slate-400">· tutor: {tutorLabel}</span>
+            <span className="text-slate-400">· responsável: {tutorLabel}</span>
           </p>
           <p className="flex items-center gap-2 text-slate-600">
             <Clock className="h-4 w-4 text-slate-400" />

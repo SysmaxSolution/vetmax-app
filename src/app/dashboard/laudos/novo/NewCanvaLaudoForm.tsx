@@ -290,7 +290,7 @@ export default function NewCanvaLaudoForm({
                   <div>
                     <strong>Preenchimento automático aplicado a {autofillStats.total} de {fillableElements.length} campos</strong>
                     <div className="mt-0.5 text-emerald-600">
-                      {autofillStats.tag     > 0 && <>{autofillStats.tag} via cadastro do pet/tutor · </>}
+                      {autofillStats.tag     > 0 && <>{autofillStats.tag} via cadastro do animal/responsável · </>}
                       {autofillStats.patient > 0 && <>{autofillStats.patient} via histórico clínico · </>}
                       {autofillStats.history > 0 && <>{autofillStats.history} via laudos anteriores · </>}
                       {autofillStats.voice   > 0 && <>{autofillStats.voice} extraído(s) da gravação de voz</>}

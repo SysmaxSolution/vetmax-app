@@ -342,7 +342,7 @@ export default function ReviewDashboard({
                   </p>
                   <ul className="ml-2 text-[11px] text-slate-600 space-y-0.5">
                     {data.counts.unique_pets_to_register > 0 && (
-                      <li>• <strong>{data.counts.unique_pets_to_register}</strong> pet{data.counts.unique_pets_to_register !== 1 ? 's' : ''} novo{data.counts.unique_pets_to_register !== 1 ? 's' : ''} cadastrado{data.counts.unique_pets_to_register !== 1 ? 's' : ''} automaticamente (com tutor)</li>
+                      <li>• <strong>{data.counts.unique_pets_to_register}</strong> {data.counts.unique_pets_to_register !== 1 ? 'animais' : 'animal'} novo{data.counts.unique_pets_to_register !== 1 ? 's' : ''} cadastrado{data.counts.unique_pets_to_register !== 1 ? 's' : ''} automaticamente (com responsável)</li>
                     )}
                     <li>• <strong>{data.counts.matched + data.counts.partial + data.counts.orphan_invoice + data.counts.missing_patient_profile}</strong> títulos individuais em A Receber (1 por procedimento)</li>
                     {data.counts.partial > 0 && (

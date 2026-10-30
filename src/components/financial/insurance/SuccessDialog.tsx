@@ -131,9 +131,9 @@ export default function SuccessDialog({
               )}
               {(applied.auto_created_patients > 0 || applied.auto_created_tutors > 0) && (
                 <Line icon={<UserPlus className="h-3.5 w-3.5 text-purple-600" />}>
-                  <strong>{applied.auto_created_patients}</strong> pet{applied.auto_created_patients !== 1 ? 's' : ''}
+                  <strong>{applied.auto_created_patients}</strong> {applied.auto_created_patients !== 1 ? 'animais' : 'animal'}
                   {applied.auto_created_tutors > 0 && (
-                    <> + <strong>{applied.auto_created_tutors}</strong> tutor{applied.auto_created_tutors !== 1 ? 'es' : ''}</>
+                    <> + <strong>{applied.auto_created_tutors}</strong> {applied.auto_created_tutors !== 1 ? 'responsáveis' : 'responsável'}</>
                   )}
                   {' '}cadastrado{applied.auto_created_patients !== 1 ? 's' : ''} automaticamente
                 </Line>

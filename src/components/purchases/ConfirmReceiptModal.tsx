@@ -9,6 +9,7 @@ import { createPortal } from 'react-dom'
 import { Loader2, X, Plus, Trash2, CheckCircle2, Wallet } from 'lucide-react'
 import { confirmPurchaseReceipt, launchPayablesFromPurchase } from '@/lib/actions/purchases'
 import type { PurchaseOrder } from '@/types/purchases'
+import { ROTULO_NATUREZA } from '@/lib/fiscal/cfop'
 import { generateEqualInstallments } from '@/lib/purchases/installments'
 
 const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -38,7 +39,12 @@ export default function ConfirmReceiptModal({ order, onClose, onDone }: {
   const total = Number(order.total_value ?? 0)
   const supplierName = (order.supplier as any)?.name ?? 'Fornecedor'
 
-  const [launchPayable, setLaunchPayable] = useState(true)
+  // O CFOP da nota decide o padrão: bonificação e remessa de entrega futura
+  // entram sem contas a pagar; o faturamento de entrega futura entra só com
+  // contas a pagar, sem mexer no estoque (migration 0530).
+  const natureza        = order.cfop_natureza ?? null
+  const movimentaSaldo  = order.movimenta_estoque !== false
+  const [launchPayable, setLaunchPayable] = useState(order.lanca_financeiro !== false)
   const [especie, setEspecie] = useState('duplicata')
   const [installments, setInstallments] = useState<Installment[]>(() => {
     const dups = order.duplicatas ?? []
@@ -76,7 +82,7 @@ export default function ConfirmReceiptModal({ order, onClose, onDone }: {
 
   async function submit() {
     setSaving(true); setErr(null)
-    const recv = await confirmPurchaseReceipt(order.id)
+    const recv = await confirmPurchaseReceipt(order.id, { lancaFinanceiro: launchPayable })
     if ('error' in recv) { setSaving(false); setErr(recv.error); return }
 
     if (launchPayable) {
@@ -109,7 +115,18 @@ export default function ConfirmReceiptModal({ order, onClose, onDone }: {
         </div>
 
         <div className="px-5 py-4 overflow-y-auto flex-1 space-y-4">
-          <p className="text-sm text-slate-600">Confirmar o recebimento credita o estoque desta ordem.</p>
+          <p className="text-sm text-slate-600">
+            {movimentaSaldo
+              ? 'Confirmar o recebimento credita o estoque desta ordem.'
+              : 'Esta nota é só de faturamento: nada entra no estoque agora. A mercadoria chega na nota de remessa, que aponta para esta.'}
+          </p>
+
+          {natureza && natureza !== 'compra' && (
+            <p className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-xs text-sky-800">
+              Operação reconhecida pelo CFOP: <strong>{ROTULO_NATUREZA[natureza as keyof typeof ROTULO_NATUREZA] ?? natureza}</strong>.
+              {order.lanca_financeiro === false && ' Por isso o lançamento financeiro já vem desmarcado.'}
+            </p>
+          )}
 
           <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3 cursor-pointer hover:bg-slate-50">
             <span className="flex items-center gap-2">
@@ -117,6 +134,7 @@ export default function ConfirmReceiptModal({ order, onClose, onDone }: {
               <span>
                 <span className="block text-sm font-semibold text-slate-800">Lançar contas a pagar?</span>
                 <span className="block text-xs text-slate-500">Desmarque em bonificação (entrada sem financeiro)</span>
+                <span className="block text-[11px] text-slate-400">A escolha fica registrada na nota.</span>
               </span>
             </span>
             <input type="checkbox" checked={launchPayable} onChange={e => setLaunchPayable(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500/30" />

@@ -365,7 +365,7 @@ export default function CustomPricesEditor({ patientId, providerId, providerName
                     {p.copay_amount !== null && p.repass_amount !== null && (
                       <>
                         <span className="text-purple-300">·</span>
-                        <span className="text-emerald-700">Tutor {fmtBRL(p.copay_amount)}</span>
+                        <span className="text-emerald-700">Responsável {fmtBRL(p.copay_amount)}</span>
                         <span className="text-purple-300">+</span>
                         <span className="text-indigo-700">Plano {fmtBRL(p.repass_amount)}</span>
                       </>

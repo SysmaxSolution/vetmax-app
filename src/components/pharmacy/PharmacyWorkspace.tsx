@@ -18,6 +18,7 @@ import {
 import { listPriceTables, getItemPrices, setItemPrices, getPricingSettings } from '@/lib/actions/pricing'
 import type { PriceTable, CompositionMode, MarginCalcType } from '@/types/pricing'
 import { useAnimaisFoundation } from '@/components/providers/ClinicConfigProvider'
+import { explicarConversao, leiturasDoSaldo } from '@/lib/stock/unidades'
 import AnimaisPricingSection from './AnimaisPricingSection'
 import type { GlobalCatalogSuggestion } from '@/lib/actions/catalog'
 import { searchGlobalCatalog } from '@/lib/actions/catalog'
@@ -105,6 +106,13 @@ interface Props {
 }
 
 export interface ItemForm {
+  /** Unidades de compra, uso e venda (migration 0532). Vazio = igual à de saldo. */
+  unit_purchase?:   string
+  factor_purchase?: string
+  unit_use?:        string
+  factor_use?:      string
+  unit_sale?:       string
+  factor_sale?:     string
   name: string; category: StockCategory; quantity: string; unit: string
   min_quantity: string; unit_price: string; is_controlled: boolean; is_sellable: boolean
   substance: string; concentration: string; control_class: string; is_human_use: boolean
@@ -133,8 +141,15 @@ export interface ItemForm {
   sale_tax_percent: string
 }
 
+/** Campo numérico opcional: vazio e lixo viram nulo, nunca 0 nem NaN. */
+function numeroOuNulo(v: string | undefined): number | null {
+  const n = Number(String(v ?? '').replace(',', '.'))
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
 const EMPTY_PRODUCT_FORM: ItemForm = {
   name: '', category: 'medication', quantity: '0', unit: 'un',
+  unit_purchase: '', factor_purchase: '', unit_use: '', factor_use: '', unit_sale: '', factor_sale: '',
   min_quantity: '0', unit_price: '0', is_controlled: false, is_sellable: true,
   substance: '', concentration: '', control_class: '', is_human_use: false, sector: '',
   brand: '', sku: '', barcode: '', batch_number: '', expiry_date: '', supplier: '',
@@ -165,6 +180,12 @@ function formFromItem(item: StockItemV2): ItemForm {
   return {
     name: item.name, category: item.category,
     quantity: String(item.quantity), unit: item.unit,
+    unit_purchase:   item.unit_purchase   ?? '',
+    factor_purchase: item.factor_purchase != null ? String(item.factor_purchase) : '',
+    unit_use:        item.unit_use        ?? '',
+    factor_use:      item.factor_use      != null ? String(item.factor_use)      : '',
+    unit_sale:       item.unit_sale       ?? '',
+    factor_sale:     item.factor_sale     != null ? String(item.factor_sale)     : '',
     min_quantity: String(item.min_quantity), unit_price: String(item.unit_price),
     is_controlled: item.is_controlled,
     // Item antigo, de antes do campo existir, continua vendável — era o
@@ -808,7 +829,16 @@ function ProductsTable({ filtered, userRole, searchTerm, catalogLoading, catalog
                   }`}>
                     {Number(item.quantity).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
                   </td>
-                  <td className="px-3 py-3 text-center text-slate-500 text-xs">{item.unit}</td>
+                  <td className="px-3 py-3 text-center text-slate-500 text-xs">
+                    {item.unit}
+                    {/* Saldo lido também em uso e em venda, quando o produto
+                        converte (migration 0532). */}
+                    {leiturasDoSaldo(item, item.quantity).slice(1).map(l => (
+                      <span key={l.papel} className="mt-0.5 block text-[10px] text-slate-400">
+                        {l.rotulo}: {l.quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} {l.unidade}
+                      </span>
+                    ))}
+                  </td>
                   <td className="px-3 py-3 text-right text-slate-600 font-mono tabular-nums text-xs">
                     {item.unit_price > 0 ? `R$ ${item.unit_price.toFixed(2)}` : <span className="text-slate-300">—</span>}
                   </td>
@@ -1136,6 +1166,12 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
       name:          form.name,
       category:      form.category,
       unit:          form.unit,
+      unit_purchase:   form.unit_purchase?.trim() || null,
+      factor_purchase: numeroOuNulo(form.factor_purchase),
+      unit_use:        form.unit_use?.trim()      || null,
+      factor_use:      numeroOuNulo(form.factor_use),
+      unit_sale:       form.unit_sale?.trim()     || null,
+      factor_sale:     numeroOuNulo(form.factor_sale),
       min_quantity:  isService ? 0 : Number(form.min_quantity),
       unit_price:    Number(form.unit_price),
       is_controlled: form.is_controlled,
@@ -1344,6 +1380,61 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
                 <input type="number" min="0" step="0.01" value={form.unit_price} onChange={e => set('unit_price', e.target.value)}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500" />
               </div>
+            </div>
+          )}
+
+          {/* Unidade de compra, de uso e de venda — a conversão do saldo */}
+          {!isService && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 space-y-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Como este produto entra, é usado e é vendido</p>
+                <p className="mt-0.5 text-[11px] text-slate-500">
+                  A <strong>Unidade</strong> acima é a do saldo — a menor, em que o estoque é contado.
+                  Preencha abaixo só quando o fornecedor, a aplicação ou a venda usarem outra.
+                  Deixar em branco mantém tudo igual à unidade de saldo.
+                </p>
+              </div>
+
+              {([
+                { papel: 'purchase', titulo: 'Compra (como o fornecedor manda)', uni: 'unit_purchase', fat: 'factor_purchase', ex: 'Ex.: CX · 1 caixa = 100' },
+                { papel: 'use',      titulo: 'Uso / aplicação',                  uni: 'unit_use',      fat: 'factor_use',      ex: 'Ex.: dose · 1 dose = 0,1' },
+                { papel: 'sale',     titulo: 'Venda',                            uni: 'unit_sale',     fat: 'factor_sale',     ex: 'Ex.: FR · 1 frasco = 10' },
+              ] as const).map(linha => (
+                <div key={linha.papel} className="grid grid-cols-[1fr_1fr] gap-2 sm:grid-cols-[160px_1fr_1fr] sm:items-center">
+                  <span className="col-span-2 text-xs font-semibold text-slate-600 sm:col-span-1">{linha.titulo}</span>
+                  <input
+                    value={(form[linha.uni] as string) ?? ''}
+                    onChange={e => set(linha.uni, e.target.value)}
+                    placeholder="Unidade"
+                    maxLength={12}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                  />
+                  <input
+                    type="number" min="0" step="0.0001"
+                    value={(form[linha.fat] as string) ?? ''}
+                    onChange={e => set(linha.fat, e.target.value)}
+                    placeholder={`Quantos ${form.unit || 'un'}`}
+                    title={linha.ex}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                  />
+                </div>
+              ))}
+
+              {explicarConversao({
+                unit: form.unit,
+                unit_purchase: form.unit_purchase, factor_purchase: numeroOuNulo(form.factor_purchase),
+                unit_use: form.unit_use,           factor_use: numeroOuNulo(form.factor_use),
+                unit_sale: form.unit_sale,         factor_sale: numeroOuNulo(form.factor_sale),
+              }) && (
+                <p className="rounded-lg bg-teal-50 px-3 py-2 text-xs text-teal-800">
+                  {explicarConversao({
+                    unit: form.unit,
+                    unit_purchase: form.unit_purchase, factor_purchase: numeroOuNulo(form.factor_purchase),
+                    unit_use: form.unit_use,           factor_use: numeroOuNulo(form.factor_use),
+                    unit_sale: form.unit_sale,         factor_sale: numeroOuNulo(form.factor_sale),
+                  })}
+                </p>
+              )}
             </div>
           )}
 

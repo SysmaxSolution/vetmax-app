@@ -529,7 +529,7 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
                           className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm border-b border-slate-100 last:border-0"
                         >
                           <span className="font-semibold">{r.name}</span>
-                          <span className="text-slate-500 ml-2">Tutor: {r.tutor.name}</span>
+                          <span className="text-slate-500 ml-2">Responsável: {r.tutor.name}</span>
                         </button>
                       ))}
                     </div>

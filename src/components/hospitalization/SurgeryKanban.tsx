@@ -173,7 +173,7 @@ export default function SurgeryKanban({ initialBoard, clinicId }: Props) {
                             />
                           </div>
                         </div>
-                        {card.tutor?.name && <p className="text-[11px] text-slate-400 truncate">Tutor: {card.tutor.name}</p>}
+                        {card.tutor?.name && <p className="text-[11px] text-slate-400 truncate">Responsável: {card.tutor.name}</p>}
                         <p className="text-[11px] text-slate-500 truncate">{card.procedure_name}</p>
                         <div className="mt-1 flex items-center gap-1.5">
                           {card.asa_risk && <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 rounded">ASA {card.asa_risk}</span>}
@@ -266,7 +266,7 @@ function AdmitSurgeryModal({ onClose, onSuccess }: { onClose: () => void; onSucc
             <div className="absolute z-10 top-full left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-lg mt-1 max-h-40 overflow-y-auto">
               {results.map(r => (
                 <button key={r.id} type="button" onClick={() => { setSelected(r); setResults([]) }} className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm">
-                  <span className="font-semibold">{r.name}</span><span className="text-slate-500 ml-2">Tutor: {r.tutor.name}</span>
+                  <span className="font-semibold">{r.name}</span><span className="text-slate-500 ml-2">Responsável: {r.tutor.name}</span>
                 </button>
               ))}
             </div>

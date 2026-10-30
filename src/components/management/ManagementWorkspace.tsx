@@ -37,6 +37,7 @@ import type { ClinicUserFull } from '@/types/user-management'
 import type { Room } from '@/types/rooms'
 import UserManagementModal from './UserManagementModal'
 import UserAccessRightsModal from './UserAccessRightsModal'
+import AccessGroupsModal from '@/components/management/AccessGroupsModal'
 import SubscriptionTab from './subscription/SubscriptionTab'
 import type { SubscriptionOverview } from '@/lib/subscription/types'
 
@@ -322,6 +323,9 @@ export default function ManagementWorkspace({
 
   // Modal "Direitos de Acesso" — granular por módulo/aba/ação
   const [rightsModalTarget, setRightsModalTarget] = useState<ClinicUserFull | null>(null)
+  // Grupos de acesso (Recepção, Veterinários, Caixa…): o molde que pré-carrega
+  // os acessos de quem entra no grupo.
+  const [showGrupos, setShowGrupos] = useState(false)
 
   // Acessos pré-configurados do convite (Module → true/false). Aplicados em
   // user_module_access no momento que o convidado completa o onboarding.
@@ -983,6 +987,11 @@ export default function ManagementWorkspace({
               </div>
               <div className="flex items-center gap-2">
                 <button
+                  onClick={() => setShowGrupos(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors">
+                  <Shield className="w-4 h-4" />Grupos de acesso
+                </button>
+                <button
                   onClick={() => { setShowInviteForm(true); setGeneratedUrl(null) }}
                   disabled={users.length >= userLimit}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-medium hover:bg-slate-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
@@ -1307,6 +1316,14 @@ export default function ManagementWorkspace({
           currentUserId={currentUserId}
           onClose={() => setUserModalTarget(undefined)}
           onSaved={() => { setUserModalTarget(undefined); window.location.reload() }}
+        />
+      )}
+
+      {/* Grupos de acesso — molde de módulos por função */}
+      {showGrupos && (
+        <AccessGroupsModal
+          activeModules={activeModules}
+          onClose={() => setShowGrupos(false)}
         />
       )}
 

@@ -414,3 +414,81 @@ export async function buscarConsumidorFinal(): Promise<{ id: string; name: strin
     .maybeSingle()
   return data ? { id: data.id as string, name: data.name as string } : null
 }
+
+// ─── Lista de responsáveis (modo "por responsável" do cadastro) ───────────────
+
+/**
+ * Uma linha da lista quando o cadastro é visto por responsável.
+ *
+ * A Aline pediu a visão enxuta (30/10/2026): buscar pelo nome dela devolvia um
+ * card gordo por animal, com os mesmos dados repetidos. Aqui vem uma linha por
+ * pessoa, e os animais só aparecem quando ela abre.
+ */
+export interface ResponsavelListItem {
+  id:      string
+  name:    string | null
+  cpf:     string | null
+  phone:   string | null
+  email:   string | null
+  city:    string | null
+  /** Quantos animais ativos estão vinculados a este responsável. */
+  animais: number
+}
+
+export async function getResponsaveisList(
+  query?: string,
+): Promise<ResponsavelListItem[] | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const { data: profile } = await admin
+    .from('profiles').select('clinic_id').eq('id', user.id).single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+  const clinicId = profile.clinic_id as string
+
+  let q = admin
+    .from('tutors')
+    .select('id, name, cpf, phone, email, city')
+    .eq('clinic_id', clinicId)
+    .order('name')
+
+  const termo = (query ?? '').trim()
+  if (termo.length >= 2) {
+    const digitos = termo.replace(/\D/g, '')
+    const cond = [`name.ilike.%${termo}%`]
+    if (digitos.length >= 4) cond.push(`cpf.ilike.%${digitos}%`, `phone.ilike.%${digitos}%`)
+    q = q.or(cond.join(','))
+  }
+
+  const { data: tutores, error } = await q.limit(100)
+  if (error) return { error: 'Erro ao buscar responsáveis: ' + mensagemErro(error, 'lib/actions/tutors.ts') }
+  if (!tutores?.length) return []
+
+  // Contagem de animais ativos em uma consulta só — a lista tem no máximo 100
+  // responsáveis, então uma consulta por linha seria desperdício.
+  const ids = tutores.map(t => t.id as string)
+  const { data: animais } = await admin
+    .from('patients')
+    .select('tutor_id')
+    .eq('clinic_id', clinicId)
+    .is('deleted_at', null)
+    .in('tutor_id', ids)
+
+  const porTutor = new Map<string, number>()
+  for (const a of animais ?? []) {
+    const id = a.tutor_id as string | null
+    if (id) porTutor.set(id, (porTutor.get(id) ?? 0) + 1)
+  }
+
+  return tutores.map(t => ({
+    id:      t.id as string,
+    name:    (t.name as string | null) ?? null,
+    cpf:     (t.cpf as string | null) ?? null,
+    phone:   (t.phone as string | null) ?? null,
+    email:   (t.email as string | null) ?? null,
+    city:    (t.city as string | null) ?? null,
+    animais: porTutor.get(t.id as string) ?? 0,
+  }))
+}

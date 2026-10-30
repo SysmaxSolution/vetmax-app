@@ -151,7 +151,7 @@ export default function TutorPortalAccessModal({ tutorId, tutorName, onClose }: 
               <div className="space-y-1.5 mb-2">
                 {members.map(m => (
                   <div key={m.tutorId} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm">
-                    <span className="text-slate-700 truncate">{m.name ?? 'Responsável'}<span className="text-slate-400 text-xs"> · {m.pets} pet(s)</span></span>
+                    <span className="text-slate-700 truncate">{m.name ?? 'Responsável'}<span className="text-slate-400 text-xs"> · {m.pets} animal(s)</span></span>
                     <button onClick={() => removeMember(m.tutorId)} disabled={busy === 'rm:' + m.tutorId} className="text-slate-300 hover:text-rose-500">{busy === 'rm:' + m.tutorId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}</button>
                   </div>
                 ))}

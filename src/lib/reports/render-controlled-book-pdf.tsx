@@ -69,7 +69,7 @@ function FolhaMedicamento({ book, folha }: { book: ControlledBook; folha: FolhaL
       <View style={s.tabela}>
         <View style={s.cab} fixed>
           <View style={col(0)}><Text style={s.cabTxt}>DATA</Text></View>
-          <View style={col(1)}><Text style={s.cabTxt}>HISTÓRICO{'\n'}Pet-Responsável</Text></View>
+          <View style={col(1)}><Text style={s.cabTxt}>HISTÓRICO{'\n'}Animal-Responsável</Text></View>
           <View style={col(2)}><Text style={s.cabTxt}>{'\n'}Procedimento</Text></View>
           <View style={col(3)}><Text style={s.cabTxt}>{'\n'}N. OS</Text></View>
           <View style={col(4)}><Text style={s.cabTxt}>MOVIMENTO{'\n'}Entrada</Text></View>

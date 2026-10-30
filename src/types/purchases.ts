@@ -20,6 +20,12 @@ export interface PurchaseOrder {
   duplicatas?:  { numero: string; vencimento: string; valor: number }[]
   supplier?:    { id: string; name: string; document: string | null } | null
   items?:       PurchaseOrderItem[]
+  // CFOP e entrega futura (migration 0530) — nulos nas compras anteriores.
+  cfop_natureza?:        string | null
+  lanca_financeiro?:     boolean | null
+  movimenta_estoque?:    boolean | null
+  nota_origem_id?:       string | null
+  nfe_key_referenciada?: string | null
 }
 
 export interface PurchaseOrderItem {
@@ -30,6 +36,12 @@ export interface PurchaseOrderItem {
   ncm:                string | null
   ean:                string | null
   cfop:               string | null
+  /** CFOP com que o item entra aqui (5102 do fornecedor → 1102 nosso). */
+  cfop_entrada?:      string | null
+  /** Entrega futura: linha do faturamento que esta remessa abate. */
+  item_origem_id?:    string | null
+  /** Entrega futura: quanto ainda falta o fornecedor entregar desta linha. */
+  quantidade_pendente?: number | null
   quantity:           number
   unit:               string | null
   unit_price:         number

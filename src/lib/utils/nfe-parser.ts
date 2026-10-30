@@ -52,6 +52,13 @@ export interface ParsedNFe {
   supplier:    ParsedSupplier
   items:       ParsedNFeItem[]
   duplicatas:  ParsedDuplicata[]   // parcelas de cobrança (tag cobr/dup)
+  /**
+   * Chaves das notas referenciadas (tag ide/NFref/refNFe).
+   *
+   * É o que liga a remessa de entrega futura ao faturamento que veio antes.
+   * Uma nota pode referenciar várias; a primeira costuma ser a que interessa.
+   */
+  chaves_referenciadas: string[]
 }
 
 export function parseNFeXML(xmlContent: string): ParsedNFe | { error: string } {
@@ -77,6 +84,13 @@ export function parseNFeXML(xmlContent: string): ParsedNFe | { error: string } {
     const ide   = inf.ide ?? {}
 
     const key: string   = inf['@_Id']?.replace('NFe', '') ?? ''
+    // NFref: o fornecedor aponta aqui a nota que esta está complementando.
+    const refRaw = ide.NFref ?? []
+    const refArr = Array.isArray(refRaw) ? refRaw : [refRaw]
+    const chaves_referenciadas = refArr
+      .map((r: Record<string, unknown>) => String(r?.refNFe ?? '').replace(/\D/g, ''))
+      .filter((c: string) => c.length === 44)
+
     const nfe_number    = String(ide.nNF ?? '')
     const nfe_series    = String(ide.serie ?? '')
     const dh_emi        = String(ide.dhEmi ?? ide.dEmi ?? '')
@@ -164,6 +178,7 @@ export function parseNFeXML(xmlContent: string): ParsedNFe | { error: string } {
       supplier,
       items,
       duplicatas,
+      chaves_referenciadas,
     }
   } catch (e: any) {
     return { error: `Erro ao processar XML: ${mensagemErro(e, 'lib/utils/nfe-parser.ts')}` }

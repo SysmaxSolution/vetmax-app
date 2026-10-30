@@ -43,7 +43,7 @@ export function TubeLabel({ data }: { data: TubeLabelData }) {
         <span>{data.collected_at ?? ''}</span>
       </div>
       <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.1, marginTop: 2 }}>{data.patient_name}{data.species ? ` · ${data.species}` : ''}</div>
-      {data.tutor_name && <div style={{ fontSize: 11, color: '#475569' }}>Tutor: {data.tutor_name}</div>}
+      {data.tutor_name && <div style={{ fontSize: 11, color: '#475569' }}>Responsável: {data.tutor_name}</div>}
       <div style={{ marginTop: 4 }}><Barcode value={data.sample_code} /></div>
       {data.exams && data.exams.length > 0 && (
         <div style={{ fontSize: 9, color: '#334155', marginTop: 2 }}>{data.exams.join(' · ')}</div>
@@ -70,7 +70,7 @@ export function printLabels(labels: TubeLabelData[]) {
     <div class="lbl">
       <div class="hd"><span>${d.clinic_name ?? 'Laboratório'}</span><span>${d.collected_at ?? ''}</span></div>
       <div class="pt">${d.patient_name}${d.species ? ' · ' + d.species : ''}</div>
-      ${d.tutor_name ? `<div class="tt">Tutor: ${d.tutor_name}</div>` : ''}
+      ${d.tutor_name ? `<div class="tt">Responsável: ${d.tutor_name}</div>` : ''}
       <div class="bc">${barcodeSvg(d.sample_code)}</div>
       ${d.exams && d.exams.length ? `<div class="ex">${d.exams.join(' · ')}</div>` : ''}
     </div>`).join('')

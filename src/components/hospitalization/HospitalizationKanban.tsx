@@ -959,7 +959,7 @@ function KanbanCard({ card, prescriptions, internacaoCompleta, openBalance, onDr
             {card.patient.breed || 'SRD'}
           </p>
           {card.tutor?.name && (
-            <p className="text-[10px] text-slate-400 truncate">Tutor: {card.tutor.name}</p>
+            <p className="text-[10px] text-slate-400 truncate">Responsável: {card.tutor.name}</p>
           )}
           <div className="flex flex-wrap gap-x-2 mt-0.5">
             {card.patient.gender && card.patient.gender !== 'unknown' && (
@@ -1276,7 +1276,7 @@ function AdmitModal({ onClose, onSuccess, preselectedBox }: { onClose: () => voi
                     className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm"
                   >
                     <span className="font-semibold">{r.name}</span>
-                    <span className="text-slate-500 ml-2">Tutor: {r.tutor.name}</span>
+                    <span className="text-slate-500 ml-2">Responsável: {r.tutor.name}</span>
                   </button>
                 ))}
               </div>

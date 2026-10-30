@@ -101,7 +101,7 @@ export async function inviteTutorToPortal(
       const codeLine = accessCode
         ? `\n\nPara entrar sempre que quiser: use seu *CPF* e o código *${accessCode}*.`
         : ''
-      const msg = `Olá${tutor.name ? ' ' + tutor.name.split(' ')[0] : ''}! 🐾\nAcesse a *Área do Tutor* para ver os exames, a carteira de vacinação e o histórico do seu pet:\n${link_url}\n\n_Este link expira em 30 minutos._${codeLine}`
+      const msg = `Olá${tutor.name ? ' ' + tutor.name.split(' ')[0] : ''}! 🐾\nAcesse a *Área do Responsável* para ver os exames, a carteira de vacinação e o histórico do seu animal:\n${link_url}\n\n_Este link expira em 30 minutos._${codeLine}`
       try {
         const id = await evolutionSendText({ apiUrl, instanceId, apiKey }, phone, msg)
         sent = !!id
@@ -320,7 +320,7 @@ export async function notifyTutorResultReleased(
 
     const link = await ensureTutorLoginLink(admin, tutor as any)
     const first = tutor.name ? ' ' + tutor.name.split(' ')[0] : ''
-    const msg = `Olá${first}! 🐾\nO resultado do exame de *${petName}* já está disponível na *Área do Tutor*:\n${link}\n\n_Link pessoal, válido por 30 minutos._`
+    const msg = `Olá${first}! 🐾\nO resultado do exame de *${petName}* já está disponível na *Área do Responsável*:\n${link}\n\n_Link pessoal, válido por 30 minutos._`
     const id = await evolutionSendText({ apiUrl, instanceId, apiKey }, tutor.phone, msg)
     return { ok: !!id }
   } catch { return { ok: false } }

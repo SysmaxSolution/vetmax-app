@@ -484,7 +484,7 @@ export async function updateFullProfile(
       // cru, unifica no tutor canônico: aplica os dados editados nele e funde o
       // tutor atual (e todos os seus pets/consultas/financeiro) via RPC atômico.
       const isDupCpf = tErr.code === '23505' || /duplicate key/i.test(tErr.message)
-      if (!isDupCpf || !cpfDigits) throw new Error(`Erro Tutor: ${tErr.message}`)
+      if (!isDupCpf || !cpfDigits) throw new Error(`Erro ao salvar Responsável: ${tErr.message}`)
 
       const { data: canonical } = await supabase
         .from('tutors')
@@ -494,7 +494,7 @@ export async function updateFullProfile(
         .neq('id', tutorId)
         .maybeSingle()
 
-      if (!canonical?.id) throw new Error(`Erro Tutor: ${tErr.message}`)
+      if (!canonical?.id) throw new Error(`Erro ao salvar Responsável: ${tErr.message}`)
 
       // Aplica a edição no tutor canônico (mesmo CPF → sem conflito).
       const { error: cErr } = await supabase
@@ -502,7 +502,7 @@ export async function updateFullProfile(
         .update(tutorPayload)
         .eq('id', canonical.id)
         .eq('clinic_id', profile.clinic_id)
-      if (cErr) throw new Error(`Erro Tutor: ${cErr.message}`)
+      if (cErr) throw new Error(`Erro ao salvar Responsável: ${cErr.message}`)
 
       // Funde o tutor duplicado no canônico (reaponta todas as FKs + remove).
       const { error: mErr } = await supabase.rpc('rpc_merge_tutor', {
@@ -510,7 +510,7 @@ export async function updateFullProfile(
         p_from:      tutorId,
         p_into:      canonical.id,
       })
-      if (mErr) throw new Error(`Erro ao unificar tutores: ${mErr.message}`)
+      if (mErr) throw new Error(`Erro ao unificar responsáveis: ${mErr.message}`)
 
       effectiveTutorId = canonical.id
       await logAudit({

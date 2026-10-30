@@ -7,6 +7,7 @@ import type { StockItemLite } from '@/types/stock-consumption'
 import CoverageChipClient from '@/components/pet/CoverageChipClient'
 import StockItemSelector from '@/components/stock/StockItemSelector'
 import { formatarQuantidade, ROTULO_STATUS_BAIXA } from '@/lib/stock/aplicacao'
+import { unidadeDe, explicarConversao } from '@/lib/stock/unidades'
 
 // ─── DCBs Controlados (CFMV — Receita de Controle Especial) ──────────────────
 // Lista B1/B2 (psicotrópicos) e Lista A (entorpecentes)
@@ -249,7 +250,7 @@ export default function ClinicalActionsSection({
             <StockItemSelector value={medItem?.id ?? null} onChange={handlePickStockItem} />
             <p className="mt-1 text-[11px] text-slate-400">
               {medItem
-                ? `Sai do estoque em ${medItem.unit}. Saldo atual: ${formatarQuantidade(medItem.quantity, medItem.unit)}.`
+                ? `Informe em ${unidadeDe(medItem, 'use')}. Saldo atual: ${formatarQuantidade(medItem.quantity, medItem.unit)}${explicarConversao(medItem) ? ` — ${explicarConversao(medItem)}` : ''}.`
                 : 'Sem item selecionado, o registro vale como texto livre e a saída fica pendente de conferência no estoque.'}
             </p>
           </div>
@@ -337,7 +338,7 @@ export default function ClinicalActionsSection({
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">
                 Quantidade aplicada *
-                {medItem && <span className="ml-1 text-slate-400">({medItem.unit})</span>}
+                {medItem && <span className="ml-1 text-slate-400">({unidadeDe(medItem, 'use')})</span>}
               </label>
               <input
                 type="text"
