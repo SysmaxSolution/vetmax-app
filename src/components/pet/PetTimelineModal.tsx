@@ -303,7 +303,7 @@ export default function PetTimelineModal({
                   )}
                 </div>
                 <p className="text-xs text-slate-500">
-                  {sp.label} · Tutor: {tutorName}
+                  {sp.label} · Responsável: {tutorName}
                   {events.length > 0 && ` · ${events.filter(e => e.type === 'checkin').length} visita${events.filter(e => e.type === 'checkin').length !== 1 ? 's' : ''}`}
                 </p>
               </div>

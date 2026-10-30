@@ -927,7 +927,7 @@ export default function CashierTabReceivables({
             <span>
               <strong>{selectedCount} documentos</strong> selecionados
               {selectedSales.length > 0 && <span className="text-teal-700"> ({selectedInvoices.length} consulta{selectedInvoices.length !== 1 ? 's' : ''} + {selectedSales.length} venda{selectedSales.length !== 1 ? 's' : ''})</span>}
-              {distinctTutors > 1 && <span className="text-amber-700 font-semibold"> · {distinctTutors} tutores diferentes</span>}
+              {distinctTutors > 1 && <span className="text-amber-700 font-semibold"> · {distinctTutors} responsáveis diferentes</span>}
             </span>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">

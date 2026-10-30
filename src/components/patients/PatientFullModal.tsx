@@ -1020,7 +1020,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                 <div className="flex items-start gap-2.5 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
                   <AlertTriangle className="h-4 w-4 text-sky-500 flex-shrink-0 mt-0.5" />
                   <p className="text-xs text-sky-700">
-                    Os dados do tutor são <strong>opcionais</strong> neste momento. Você pode salvar o cadastro do pet agora e preencher as informações do responsável posteriormente.
+                    Os dados do responsável são <strong>opcionais</strong> neste momento. Você pode salvar o cadastro do animal agora e preencher as informações do responsável depois.
                   </p>
                 </div>
               )}
@@ -1136,7 +1136,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                   </div>
                 )}
               </div>
-              <FieldInput label="E-mail" value={tutorEmail} onChange={setTutorEmail} placeholder="tutor@email.com" type="email" />
+              <FieldInput label="E-mail" value={tutorEmail} onChange={setTutorEmail} placeholder="responsavel@email.com" type="email" />
 
               {/* ── Endereço ── */}
               <div className="pt-4 border-t border-slate-100 space-y-4">

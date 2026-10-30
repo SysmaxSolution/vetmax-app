@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Search, Users, Pencil, Plus, Archive, ArchiveRestore, KeyRound } from 'lucide-react'
+import { Search, Users, Pencil, Plus, Archive, ArchiveRestore, KeyRound, PawPrint, User } from 'lucide-react'
 import { getPatientsList, type PatientsListItem } from '@/lib/actions/timeline'
 import { reactivatePatient } from '@/lib/actions/pets'
 import PetTimelineModal from '@/components/pet/PetTimelineModal'
 import PatientFullModal from '@/components/patients/PatientFullModal'
 import TutorPortalAccessModal from '@/components/patients/TutorPortalAccessModal'
+import ResponsaveisList from '@/components/patients/ResponsaveisList'
 import { formatPetAge } from '@/lib/utils/pet-age'
 import { PetAvatar } from '@/components/ui/PetAvatar'
 import { Spinner } from '@/components/ui/Spinner'
@@ -193,8 +194,26 @@ interface Props {
   clinicName: string
 }
 
+/** Visão da lista: por animal (padrão) ou por responsável. */
+type ModoLista = 'animais' | 'responsaveis'
+const CHAVE_MODO = 'sysvet:patients-modo'
+
 export default function PatientsWorkspace({ initialPatients, clinicName }: Props) {
   const [tab, setTab] = useState<'active' | 'archived'>('active')
+  // Começa sempre em 'animais' para o servidor e o cliente renderizarem igual;
+  // a preferência salva entra logo depois (evita erro de hidratação).
+  const [modo, setModo] = useState<ModoLista>('animais')
+  useEffect(() => {
+    try {
+      const salvo = localStorage.getItem(CHAVE_MODO)
+      if (salvo === 'responsaveis') setModo('responsaveis')
+    } catch { /* navegador sem storage */ }
+  }, [])
+  function mudarModo(m: ModoLista) {
+    setModo(m)
+    setQuery('')
+    try { localStorage.setItem(CHAVE_MODO, m) } catch { /* sem storage */ }
+  }
   const [patients, setPatients] = useState<PatientsListItem[]>(initialPatients)
   const [archived, setArchived] = useState<PatientsListItem[]>([])
   const [archivedLoaded, setArchivedLoaded] = useState(false)
@@ -325,7 +344,7 @@ export default function PatientsWorkspace({ initialPatients, clinicName }: Props
         <div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900">Animais e Responsáveis</h1>
           <p className="mt-0.5 text-sm text-slate-500">
-            Diretório clínico — {initialPatients.length} paciente{initialPatients.length !== 1 ? 's' : ''} cadastrado{initialPatients.length !== 1 ? 's' : ''}
+            Diretório clínico — {initialPatients.length} {initialPatients.length !== 1 ? 'animais cadastrados' : 'animal cadastrado'}
           </p>
         </div>
         <button
@@ -339,8 +358,32 @@ export default function PatientsWorkspace({ initialPatients, clinicName }: Props
         </button>
       </div>
 
+      {/* Visão: por animal ou por responsável */}
+      <div className="mb-4 inline-flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-sm">
+        <button
+          type="button"
+          onClick={() => mudarModo('animais')}
+          aria-pressed={modo === 'animais'}
+          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+            modo === 'animais' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <PawPrint className="h-3.5 w-3.5" /> Por animal
+        </button>
+        <button
+          type="button"
+          onClick={() => mudarModo('responsaveis')}
+          aria-pressed={modo === 'responsaveis'}
+          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+            modo === 'responsaveis' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <User className="h-3.5 w-3.5" /> Por responsável
+        </button>
+      </div>
+
       {/* Abas: Ativos / Arquivados */}
-      <div className="mb-5 flex items-center gap-2 border-b border-slate-200">
+      <div className={`mb-5 flex items-center gap-2 border-b border-slate-200 ${modo === 'responsaveis' ? 'hidden' : ''}`}>
         <button
           type="button"
           onClick={() => { setTab('active'); setQuery('') }}
@@ -381,7 +424,7 @@ export default function PatientsWorkspace({ initialPatients, clinicName }: Props
           type="text"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="Buscar por nome do animal..."
+          placeholder={modo === 'responsaveis' ? 'Buscar responsável por nome, CPF ou telefone...' : 'Buscar por nome do animal, responsável, CPF ou telefone...'}
           className="w-full rounded-lg border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 shadow-sm"
         />
         {query && (
@@ -404,15 +447,17 @@ export default function PatientsWorkspace({ initialPatients, clinicName }: Props
         )}
       </div>
 
-      {/* Lista de Pacientes */}
-      {list.length === 0 ? (
+      {/* Lista — por responsável ou por animal */}
+      {modo === 'responsaveis' ? (
+        <ResponsaveisList query={query} onEdit={setEditPet} onViewFeed={setFeedPet} />
+      ) : list.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center rounded-2xl border border-dashed border-slate-300 bg-white">
           <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
             {tab === 'archived' ? <Archive className="h-7 w-7 text-slate-400" /> : <Users className="h-7 w-7 text-slate-400" />}
           </div>
           <p className="text-sm font-medium text-slate-500">
             {query
-              ? `Nenhum paciente encontrado para "${query}"`
+              ? `Nenhum animal encontrado para "${query}"`
               : tab === 'archived' ? 'Nenhum animal arquivado' : 'Nenhum animal cadastrado'}
           </p>
           <p className="mt-1 text-xs text-slate-400">

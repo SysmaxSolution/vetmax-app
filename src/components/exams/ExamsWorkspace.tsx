@@ -75,7 +75,7 @@ function ExamCard({
           <BehaviorTagsBadges tags={item.patient.behavior_tags} size="xs" />
         </div>
         <div className="mt-0.5 flex items-center gap-3 flex-wrap">
-          <span className="text-xs text-slate-500">Tutor: {item.tutor.name}</span>
+          <span className="text-xs text-slate-500">Responsável: {item.tutor.name}</span>
           {item.tutor.phone && (
             <span className="text-xs text-slate-400">{item.tutor.phone}</span>
           )}
@@ -368,7 +368,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
                         <span className="text-xs bg-violet-50 text-violet-700 px-2 py-0.5 rounded-full font-medium">{req.exam_type}</span>
                       </div>
                       <div className="mt-0.5 flex items-center gap-2">
-                        <span className="text-xs text-slate-500">Tutor: {req.tutor.name}</span>
+                        <span className="text-xs text-slate-500">Responsável: {req.tutor.name}</span>
                       </div>
                     </div>
                     <div className="flex-shrink-0 flex items-center gap-2" onClick={e => e.stopPropagation()}>
@@ -490,7 +490,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
                       className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm"
                     >
                       <span className="font-semibold">{r.name}</span>
-                      <span className="text-slate-500 ml-2">Tutor: {r.tutor.name}</span>
+                      <span className="text-slate-500 ml-2">Responsável: {r.tutor.name}</span>
                     </button>
                   ))}
                 </div>

@@ -794,7 +794,8 @@ export type PatientsListItem = {
 
 export async function getPatientsList(
   query?: string,
-  opts?: { archived?: boolean }
+  /** `tutorId` lista só os animais daquele responsável (modo "por responsável"). */
+  opts?: { archived?: boolean; tutorId?: string }
 ): Promise<PatientsListItem[] | { error: string }> {
   try {
     const supabase = await createClient()
@@ -823,6 +824,8 @@ export async function getPatientsList(
     patientsQuery = opts?.archived
       ? patientsQuery.not('deleted_at', 'is', null)
       : patientsQuery.is('deleted_at', null)
+
+    if (opts?.tutorId) patientsQuery = patientsQuery.eq('tutor_id', opts.tutorId)
 
     if (query && query.trim().length >= 2) {
       // Busca por nome do PET ou por TUTOR (nome, CPF ou telefone): a Animais

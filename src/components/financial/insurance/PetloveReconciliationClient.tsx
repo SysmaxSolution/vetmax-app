@@ -234,9 +234,9 @@ export default function PetloveReconciliationClient({
             </p>
             {status.previewSideEffects && (
               <ul className="text-xs text-sky-800 mt-2 space-y-0.5 ml-1">
-                <li>• <strong>{status.previewSideEffects.matched}</strong> linha{status.previewSideEffects.matched !== 1 ? 's' : ''} casada{status.previewSideEffects.matched !== 1 ? 's' : ''} com pets já cadastrados</li>
+                <li>• <strong>{status.previewSideEffects.matched}</strong> linha{status.previewSideEffects.matched !== 1 ? 's' : ''} casada{status.previewSideEffects.matched !== 1 ? 's' : ''} com animais já cadastrados</li>
                 {(status.previewSideEffects.auto_created_patients > 0 || status.previewSideEffects.auto_created_tutors > 0) && (
-                  <li>• <strong>{status.previewSideEffects.auto_created_patients}</strong> pet{status.previewSideEffects.auto_created_patients !== 1 ? 's' : ''} e <strong>{status.previewSideEffects.auto_created_tutors}</strong> tutor{status.previewSideEffects.auto_created_tutors !== 1 ? 'es' : ''} cadastrado{status.previewSideEffects.auto_created_patients !== 1 ? 's' : ''} automaticamente</li>
+                  <li>• <strong>{status.previewSideEffects.auto_created_patients}</strong> {status.previewSideEffects.auto_created_patients !== 1 ? 'animais' : 'animal'} e <strong>{status.previewSideEffects.auto_created_tutors}</strong> {status.previewSideEffects.auto_created_tutors !== 1 ? 'responsáveis' : 'responsável'} cadastrado{status.previewSideEffects.auto_created_patients !== 1 ? 's' : ''} automaticamente</li>
                 )}
                 <li>• <strong>{status.previewSideEffects.patients_updated}</strong> cadastro{status.previewSideEffects.patients_updated !== 1 ? 's' : ''} de pet enriquecido{status.previewSideEffects.patients_updated !== 1 ? 's' : ''} (chip / sexo / raça quando vazios)</li>
                 <li>• <strong>{status.previewSideEffects.prices_updated}</strong> preço{status.previewSideEffects.prices_updated !== 1 ? 's' : ''} fixado{status.previewSideEffects.prices_updated !== 1 ? 's' : ''} em patient_custom_prices</li>

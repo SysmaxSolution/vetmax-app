@@ -162,7 +162,7 @@ export default function FollowUpPanel({ consultation }: Props) {
             </button>
           </div>
           <p className="text-[11px] text-slate-500 text-center">
-            <strong>Dar alta:</strong> registra no histórico do pet, sem cobrança. {' · '}
+            <strong>Dar alta:</strong> registra no histórico do animal, sem cobrança. {' · '}
             <strong>Virar consulta:</strong> abre o prontuário completo para lançar serviços/medicação.
           </p>
         </>

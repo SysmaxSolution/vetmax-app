@@ -14,7 +14,7 @@ interface Props {
 const CONSENT_TEXT = `
 TERMOS DE CONSENTIMENTO E POLÍTICA DE PRIVACIDADE — SysVetMax
 
-Prezado(a) Tutor(a),
+Prezado(a) Responsável,
 
 Em cumprimento à Lei Geral de Proteção de Dados Pessoais (LGPD — Lei nº 13.709/2018)
 e à Resolução CFMV nº 1.138/2016, informamos:
@@ -118,7 +118,7 @@ export default function ConsentModal({ tutorName, onAccept, onDecline }: Props) 
           {tutorName && (
             <div className="mt-3 rounded-xl bg-white border border-teal-200 px-4 py-2.5">
               <p className="text-xs text-slate-600">
-                Tutor(a): <span className="font-semibold text-slate-800">{tutorName}</span>
+                Responsável: <span className="font-semibold text-slate-800">{tutorName}</span>
               </p>
             </div>
           )}

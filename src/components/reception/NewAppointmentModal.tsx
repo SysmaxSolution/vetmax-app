@@ -449,7 +449,7 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
                     <span className="text-xl">{SPECIES_EMOJI[p.species] ?? '🐾'}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-slate-900">{p.name}</p>
-                      <p className="text-xs text-slate-500">Tutor: {p.tutor.name}</p>
+                      <p className="text-xs text-slate-500">Responsável: {p.tutor.name}</p>
                     </div>
                   </button>
                 ))}

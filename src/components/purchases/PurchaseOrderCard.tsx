@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { ChevronDown, ChevronUp, CheckCircle2, XCircle, Clock, Package, Link2, Loader2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, CheckCircle2, XCircle, Clock, Package, Link2, Loader2, Unlink } from 'lucide-react'
 import type { PurchaseOrder, PurchaseOrderItem } from '@/types/purchases'
 import {
   cancelPurchaseOrder,
   getPurchaseOrder,
+  unmatchItemFromStock,
 } from '@/lib/actions/purchases'
 import { ItemMatchingPanel } from './ItemMatchingPanel'
 import ConfirmReceiptModal from './ConfirmReceiptModal'
@@ -28,6 +29,22 @@ export function PurchaseOrderCard({ order, onStatusChange }: Props) {
   const [isPending, startTransition]  = useTransition()
   const [msg, setMsg]                 = useState<string | null>(null)
   const [showConfirm, setShowConfirm] = useState(false)
+  // Vínculo errado tem volta enquanto a entrada não foi recebida.
+  const [desvinculando, setDesvinculando] = useState<string | null>(null)
+
+  async function recarregar() {
+    const res = await getPurchaseOrder(order.id)
+    if (!('error' in res)) setFullOrder(res)
+  }
+
+  async function desvincular(itemId: string) {
+    setDesvinculando(itemId)
+    setMsg(null)
+    const res = await unmatchItemFromStock(itemId)
+    setDesvinculando(null)
+    if ('error' in res) { setMsg(res.error); return }
+    await recarregar()
+  }
 
   const status = STATUS_CONFIG[order.status]
   const StatusIcon = status.icon
@@ -146,10 +163,34 @@ export function PurchaseOrderCard({ order, onStatusChange }: Props) {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {item.is_matched ? (
-                          <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium">
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            Vinculado
-                          </span>
+                          <>
+                            <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Vinculado
+                            </span>
+                            {order.status === 'pending' && (
+                              <>
+                                <button
+                                  onClick={() => setMatchingItem(item)}
+                                  title="Vincular a outro produto"
+                                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-purple-300 hover:text-purple-700"
+                                >
+                                  Trocar
+                                </button>
+                                <button
+                                  onClick={() => void desvincular(item.id)}
+                                  disabled={desvinculando === item.id}
+                                  title="Desfazer o vínculo deste item"
+                                  className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-red-300 hover:text-red-700 disabled:opacity-50"
+                                >
+                                  {desvinculando === item.id
+                                    ? <Loader2 className="h-3 w-3 animate-spin" />
+                                    : <Unlink className="h-3 w-3" />}
+                                  Desvincular
+                                </button>
+                              </>
+                            )}
+                          </>
                         ) : (
                           <button
                             onClick={() => setMatchingItem(item)}
@@ -175,10 +216,7 @@ export function PurchaseOrderCard({ order, onStatusChange }: Props) {
           onClose={() => setMatchingItem(null)}
           onMatched={() => {
             setMatchingItem(null)
-            startTransition(async () => {
-              const res = await getPurchaseOrder(order.id)
-              if (!('error' in res)) setFullOrder(res)
-            })
+            startTransition(async () => { await recarregar() })
           }}
         />
       )}

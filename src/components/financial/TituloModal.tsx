@@ -557,7 +557,7 @@ export default function TituloModal({
                     </>
                   )}
                   {entry?.patient_name && (
-                    <p className="mt-1 text-xs text-slate-400">Pet: {entry.patient_name}</p>
+                    <p className="mt-1 text-xs text-slate-400">Animal: {entry.patient_name}</p>
                   )}
                   {/* Manutenção preventiva: informa ANTES de mandar ao banco, para
                       a correção já estar em andamento. NÃO trava o salvamento. */}

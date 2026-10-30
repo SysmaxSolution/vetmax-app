@@ -564,6 +564,26 @@ export async function launchPayablesFromPurchase(
 
 // ─── Match item to stock ──────────────────────────────────────────────────────
 
+/**
+ * Confere que o item da nota é desta clínica e devolve a compra dele.
+ *
+ * Sem isto o vínculo aceitava qualquer `itemId` do banco: o filtro era só
+ * `.eq('id', itemId)`, sem clinic_id.
+ */
+async function itemDaClinica(
+  admin: ReturnType<typeof createAdminClient>, itemId: string, clinicId: string,
+): Promise<{ purchaseId: string; status: string } | { error: string }> {
+  const { data } = await admin
+    .from('purchase_order_items')
+    .select('id, purchase_order_id, purchase_orders!inner(id, clinic_id, status)')
+    .eq('id', itemId)
+    .maybeSingle()
+  const ordem = (data as { purchase_orders?: { clinic_id?: string; status?: string } } | null)?.purchase_orders
+  if (!data || !ordem) return { error: 'Item da nota não encontrado.' }
+  if (ordem.clinic_id !== clinicId) return { error: 'Este item pertence a outra clínica.' }
+  return { purchaseId: (data as { purchase_order_id: string }).purchase_order_id, status: ordem.status ?? '' }
+}
+
 export async function matchItemToStock(
   itemId: string,
   stockItemId: string,
@@ -572,12 +592,56 @@ export async function matchItemToStock(
   if ('error' in ctx) return { error: ctx.error as string }
 
   const admin = createAdminClient()
+  const dono = await itemDaClinica(admin, itemId, ctx.clinic_id)
+  if ('error' in dono) return { error: dono.error }
+
+  // O produto também precisa ser desta clínica — vincular item de nota a
+  // produto de outra clínica misturaria estoque no recebimento.
+  const { data: produto } = await admin
+    .from('stock_items').select('id').eq('id', stockItemId).eq('clinic_id', ctx.clinic_id).maybeSingle()
+  if (!produto) return { error: 'Produto não encontrado nesta clínica.' }
+
   const { error } = await admin
     .from('purchase_order_items')
     .update({ stock_item_id: stockItemId, is_matched: true })
     .eq('id', itemId)
 
   if (error) return { error: mensagemErro(error, 'lib/actions/purchases.ts') }
+  revalidatePath('/dashboard/purchases')
+  return { success: true }
+}
+
+/**
+ * Desfaz o vínculo de um item da nota com o produto do estoque.
+ *
+ * Pedido da Clínica Animais (30/10/2026): "às vezes o operador seleciona o
+ * produto errado". Antes disso, vínculo errado não tinha volta pela tela.
+ *
+ * Só vale enquanto a entrada não foi recebida. Depois do recebimento o saldo
+ * já entrou no produto, e desvincular aqui deixaria o estoque sem explicação —
+ * nesse caso o caminho é o ajuste de estoque, que deixa rastro.
+ */
+export async function unmatchItemFromStock(
+  itemId: string,
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error as string }
+
+  const admin = createAdminClient()
+  const dono = await itemDaClinica(admin, itemId, ctx.clinic_id)
+  if ('error' in dono) return { error: dono.error }
+  if (dono.status === 'received') {
+    return { error: 'Esta entrada já foi recebida. O saldo já entrou no produto — corrija por um ajuste de estoque, que fica registrado.' }
+  }
+  if (dono.status === 'cancelled') return { error: 'Esta entrada está cancelada.' }
+
+  const { error } = await admin
+    .from('purchase_order_items')
+    .update({ stock_item_id: null, is_matched: false })
+    .eq('id', itemId)
+
+  if (error) return { error: mensagemErro(error, 'lib/actions/purchases.ts') }
+  revalidatePath('/dashboard/purchases')
   return { success: true }
 }
 
