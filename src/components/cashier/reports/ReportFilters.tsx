@@ -97,7 +97,7 @@ export default function ReportFilters({ filters, onChange, onSubmit, loading }: 
               type="text"
               value={filters.q}
               onChange={e => update('q', e.target.value)}
-              placeholder="Pet, tutor ou descrição do produto/serviço..."
+              placeholder="Animal, responsável ou descrição do produto/serviço..."
               className="w-full rounded-lg border border-slate-200 pl-9 pr-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             />
           </div>

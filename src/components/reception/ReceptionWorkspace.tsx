@@ -151,7 +151,7 @@ function TutorProfile({
                   type="button"
                   onClick={() => setShowQuotes(v => !v)}
                   className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-[11px] font-bold text-green-700 hover:bg-green-200 transition-colors"
-                  title="Orçamentos em aberto deste tutor"
+                  title="Orçamentos em aberto deste responsável"
                 >
                   🧾 {openQuotes.length} {openQuotes.length === 1 ? 'orçamento aberto' : 'orçamentos abertos'}
                 </button>
@@ -191,7 +191,7 @@ function TutorProfile({
               </div>
             ))}
           </div>
-          <p className="mt-2 text-[11px] text-green-600/70">No Check-in do pet você pode puxar estes orçamentos e já lançar os serviços.</p>
+          <p className="mt-2 text-[11px] text-green-600/70">No Check-in do animal você pode puxar estes orçamentos e já lançar os serviços.</p>
         </div>
       )}
 
@@ -208,12 +208,12 @@ function TutorProfile({
             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
-            Adicionar Novo Pet
+            Adicionar Novo Animal
           </button>
         </div>
 
         {data.patients.length === 0 ? (
-          <p className="text-sm text-slate-400 py-2">Nenhum pet cadastrado ainda.</p>
+          <p className="text-sm text-slate-400 py-2">Nenhum animal cadastrado ainda.</p>
         ) : (
           <div className="space-y-2">
             {data.patients.map(p => {
@@ -244,7 +244,7 @@ function TutorProfile({
                     <button
                       onClick={() => onViewFeed(p.id, p.name, p.species, data.tutor.name ?? '', data.tutor.cpf ?? '', data.tutor.id)}
                       className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
-                      title="Ver histórico do pet"
+                      title="Ver histórico do animal"
                     >
                       {isDeceased ? 'Ver histórico' : 'Feed'}
                     </button>
@@ -327,7 +327,7 @@ function QueueCard({
         type="button"
         onClick={(e) => { e.stopPropagation(); onOpenPet(item.patient.id) }}
         disabled={isLoading}
-        title="Abrir cadastro do pet/tutor"
+        title="Abrir cadastro do animal/responsável"
         className="flex-shrink-0 rounded-full hover:ring-2 hover:ring-teal-300 transition-shadow disabled:opacity-60"
       >
         <PetAvatar name={item.patient.name} species={item.patient.species} photoUrl={item.patient.photo_url} size="md" />
@@ -339,7 +339,7 @@ function QueueCard({
             onClick={(e) => { e.stopPropagation(); onOpenPet(item.patient.id) }}
             disabled={isLoading}
             className="font-semibold text-slate-900 hover:text-teal-700 hover:underline disabled:opacity-60"
-            title="Abrir cadastro do pet/tutor"
+            title="Abrir cadastro do animal/responsável"
           >
             {item.patient.name}
           </button>
@@ -631,7 +631,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
           const err = await moveDirectToVet(consultationId)
           if (err) { showToast(err.error, 'error'); return }
           setQueue(q => q.filter(c => c.id !== consultationId))
-          showToast('Pet encaminhado direto ao Consultório.', 'success', {
+          showToast('Animal encaminhado direto ao Consultório.', 'success', {
             label: 'Abrir Consultório',
             href:  `/dashboard/vet/${consultationId}`,
           })
@@ -640,7 +640,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
         const err = await moveToTriage(consultationId)
         if (err) { showToast(err.error, 'error'); return }
         setQueue(q => q.filter(c => c.id !== consultationId))
-        showToast('Pet encaminhado para Triagem.', 'success', {
+        showToast('Animal encaminhado para Triagem.', 'success', {
           label: 'Abrir Triagem',
           href:  `/dashboard/triage/${consultationId}`,
         })
@@ -802,7 +802,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
           <div className="mb-3 flex items-center justify-between">
             <div>
               <h2 className="text-base font-semibold text-slate-900">Busca Inteligente</h2>
-              <p className="text-sm text-slate-500">Pesquise por CPF do Tutor, nome do Tutor ou nome do Pet</p>
+              <p className="text-sm text-slate-500">Pesquise por CPF do Responsável, nome do Responsável ou nome do Animal</p>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <button
@@ -846,7 +846,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
                 // aberto era da busca anterior e não pode continuar na tela.
                 if (selectedTutorId) setSelectedTutorId(null)
               }}
-              placeholder="CPF, nome do tutor ou nome do pet..."
+              placeholder="CPF, nome do responsável ou nome do animal..."
               className="w-full rounded-lg border border-slate-200 bg-white py-3.5 pl-11 pr-4 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             />
             {query && (
@@ -875,7 +875,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
                     <p className="font-medium text-slate-900">{result.tutor.name ?? '—'}</p>
                     <div className="flex flex-wrap gap-2 mt-1">
                       {result.patients.length === 0
-                        ? <span className="text-xs text-slate-400">Nenhum pet cadastrado</span>
+                        ? <span className="text-xs text-slate-400">Nenhum animal cadastrado</span>
                         : result.patients.map(p => {
                             const sp = SPECIES_LABELS[p.species]
                             return (
@@ -923,7 +923,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-2xl">🔍</div>
               <div>
                 <p className="font-medium text-slate-700">Nenhum resultado para "{query}"</p>
-                <p className="text-sm text-slate-500 mt-1">O Tutor ou Pet não está cadastrado nesta clínica.</p>
+                <p className="text-sm text-slate-500 mt-1">O Responsável ou Animal não está cadastrado nesta clínica.</p>
               </div>
               <button
                 onClick={() => setModal({ type: 'new_tutor_and_pet' })}
@@ -932,7 +932,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
-                Cadastrar Novo Tutor e Pet
+                Cadastrar Novo Responsável e Animal
               </button>
             </div>
           )}
@@ -943,7 +943,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="text-base font-semibold text-slate-900">Fila de Espera</h2>
-              <p className="text-sm text-slate-500">Pets aguardando atendimento hoje</p>
+              <p className="text-sm text-slate-500">Animais aguardando atendimento hoje</p>
             </div>
             <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-slate-900 px-2 text-xs font-bold font-mono tabular-nums text-white">
               {queue.length}
@@ -954,7 +954,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
             <div data-mentor-step="reception-queue" className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-12 text-center">
               <span className="text-4xl">🐾</span>
               <p className="font-medium text-slate-700">Fila vazia</p>
-              <p className="text-sm text-slate-400">Use a busca acima para fazer o check-in de um pet.</p>
+              <p className="text-sm text-slate-400">Use a busca acima para fazer o check-in de um animal.</p>
             </div>
           ) : (
             <div data-mentor-step="reception-queue" className="space-y-3">
@@ -989,7 +989,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="text-base font-semibold text-slate-900">Atendidos Hoje</h2>
-              <p className="text-sm text-slate-500">Todos os pacientes em fluxo clínico hoje</p>
+              <p className="text-sm text-slate-500">Todos os animais em fluxo clínico hoje</p>
             </div>
             <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-bold font-mono tabular-nums text-slate-700">
               {history.length}
@@ -1022,7 +1022,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
                       type="button"
                       onClick={(e) => { e.stopPropagation(); handleOpenPet(item.patient.id) }}
                       disabled={isPetLoading}
-                      title="Abrir cadastro do pet/tutor"
+                      title="Abrir cadastro do animal/responsável"
                       className="flex-shrink-0 rounded-full hover:ring-2 hover:ring-teal-300 transition-shadow disabled:opacity-60"
                     >
                       <PetAvatar name={item.patient.name} species={item.patient.species} photoUrl={item.patient.photo_url} size="sm" />
@@ -1034,7 +1034,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
                           onClick={(e) => { e.stopPropagation(); handleOpenPet(item.patient.id) }}
                           disabled={isPetLoading}
                           className="font-medium text-slate-900 hover:text-teal-700 hover:underline disabled:opacity-60"
-                          title="Abrir cadastro do pet/tutor"
+                          title="Abrir cadastro do animal/responsável"
                         >
                           {item.patient.name}
                         </button>

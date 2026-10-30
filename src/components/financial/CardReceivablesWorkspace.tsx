@@ -420,8 +420,8 @@ export default function CardReceivablesWorkspace({
               className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase">Pet / Tutor</span>
-            <input value={ptFilter} onChange={e => setPtFilter(e.target.value)} placeholder="Nome do pet ou tutor"
+            <span className="text-[11px] font-semibold text-slate-500 uppercase">Animal / Responsável</span>
+            <input value={ptFilter} onChange={e => setPtFilter(e.target.value)} placeholder="Nome do animal ou responsável"
               className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
           </label>
           <label className="flex flex-col gap-1">
@@ -489,7 +489,7 @@ export default function CardReceivablesWorkspace({
                 <th className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Previsão</th>
                 <th className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Cartão</th>
                 <th className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Tipo</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Pet / Tutor</th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Animal / Responsável</th>
                 <th className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Parcela</th>
                 <th className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">NSU</th>
                 <th className="text-right px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Bruto</th>
@@ -912,7 +912,7 @@ function InstallmentDetailModal({
                 <Field label="Cartão">{i.card_label ?? i.card_acquirer ?? '—'}</Field>
                 <Field label="Administradora">{i.card_acquirer ?? '—'}</Field>
                 <Field label="Bandeira">{i.card_brand ?? '—'}</Field>
-                <Field label="Pet / Tutor">{i.patient_name ?? i.tutor_name ?? '—'}</Field>
+                <Field label="Animal / Responsável">{i.patient_name ?? i.tutor_name ?? '—'}</Field>
                 <Field label="NSU"><span className="font-mono">{i.card_nsu ?? '—'}</span></Field>
                 <Field label="Nº Liberação"><span className="font-mono">{i.card_authorization ?? '—'}</span></Field>
                 <Field label="Data transação">{fmtDate(i.transaction_date)}</Field>

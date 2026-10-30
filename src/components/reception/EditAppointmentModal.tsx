@@ -250,7 +250,7 @@ export default function EditAppointmentModal({ appointmentId, onClose, onSuccess
                   </div>
                   <span className="flex items-center gap-1.5 text-sm text-slate-600">
                     <MessageCircle className="h-3.5 w-3.5 text-teal-500" />
-                    Notificar tutor via WhatsApp
+                    Notificar responsável via WhatsApp
                   </span>
                 </label>
 

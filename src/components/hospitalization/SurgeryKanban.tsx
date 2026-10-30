@@ -257,7 +257,7 @@ function AdmitSurgeryModal({ onClose, onSuccess }: { onClose: () => void; onSucc
         {error && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
         <div className="relative">
           <input
-            type="text" placeholder="Buscar por tutor ou pet..."
+            type="text" placeholder="Buscar por responsável ou animal..."
             value={selected ? `${selected.tutor.name} — ${selected.name}` : search}
             onChange={e => handleSearch(e.target.value)}
             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"

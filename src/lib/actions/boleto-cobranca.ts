@@ -228,12 +228,12 @@ export async function emitOrReprintBoleto(financialEntryId: string, bankAccountI
 
   const tutorId = (entry as { tutor_id?: string | null }).tutor_id
   if (!tutorId) {
-    return { error: 'Este título não tem Tutor informado, e o banco exige os dados do pagador para registrar o boleto. Informe o cliente no título.' }
+    return { error: 'Este título não tem Responsável informado, e o banco exige os dados do pagador para registrar o boleto. Informe o cliente no título.' }
   }
   const { data: t } = await admin.from('tutors')
     .select('name, cpf, email, address, address_number, address_complement, neighborhood, city, state, cep')
     .eq('id', tutorId).maybeSingle()
-  if (!t) return { error: 'Tutor do título não encontrado.' }
+  if (!t) return { error: 'Responsável do título não encontrado.' }
 
   const dados = pagadorDeTutor(t as Parameters<typeof pagadorDeTutor>[0])
   const faltas = pendenciasDoPagador(dados)
@@ -493,7 +493,7 @@ export async function pendenciasPagadorDoTutor(tutorId: string): Promise<{
   const { data: t } = await admin.from('tutors')
     .select('name, cpf, email, address, address_number, address_complement, neighborhood, city, state, cep')
     .eq('id', tutorId).eq('clinic_id', c.clinicId).maybeSingle()
-  if (!t) return { error: 'Tutor não encontrado.' }
+  if (!t) return { error: 'Responsável não encontrado.' }
 
   const { pagadorDeTutor, pendenciasDoPagador, avisoDoPagador } = await import('@/lib/financial/pagador-boleto')
   const dados = pagadorDeTutor(t as Parameters<typeof pagadorDeTutor>[0])

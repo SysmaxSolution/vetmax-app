@@ -65,7 +65,7 @@ export function pendenciasDoPagador(p: DadosPagador): PendenciaPagador[] {
     // boleto. A mensagem tem de dizer o que fazer, não acusar o dígito.
     faltas.push({
       campo: 'cpfCnpj', rotulo: 'Cliente',
-      motivo: 'é o CONSUMIDOR FINAL (avulso) — informe o tutor real para emitir boleto',
+      motivo: 'é o CONSUMIDOR FINAL (avulso) — informe o responsável real para emitir boleto',
     })
   } else if (!cpfOuCnpjValido(String(p.cpfCnpj))) {
     // Documento errado só apareceria como recusa do banco, depois da nota
@@ -98,7 +98,7 @@ export const pagadorPronto = (p: DadosPagador): boolean => pendenciasDoPagador(p
  * Uma frase para a tela. Informativa de propósito: diz o que falta e onde
  * corrigir, sem impedir o usuário de seguir fazendo outra coisa.
  */
-export function avisoDoPagador(p: DadosPagador, ondeCorrigir = 'no cadastro do Tutor'): string | null {
+export function avisoDoPagador(p: DadosPagador, ondeCorrigir = 'no cadastro do Responsável'): string | null {
   const faltas = pendenciasDoPagador(p)
   if (!faltas.length) return null
   const lista = faltas.map(f => `${f.rotulo} (${f.motivo})`).join(', ')

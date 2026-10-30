@@ -39,8 +39,8 @@ export const MACRO_BLOCKS: MacroBlock[] = [
   // ── Cabeçalho do Pet ─────────────────────────────────────────────────────
   {
     id: 'pet_header',
-    label: 'Cabeçalho do Pet',
-    description: 'Tutor + Paciente em linha 1, Espécie/Raça/Idade/Peso/Sexo em linha 2',
+    label: 'Cabeçalho do Animal',
+    description: 'Responsável + Animal em linha 1, Espécie/Raça/Idade/Peso/Sexo em linha 2',
     icon: '🐾',
     build({ startY }) {
       const y1 = startY

@@ -161,7 +161,7 @@ export function resolveRejectionRecipients(ctx: NotificationContext): Recipient[
   if (ctx.tutor?.id) {
     const t = ctx.tutor
     out.push({
-      kind: 'tutor', id: t.id, name: t.name ?? 'Tutor',
+      kind: 'tutor', id: t.id, name: t.name ?? 'Responsável',
       phone: t.phone ?? null, email: null,
       // O tutor só decide quando não houve encaminhamento por parceira/MV.
       canDecide: out.length === 0,

@@ -167,7 +167,7 @@ export default function DadosClinicosTab({ hospitalizationId, onSaved }: Props) 
             className="mt-0.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none" />
         </label>
         <label className="block">
-          <span className="text-[10px] font-bold text-slate-500 uppercase">Pertences do Pet</span>
+          <span className="text-[10px] font-bold text-slate-500 uppercase">Pertences do Animal</span>
           <input value={d.personal_belongings ?? ''} onChange={e => setD(p => ({ ...p, personal_belongings: e.target.value }))} placeholder="Coleira, cobertor…"
             className="mt-0.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none" />
         </label>

@@ -49,7 +49,7 @@ export interface PortalTheme {
   headingFont: PortalHeadingFontId
   /** Imagem de capa opcional do herói (URL pública). */
   coverImageUrl: string | null
-  /** Frase curta acima do título do herói ("Portal do Tutor" por padrão). */
+  /** Frase curta acima do título do herói ("Portal do Responsável" por padrão). */
   tagline: string | null
 }
 

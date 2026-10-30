@@ -12,7 +12,7 @@ export default function PetlovePriceHistory({ items }: { items: PetlovePriceHist
         <div className="px-5 py-8 text-center">
           <PawPrint className="h-8 w-8 text-purple-200 mx-auto mb-2" />
           <p className="text-sm text-purple-500">
-            Nenhum repasse Petlove registrado para este pet ainda.
+            Nenhum repasse Petlove registrado para este animal ainda.
           </p>
           <p className="text-xs text-purple-400 mt-1">
             Os valores aparecerão aqui após a importação da próxima remessa mensal.

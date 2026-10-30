@@ -205,7 +205,7 @@ export default function CanvaTemplateEditor({
             <section className="space-y-3">
               <h3 className="text-sm font-semibold text-slate-800">Margens de segurança (cm)</h3>
               <p className="text-xs text-slate-500">
-                Distância entre o bloco de dados do pet e a borda do papel — evita
+                Distância entre o bloco de dados do animal e a borda do papel — evita
                 colidir com logo/cabeçalho/rodapé do timbrado.
               </p>
               {(['top', 'right', 'bottom', 'left'] as const).map(k => (
@@ -219,7 +219,7 @@ export default function CanvaTemplateEditor({
             </section>
 
             <section className="space-y-2">
-              <h3 className="text-sm font-semibold text-slate-800">Estilo do bloco do pet</h3>
+              <h3 className="text-sm font-semibold text-slate-800">Estilo do bloco do animal</h3>
               <div className="grid grid-cols-2 gap-2">
                 {(['solid', 'transparent'] as const).map(style => (
                   <button

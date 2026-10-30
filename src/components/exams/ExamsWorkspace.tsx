@@ -132,7 +132,7 @@ function ExamCard({
         <button
           type="button"
           onClick={() => onDischarge(item.id, item.patient.name)}
-          title="Pet não retorna ao consultório — concluir atendimento"
+          title="Animal não retorna ao consultório — concluir atendimento"
           className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors"
         >
           <LogOut className="h-4 w-4" />
@@ -247,7 +247,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900">Laboratório / Exames</h1>
-            <p className="mt-0.5 text-sm text-slate-600">Pacientes aguardando exame e geração de laudos</p>
+            <p className="mt-0.5 text-sm text-slate-600">Animais aguardando exame e geração de laudos</p>
           </div>
           <button
             type="button"
@@ -342,7 +342,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
                 </div>
                 <p className="text-sm font-medium text-slate-500">Nenhum exame pendente no momento</p>
                 <p className="text-xs text-slate-400 mt-1">
-                  Os pacientes aparecem aqui quando o médico encaminha para exames
+                  Os animais aparecem aqui quando o médico encaminha para exames
                 </p>
               </div>
             ) : (
@@ -472,10 +472,10 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
             {examSuccess && <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">{examSuccess}</p>}
             {examError && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{examError}</p>}
             <div className="relative">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Paciente</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Animal</label>
               <input
                 type="text"
-                placeholder="Buscar por pet ou tutor..."
+                placeholder="Buscar por animal ou responsável..."
                 value={examPatientSelected ? examPatientSelected.name + ' — ' + examPatientSelected.tutor.name : examPatientSearch}
                 onChange={e => handleExamPatientSearch(e.target.value)}
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"

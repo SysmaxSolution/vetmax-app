@@ -191,14 +191,14 @@ export default function CashierQuickSale({ clinicId, activeModules = [], onToast
           {tutor && tutorPets.length > 0 && (
             <div>
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1 flex items-center gap-1">
-                <PawPrint className="h-3 w-3" /> Pet <span className="font-normal normal-case">(opcional)</span>
+                <PawPrint className="h-3 w-3" /> Animal <span className="font-normal normal-case">(opcional)</span>
               </p>
               <select
                 value={petId}
                 onChange={e => setPetId(e.target.value)}
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400"
               >
-                <option value="">— Sem pet vinculado —</option>
+                <option value="">— Sem animal vinculado —</option>
                 {tutorPets.map(p => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}

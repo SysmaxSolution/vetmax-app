@@ -224,7 +224,7 @@ export async function omnisearch(query: string): Promise<OmnisearchResult | { er
   const whatsapp = [...wppMap.values()]
 
   const allGroups: OmnisearchGroup[] = [
-    { key: 'cadastro',   label: 'Cadastro (Pets/Tutores)', hits: cadastro,   count: cadastro.length   },
+    { key: 'cadastro',   label: 'Cadastro (Animais/Responsáveis)', hits: cadastro,   count: cadastro.length   },
     { key: 'consulta',   label: 'Consultas',                hits: consulta,   count: consulta.length   },
     { key: 'internacao', label: 'Internação',               hits: internacao, count: internacao.length },
     { key: 'exames',     label: 'Exames',                   hits: exames,     count: exames.length     },

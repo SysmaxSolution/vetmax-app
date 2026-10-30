@@ -64,7 +64,7 @@ function maskCpf(cpf: string | null | undefined): string | null {
 export async function getPublicPatientVaccines(
   patientId: string,
 ): Promise<PublicPatientVaccineData | { error: string }> {
-  if (!patientId || patientId.length < 10) return { error: 'ID de paciente inválido.' }
+  if (!patientId || patientId.length < 10) return { error: 'ID de animal inválido.' }
 
   const admin = createAdminClient()
 
@@ -81,7 +81,7 @@ export async function getPublicPatientVaccines(
     .is('deleted_at', null)
     .single()
 
-  if (petErr || !pet) return { error: 'Paciente não encontrado.' }
+  if (petErr || !pet) return { error: 'Animal não encontrado.' }
 
   const p = pet as any
   const clinic = Array.isArray(p.clinics) ? p.clinics[0] : p.clinics

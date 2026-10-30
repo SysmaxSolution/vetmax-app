@@ -1569,7 +1569,7 @@ export async function getBBStatement(params: {
       external_id:         'BB-2026-001',
       date:                params.start_date,
       amount:              1500.00,
-      description:         'PIX RECEBIDO - TUTOR JOAO SILVA',
+      description:         'PIX RECEBIDO - RESPONSÁVEL JOAO SILVA',
       type:                'credit',
       reconciled_entry_id: null,
       import_batch_id:     'mock-batch',

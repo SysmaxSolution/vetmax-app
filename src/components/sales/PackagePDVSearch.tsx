@@ -99,7 +99,7 @@ export default function PackagePDVSearch({ selectedPet, onSelectPet, onAdd }: Pr
             {petSearching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-slate-400" />}
             <input
               type="text"
-              placeholder="Buscar animal (nome ou tutor)…"
+              placeholder="Buscar animal (nome ou responsável)…"
               value={petQuery}
               onChange={handlePetChange}
               onFocus={() => petResults.length > 0 && setPetOpen(true)}

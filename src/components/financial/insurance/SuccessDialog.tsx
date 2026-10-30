@@ -107,7 +107,7 @@ export default function SuccessDialog({
                 icon={<Tags className="h-5 w-5" />}
                 value={applied.custom_prices_set}
                 label="Preços fixados"
-                sublabel="nos perfis dos pets"
+                sublabel="nos perfis dos animais"
                 tone="purple"
               />
             </div>
@@ -164,7 +164,7 @@ export default function SuccessDialog({
           <div className="grid grid-cols-3 gap-2 mt-6">
             <Stat label="Casados"     value={summary.matched_count}  tone="emerald" />
             <Stat label="Divergentes" value={summary.partial_count}  tone="amber" />
-            <Stat label="Novos Pets"  value={summary.new_pets_count} tone="purple" />
+            <Stat label="Novos Animais"  value={summary.new_pets_count} tone="purple" />
           </div>
         )}
 

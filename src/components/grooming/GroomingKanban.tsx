@@ -238,7 +238,7 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
           Banho e Tosa
         </h1>
         <p className="text-sm text-slate-600">
-          Acompanhe o fluxo dos pets em tempo real. Arraste para mover, clique no card para registrar evolução.
+          Acompanhe o fluxo dos animais em tempo real. Arraste para mover, clique no card para registrar evolução.
         </p>
       </div>
 
@@ -418,7 +418,7 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
       {deliverySuccess && (
         <div role="status" className="fixed bottom-6 right-6 z-50 bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-lg text-sm font-semibold flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4" />
-          Pet entregue! Realize o pagamento no Caixa Central.
+          Animal entregue! Realize o pagamento no Caixa Central.
         </div>
       )}
 
@@ -623,7 +623,7 @@ function GroomingKanbanCard({ card, isScheduled, isConfirmingArrival, onDragStar
               <button
                 onClick={e => { e.stopPropagation(); onDeliver() }}
                 className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors flex-shrink-0 text-[10px] font-semibold"
-                title="Confirmar Entrega ao Tutor"
+                title="Confirmar Entrega ao Responsável"
               >
                 <CheckCircle2 className="h-3 w-3" />
                 Entregar

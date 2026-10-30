@@ -70,7 +70,7 @@ describe('avisoDoPagador — informativo, não trava', () => {
   it('uma pendência: frase no singular, dizendo onde corrigir', () => {
     const msg = avisoDoPagador({ ...completo, bairro: '' })!
     expect(msg).toContain('Bairro')
-    expect(msg).toContain('cadastro do Tutor')
+    expect(msg).toContain('cadastro do Responsável')
     expect(msg).toMatch(/falta /)
   })
 
@@ -139,7 +139,7 @@ describe('CONSUMIDOR FINAL (cliente avulso)', () => {
     const f = pendenciasDoPagador(avulso)[0]
     expect(f.rotulo).toBe('Cliente')
     expect(f.motivo).toMatch(/CONSUMIDOR FINAL/)
-    expect(f.motivo).toMatch(/informe o tutor real/i)
+    expect(f.motivo).toMatch(/informe o responsável real/i)
   })
 
   it('não acusa "dígito inválido" — seria confuso, não é erro de digitação', () => {

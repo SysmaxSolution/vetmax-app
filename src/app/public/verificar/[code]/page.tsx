@@ -58,7 +58,7 @@ export default async function VerifyPage({ params }: { params: Promise<{ code: s
             {/* Dados */}
             <div className="px-8 py-6">
               <Row label="Documento" value={v.documentName} />
-              <Row label="Paciente" value={v.petName} />
+              <Row label="Animal" value={v.petName} />
               <Row label="Clínica" value={v.clinicName} />
               <Row label="Responsável" value={v.signerName} />
               <Row label="CRMV" value={v.signerCrmv} />

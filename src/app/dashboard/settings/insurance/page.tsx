@@ -102,7 +102,7 @@ function ProviderFormModal({
         </div>
         <div className="p-6 space-y-4">
           <Field label="Nome do Convênio *">
-            <Input value={form.name} onChange={set('name')} placeholder="Ex: Pet Love" />
+            <Input value={form.name} onChange={set('name')} placeholder="Ex: Animal Love" />
           </Field>
           <Field label="Planos (separados por vírgula) *">
             <Input value={form.plan_types_raw} onChange={set('plan_types_raw')} placeholder="Ex: Básico, Standard, Premium" />

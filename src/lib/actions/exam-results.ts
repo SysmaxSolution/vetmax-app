@@ -216,7 +216,7 @@ export async function releaseExamResults(
         .eq('id', consultationId).maybeSingle()
       const pat = (cons as any)?.patients
       const p = Array.isArray(pat) ? pat[0] : pat
-      if (p?.tutor_id) await notifyTutorResultReleased(p.tutor_id, p.name ?? 'seu pet')
+      if (p?.tutor_id) await notifyTutorResultReleased(p.tutor_id, p.name ?? 'seu animal')
     } catch { /* best-effort */ }
   }
 

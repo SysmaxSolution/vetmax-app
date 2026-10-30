@@ -118,7 +118,7 @@ export default function AppointmentValidationModal({
           {tab === 'approve' && (
             <>
               <p className="text-sm text-slate-600">
-                Confirma o agendamento no horário solicitado pelo tutor. O sistema cria o appointment e notifica via WhatsApp.
+                Confirma o agendamento no horário solicitado pelo responsável. O sistema cria o appointment e notifica via WhatsApp.
               </p>
               <div>
                 <label className="text-xs text-slate-500 font-medium block mb-1">Observações (opcional)</label>
@@ -134,7 +134,7 @@ export default function AppointmentValidationModal({
 
           {tab === 'propose' && (
             <>
-              <p className="text-sm text-slate-600">Indique um horário disponível diferente do solicitado. O tutor será notificado.</p>
+              <p className="text-sm text-slate-600">Indique um horário disponível diferente do solicitado. O responsável será notificado.</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-slate-500 font-medium block mb-1">Data</label>
@@ -170,7 +170,7 @@ export default function AppointmentValidationModal({
 
           {tab === 'reject' && (
             <>
-              <p className="text-sm text-slate-600">O tutor receberá uma mensagem no WhatsApp informando a recusa.</p>
+              <p className="text-sm text-slate-600">O responsável receberá uma mensagem no WhatsApp informando a recusa.</p>
               <div>
                 <label className="text-xs text-slate-500 font-medium block mb-1">Motivo da recusa *</label>
                 <textarea

@@ -156,7 +156,7 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
             className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 transition-colors flex-shrink-0"
           >
             <Plus className="h-4 w-4" />
-            Incluir Paciente
+            Incluir Animal
           </button>
         </div>
 
@@ -474,7 +474,7 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Plus className="h-5 w-5 text-teal-600" />
-                <h2 className="text-base font-semibold text-slate-900">Incluir Paciente no Consultório</h2>
+                <h2 className="text-base font-semibold text-slate-900">Incluir Animal no Consultório</h2>
               </div>
               <button onClick={() => { setShowAddModal(false); setAddTab('buscar'); setAddSearch(''); setAddResults([]); setAddSelected(null); setAddError('') }} className="text-slate-400 hover:text-slate-600">
                 <X className="h-5 w-5" />
@@ -512,7 +512,7 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
                     </div>
                     <input
                       type="text"
-                      placeholder="Nome do pet ou tutor..."
+                      placeholder="Nome do animal ou responsável..."
                       value={addSelected ? `${addSelected.name} — ${addSelected.tutor.name}` : addSearch}
                       onChange={e => handleAddSearch(e.target.value)}
                       className="w-full border border-slate-300 rounded-lg pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
@@ -548,7 +548,7 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
                   </select>
                 </div>
                 <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                  O pet entrará diretamente no Consultório. Vitais devem ser coletados durante a consulta.
+                  O animal entrará diretamente no Consultório. Vitais devem ser coletados durante a consulta.
                 </p>
                 <div className="flex gap-2">
                   <button
@@ -574,7 +574,7 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
             {addTab === 'novo' && (
               <div className="space-y-3">
                 <p className="text-sm text-slate-600">
-                  Cadastre tutor e pet e inicie a consulta imediatamente.
+                  Cadastre responsável e animal e inicie a consulta imediatamente.
                 </p>
                 {/* HF4 (05/06): motivo escolhido aqui é respeitado no novo cadastro */}
                 <div>

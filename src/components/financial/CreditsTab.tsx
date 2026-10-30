@@ -150,8 +150,8 @@ function DetailModal({ tutor, mode, onClose }: { tutor: ClinicCreditSummary; mod
                         <>
                           <Field label="OS / NS" value={m.os_number ? `Nº ${m.os_number}` : null} />
                           <Field label="Empresa" value={m.company_name} />
-                          <Field label="Pet" value={m.patient_name} />
-                          <Field label="Tutor" value={m.tutor_name} />
+                          <Field label="Animal" value={m.patient_name} />
+                          <Field label="Responsável" value={m.tutor_name} />
                           <Field label="Data da consulta" value={m.consultation_date ? fmtDate(m.consultation_date) : null} />
                           <Field label="Crédito usado em" value={fmtDate(m.created_at)} />
                           <Field label="Utilizado por" value={m.user_name} />

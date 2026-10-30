@@ -58,7 +58,7 @@ export default function ReportExport({ data, periodLabel, clinicName }: Props) {
 
   function handleCsv() {
     const headers = [
-      'Tipo','Data/Hora','Módulo','Pet','Tutor','Fornecedor',
+      'Tipo','Data/Hora','Módulo','Animal','Responsável','Fornecedor',
       'Forma Pgto','Status','Descrição','Valor',
     ]
     const lines = [headers.join(';')]
@@ -139,7 +139,7 @@ export default function ReportExport({ data, periodLabel, clinicName }: Props) {
       y += kpiH + 6
 
       // ── Table ───────────────────────────────────────────────────────────────
-      const headers = ['Tipo','Data/Hora','Módulo','Pet/Forn.','Tutor','Forma','Status','Valor']
+      const headers = ['Tipo','Data/Hora','Módulo','Pet/Forn.','Responsável','Forma','Status','Valor']
 
       function drawTableHeader() {
         doc.setFillColor(240, 253, 250)

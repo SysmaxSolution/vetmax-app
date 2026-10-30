@@ -73,7 +73,7 @@ export default function CreateStudyModal({ partners, services = [], onClose, onS
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!selected) { setError('Selecione o paciente.'); return }
+    if (!selected) { setError('Selecione o animal.'); return }
     setSaving(true); setError(null)
     const res = await createImagingStudy({
       patientId: selected.id,
@@ -109,7 +109,7 @@ export default function CreateStudyModal({ partners, services = [], onClose, onS
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {/* Paciente */}
           <div>
-            <label className="block text-xs font-semibold text-slate-500 mb-1">Paciente *</label>
+            <label className="block text-xs font-semibold text-slate-500 mb-1">Animal *</label>
             {selected ? (
               <div className="flex items-center justify-between gap-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2">
                 <span className="text-sm font-medium text-slate-800 flex items-center gap-2">
@@ -123,7 +123,7 @@ export default function CreateStudyModal({ partners, services = [], onClose, onS
                 <div className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2">
                   <Search className="h-4 w-4 text-slate-400" />
                   <input value={query} onChange={e => setQuery(e.target.value)} autoFocus
-                         placeholder="Buscar por nome do pet ou tutor…"
+                         placeholder="Buscar por nome do animal ou responsável…"
                          className="flex-1 text-sm outline-none" />
                   {searching && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
                 </div>
@@ -179,7 +179,7 @@ export default function CreateStudyModal({ partners, services = [], onClose, onS
                 <option value="">— Não vincular —</option>
                 {services.map(s => <option key={s.id} value={s.id}>{s.name}{s.publishToPortal ? ' • publica no portal' : ''}</option>)}
               </select>
-              <p className="text-[11px] text-slate-400 mt-1">Se o serviço estiver marcado como "publicar no portal", o laudo vai automaticamente ao tutor ao ser liberado.</p>
+              <p className="text-[11px] text-slate-400 mt-1">Se o serviço estiver marcado como "publicar no portal", o laudo vai automaticamente ao responsável ao ser liberado.</p>
             </div>
           )}
 

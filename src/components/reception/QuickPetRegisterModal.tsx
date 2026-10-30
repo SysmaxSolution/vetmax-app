@@ -66,8 +66,8 @@ export default function QuickPetRegisterModal({ onClose, onSuccess, showSchedule
 
   async function handleSave(then: 'close' | 'schedule') {
     setError(null)
-    if (!petName.trim())   { setError('Informe o nome do pet.'); return }
-    if (!tutorName.trim()) { setError('Informe o nome do tutor.'); return }
+    if (!petName.trim())   { setError('Informe o nome do animal.'); return }
+    if (!tutorName.trim()) { setError('Informe o nome do responsável.'); return }
 
     setSaving(then === 'schedule' ? 'register_and_schedule' : 'register')
     const res = await registerTutorAndPet(
@@ -177,7 +177,7 @@ export default function QuickPetRegisterModal({ onClose, onSuccess, showSchedule
           </div>
 
           <p className="text-[11px] text-slate-400 leading-relaxed">
-            CPF, endereço e dados clínicos podem ser completados depois em <strong>Pacientes → Editar Cadastro</strong>.
+            CPF, endereço e dados clínicos podem ser completados depois em <strong>Animais → Editar Cadastro</strong>.
           </p>
 
           {error && (
@@ -212,7 +212,7 @@ export default function QuickPetRegisterModal({ onClose, onSuccess, showSchedule
               disabled={!!saving}
               onClick={() => handleSave('schedule')}
               className="flex-1 rounded-xl bg-amber-500 hover:bg-amber-600 py-2.5 text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
-              title="Cadastra e abre o modal de agendamento já com o pet selecionado"
+              title="Cadastra e abre o modal de agendamento já com o animal selecionado"
             >
               {saving === 'register_and_schedule'
                 ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>

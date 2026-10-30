@@ -158,7 +158,7 @@ export default function ProtocolPicker({ hospitalizationId, onClose, onApplied }
               <p className="text-[10px] text-slate-500 mt-1">
                 {echoLocalInput(startAt)
                   ? <>Início selecionado: <b className="text-indigo-700">{echoLocalInput(startAt)}</b> — confira também os minutos. Todas as medicações do protocolo partem dele.</>
-                  : 'Todas as medicações do protocolo são agendadas a partir deste horário. Use um horário passado se o pet já está medicado.'}
+                  : 'Todas as medicações do protocolo são agendadas a partir deste horário. Use um horário passado se o animal já está medicado.'}
               </p>
             </div>
           )}

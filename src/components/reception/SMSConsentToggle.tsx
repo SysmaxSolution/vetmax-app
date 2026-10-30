@@ -68,7 +68,7 @@ export default function SMSConsentToggle({ tutorId, initialConsent, onToast, rea
               </button>
             </div>
             <p className="text-[10px] text-slate-500 mt-0.5">
-              {consent ? 'Tutor receberá notificações automáticas' : 'Notificações desabilitadas'}
+              {consent ? 'Responsável receberá notificações automáticas' : 'Notificações desabilitadas'}
             </p>
           </div>
         </div>
@@ -112,7 +112,7 @@ export default function SMSConsentToggle({ tutorId, initialConsent, onToast, rea
             via WhatsApp (lembretes de consulta, resultados de exames, alta de internação).
           </p>
           <p className="mt-1.5">
-            O tutor pode revogar a qualquer momento. A revogação não afeta outros serviços.
+            O responsável pode revogar a qualquer momento. A revogação não afeta outros serviços.
           </p>
           <button
             type="button"

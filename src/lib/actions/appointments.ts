@@ -282,7 +282,7 @@ export async function confirmArrival(
 
     revalidatePath('/dashboard/reception')
     revalidatePath('/dashboard/reception/calendar')
-    return { success: true, petName: pet?.name ?? 'Pet' }
+    return { success: true, petName: pet?.name ?? 'Animal' }
   } catch (err) {
     console.error('[confirmArrival]', err)
     return { error: 'Erro interno ao confirmar chegada.' }
@@ -417,7 +417,7 @@ async function conflitoDeRecurso(clinicId: string, roomId: string, inicioIso: st
     const mf = new Date(mi.getTime() + Math.max(5, Number(m.duration_minutes ?? 30)) * 60000)
     if (mi < fim && mf > inicio) {
       const pet = Array.isArray(m.patients) ? m.patients[0] : m.patients
-      ocupando.push({ nome: (pet as { name?: string } | null)?.name ?? 'outro pet', hora: mi.toTimeString().slice(0, 5) })
+      ocupando.push({ nome: (pet as { name?: string } | null)?.name ?? 'outro animal', hora: mi.toTimeString().slice(0, 5) })
     }
   }
   if (ocupando.length < capacidade) return null

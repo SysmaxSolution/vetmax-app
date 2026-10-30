@@ -72,7 +72,7 @@ export async function createSurgery(payload: {
 }): Promise<{ id: string } | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return ctx
-  if (!payload.patient_id)            return { error: 'Pet é obrigatório.' }
+  if (!payload.patient_id)            return { error: 'Animal é obrigatório.' }
   if (!payload.procedure_name?.trim()) return { error: 'Procedimento é obrigatório.' }
 
   const admin = createAdminClient()

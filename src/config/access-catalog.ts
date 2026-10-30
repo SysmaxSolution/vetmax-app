@@ -51,7 +51,7 @@ export const ACCESS_CATALOG: AccessModule[] = [
     label: 'Recepção',
     tabs: [
       { key: 'queue',         label: 'Fila de Atendimento',  actions: ['view', 'create', 'edit'] },
-      { key: 'checkin',       label: 'Check-in de Pet',      actions: ['view', 'create'] },
+      { key: 'checkin',       label: 'Check-in de Animal',      actions: ['view', 'create'] },
       { key: 'appointments',  label: 'Agendamentos',         actions: ['view', 'create', 'edit', 'delete'] },
       { key: 'history',       label: 'Histórico do Dia',     actions: ['view', 'export'] },
     ],
@@ -67,7 +67,7 @@ export const ACCESS_CATALOG: AccessModule[] = [
     tabs: [
       { key: 'attendance', label: 'Atendimento Clínico', actions: ['view', 'create', 'edit'] },
       { key: 'prescription', label: 'Prescrições e Receitas', actions: ['view', 'create', 'edit', 'delete'] },
-      { key: 'documents', label: 'Documentos do Pet',    actions: ['view', 'create', 'edit', 'delete'] },
+      { key: 'documents', label: 'Documentos do Animal',    actions: ['view', 'create', 'edit', 'delete'] },
       { key: 'pricing', label: 'Alterar Preço de Serviços', actions: ['edit'], description: 'Permite alterar o preço de itens/serviços lançados no atendimento (recepção, consultório, exames, internação, cirurgia, faturamento).' },
     ],
   },
@@ -131,18 +131,18 @@ export const ACCESS_CATALOG: AccessModule[] = [
       {
         key: 'insurance_intelligence',
         label: 'Dados Inteligentes do Convênio',
-        description: 'Repasse Petlove, desconto da clínica e economia do tutor no recebimento. Desmarque "Visualizar" para o operador ver só itens + valor a cobrar (tela limpa).',
+        description: 'Repasse Petlove, desconto da clínica e economia do responsável no recebimento. Desmarque "Visualizar" para o operador ver só itens + valor a cobrar (tela limpa).',
         actions: ['view'],
       },
     ],
   },
   {
     key:   'patients',
-    label: 'Pacientes',
+    label: 'Animais e Responsáveis',
     tabs: [
-      { key: 'list',     label: 'Lista de Pets/Tutores', actions: ['view', 'create', 'edit', 'delete'] },
-      { key: 'timeline', label: 'Histórico do Pet',     actions: ['view', 'export'] },
-      { key: 'insurance', label: 'Convênios do Pet',    actions: ['view', 'edit'] },
+      { key: 'list',     label: 'Lista de Animais/Responsáveis', actions: ['view', 'create', 'edit', 'delete'] },
+      { key: 'timeline', label: 'Histórico do Animal',     actions: ['view', 'export'] },
+      { key: 'insurance', label: 'Convênios do Animal',    actions: ['view', 'edit'] },
     ],
   },
   {

@@ -1355,7 +1355,7 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
                 <input type="number" min="0" step="0.01" value={form.unit_price} onChange={e => set('unit_price', e.target.value)}
                   placeholder="0.00"
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500" />
-                <p className="text-[10px] text-slate-400 mt-1">Valor cheio cobrado quando o pet NÃO tem convênio.</p>
+                <p className="text-[10px] text-slate-400 mt-1">Valor cheio cobrado quando o animal NÃO tem convênio.</p>
               </div>
 
               {/* Item 5 (2026-06-02): preço base de convênio + sugestão IA */}
@@ -1381,7 +1381,7 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">
-                  Aplicada automaticamente quando o tutor pagar a coparticipação do convênio no cartão.
+                  Aplicada automaticamente quando o responsável pagar a coparticipação do convênio no cartão.
                   Inclua aqui taxa da maquininha + impostos (ex.: 10% → R$ 3,02 sobre copart de R$ 30,21).
                   Não afeta dinheiro/PIX nem itens particulares.
                 </p>
@@ -1481,7 +1481,7 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
               {isService ? 'Observações / Fornecedor' : 'Fornecedor / Distribuidora'}
             </label>
             <input value={form.supplier} onChange={e => set('supplier', e.target.value)}
-              placeholder={isService ? 'Ex: Laboratório, notas…' : 'Ex: Distribuidora Pet Brasil'}
+              placeholder={isService ? 'Ex: Laboratório, notas…' : 'Ex: Distribuidora Animal Brasil'}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500" />
           </div>
 
@@ -1512,7 +1512,7 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">SKU / Cód. Interno</label>
                   <input value={form.sku} onChange={e => set('sku', e.target.value)}
-                    placeholder="Ex: PET-001"
+                    placeholder="Ex: ANIMAL-001"
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500" />
                 </div>
               )}
@@ -1716,7 +1716,7 @@ function DispenseForm({ item, onDone, onError }: {
       <input type="number" min="0.001" step="0.001" value={qty} onChange={e => setQty(e.target.value)}
         placeholder="Quantidade a dispensar"
         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500" />
-      <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Nota: consulta, paciente… (opcional)"
+      <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Nota: consulta, animal… (opcional)"
         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500" />
       <button onClick={handle} disabled={saving}
         className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-60">

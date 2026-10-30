@@ -73,7 +73,7 @@ export default function ExamRejectionSettings({ initialConfig, onToast }: Props)
         <div className="px-6 py-4 flex items-start justify-between gap-4">
           <p className="text-xs text-slate-500 leading-relaxed">
             {uses
-              ? 'O laboratório informa dentro do exame se ele foi realizado ou não realizado (com o motivo). O não realizado avisa automaticamente quem encaminhou — clínica parceira, protetor ou Médico Veterinário solicitante — e também o tutor, fica fora da cobrança e espera a decisão de recoletar ou não. O título financeiro do exame só é gerado quando o exame é realizado e liberado.'
+              ? 'O laboratório informa dentro do exame se ele foi realizado ou não realizado (com o motivo). O não realizado avisa automaticamente quem encaminhou — clínica parceira, protetor ou Médico Veterinário solicitante — e também o responsável, fica fora da cobrança e espera a decisão de recoletar ou não. O título financeiro do exame só é gerado quando o exame é realizado e liberado.'
               : 'Quando desativado, nada muda: o exame continua sendo cobrado no envio ao laboratório e nenhuma tela nova aparece.'}
           </p>
           <button

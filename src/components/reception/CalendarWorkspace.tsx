@@ -311,7 +311,7 @@ function EventDetailCard({ event, onClose, onCheckIn, onCancel, onEdit, onOpenPe
             type="button"
             disabled={!event.petId || loadingPet}
             onClick={() => event.petId && onOpenPet(event.petId)}
-            title="Abrir cadastro do pet/tutor"
+            title="Abrir cadastro do animal/responsável"
             className="flex items-center gap-2 -ml-1 px-1 py-0.5 rounded-lg hover:bg-slate-50 disabled:cursor-not-allowed group text-left"
           >
             {isAppt
@@ -333,7 +333,7 @@ function EventDetailCard({ event, onClose, onCheckIn, onCancel, onEdit, onOpenPe
         {/* Info grid */}
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-0.5">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Tutor</p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Responsável</p>
             <p className="text-sm font-medium text-slate-800">{event.tutorName || '—'}</p>
           </div>
           <div className="space-y-0.5">

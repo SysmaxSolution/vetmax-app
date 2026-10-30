@@ -83,7 +83,7 @@ export default function CsvImporter() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
           <h2 className="text-xl font-bold text-slate-900">Importação em Massa</h2>
-          <p className="text-sm text-slate-500">Migre tutores e pets de outro sistema via planilha CSV.</p>
+          <p className="text-sm text-slate-500">Migre responsáveis e animais de outro sistema via planilha CSV.</p>
         </div>
         <button 
           onClick={downloadTemplate}
@@ -123,10 +123,10 @@ export default function CsvImporter() {
             <table className="w-full text-left text-sm whitespace-nowrap">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
                 <tr>
-                  <th className="px-4 py-3 font-semibold">Tutor</th>
+                  <th className="px-4 py-3 font-semibold">Responsável</th>
                   <th className="px-4 py-3 font-semibold">CPF</th>
                   <th className="px-4 py-3 font-semibold">Telefone</th>
-                  <th className="px-4 py-3 font-semibold">Pet</th>
+                  <th className="px-4 py-3 font-semibold">Animal</th>
                   <th className="px-4 py-3 font-semibold">Espécie / Raça</th>
                 </tr>
               </thead>
@@ -190,7 +190,7 @@ export default function CsvImporter() {
               {result.success !== undefined && result.success > 0 
                 ? `${result.success} novos clientes/pets foram adicionados com sucesso ao seu banco de dados.` 
                 : result.success === 0 
-                ? 'Todos os tutores e pets desta planilha já constam no banco de dados. O sistema bloqueou as duplicidades automaticamente para manter o seu cadastro limpo.' 
+                ? 'Todos os responsáveis e animais desta planilha já constam no banco de dados. O sistema bloqueou as duplicidades automaticamente para manter o seu cadastro limpo.' 
                 : result.error}
             </p>
           </div>

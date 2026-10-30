@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Loader2, Send, Copy, Check, Smartphone, KeyRound, RefreshCw } from 'lucide-react'
 import { inviteTutorToPortal, regenerateTutorAccessCode } from '@/lib/actions/tutor-portal'
 
-/** "Convidar para a Área do Tutor" — envia link (WhatsApp) e mostra o código de acesso permanente (CPF + código). */
+/** "Convidar para a Área do Responsável" — envia link (WhatsApp) e mostra o código de acesso permanente (CPF + código). */
 export default function InvitePortalButton({ tutorId }: { tutorId: string }) {
   const [busy, setBusy] = useState(false)
   const [regen, setRegen] = useState(false)
@@ -41,8 +41,8 @@ export default function InvitePortalButton({ tutorId }: { tutorId: string }) {
         <div className="flex items-center gap-2">
           <Smartphone className="h-4 w-4 text-teal-600" />
           <div>
-            <p className="text-sm font-semibold text-slate-800">Área do Tutor</p>
-            <p className="text-[11px] text-slate-500">Acesso permanente do tutor: CPF + código, e link no WhatsApp.</p>
+            <p className="text-sm font-semibold text-slate-800">Área do Responsável</p>
+            <p className="text-[11px] text-slate-500">Acesso permanente do responsável: CPF + código, e link no WhatsApp.</p>
           </div>
         </div>
         <button type="button" onClick={handleInvite} disabled={busy}
@@ -68,9 +68,9 @@ export default function InvitePortalButton({ tutorId }: { tutorId: string }) {
             {code ? (
               <p className="mt-1 text-lg font-bold tracking-[0.25em] text-slate-800 font-mono">{code}</p>
             ) : (
-              <p className="mt-1 text-xs text-amber-700">{result.codeAlreadySet ? 'O tutor já tem um código. Se ele esqueceu, clique em "Gerar novo".' : 'Tutor sem CPF — o código exige CPF. Cadastre o CPF para habilitar.'}</p>
+              <p className="mt-1 text-xs text-amber-700">{result.codeAlreadySet ? 'O responsável já tem um código. Se ele esqueceu, clique em "Gerar novo".' : 'Responsável sem CPF — o código exige CPF. Cadastre o CPF para habilitar.'}</p>
             )}
-            <p className="text-[10px] text-amber-600 mt-1">Anote e entregue ao tutor. Ele entra sempre que quiser em <strong>Área do Tutor</strong> com CPF + este código.</p>
+            <p className="text-[10px] text-amber-600 mt-1">Anote e entregue ao responsável. Ele entra sempre que quiser em <strong>Área do Responsável</strong> com CPF + este código.</p>
           </div>
 
           {/* Link mágico */}

@@ -31,7 +31,7 @@ export interface EmojiDef {
 export const EMOJI_CATEGORIES: EmojiCategory[] = [
   { id: 'animais',    label: 'Animais',          icon: '🐶' },
   { id: 'saude',      label: 'Saúde Veterinária', icon: '🩺' },
-  { id: 'estetica',   label: 'Estética Pet',     icon: '🛁' },
+  { id: 'estetica',   label: 'Estética Animal',     icon: '🛁' },
   { id: 'simbolos',   label: 'Símbolos médicos', icon: '⚕️' },
   { id: 'avisos',     label: 'Avisos / Status',  icon: '⚠️' },
   { id: 'documentos', label: 'Documentos',       icon: '📄' },

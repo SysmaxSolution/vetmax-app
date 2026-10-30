@@ -29,7 +29,7 @@ const CAT_OPTIONS = [
   { value: 'medication',          label: 'Medicamento' },
   { value: 'controlled_medication', label: 'Medicamento Controlado' },
   { value: 'grooming_supply',     label: 'Banho e Tosa' },
-  { value: 'aesthetics',          label: 'Estética Pet' },
+  { value: 'aesthetics',          label: 'Estética Animal' },
   { value: 'vaccine',             label: 'Vacina' },
   { value: 'clinic_product',      label: 'Insumo Clínico' },
   { value: 'petshop',             label: 'Petshop' },

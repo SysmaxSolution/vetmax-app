@@ -284,7 +284,7 @@ export default function CardReconciliation() {
                         <th className="text-right px-3 py-2">Líquido</th>
                         <th className="text-right px-3 py-2">Taxa</th>
                         <th className="text-left px-3 py-2">Repasse</th>
-                        <th className="text-left px-3 py-2">{g.key === 'not_found' ? '—' : 'Pet / Obs.'}</th>
+                        <th className="text-left px-3 py-2">{g.key === 'not_found' ? '—' : 'Animal / Obs.'}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">

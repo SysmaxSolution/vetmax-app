@@ -122,7 +122,7 @@ export async function sendClientStatementWhatsApp(
   const phone = params.phone || data.client.phone
   if (!phone) {
     return { error: data.client.kind === 'tutor'
-      ? 'Tutor sem telefone cadastrado.'
+      ? 'Responsável sem telefone cadastrado.'
       : 'Clínica parceira sem telefone cadastrado.' }
   }
 

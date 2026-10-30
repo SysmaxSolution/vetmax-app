@@ -31,7 +31,7 @@ export default async function PortalMessagesPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900">Mensagens do Portal</h1>
-            <p className="text-sm text-slate-600 mt-1">Converse com os tutores que escreveram pela Área do Tutor.</p>
+            <p className="text-sm text-slate-600 mt-1">Converse com os responsáveis que escreveram pela Área do Responsável.</p>
           </div>
         </header>
         <ClinicPortalInbox />

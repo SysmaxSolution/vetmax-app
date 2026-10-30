@@ -75,7 +75,7 @@ export async function runInsuranceAudit(params: {
       `- Procedimento: "${r.procedure_name}" | Tipo: ${r.rule_type} | Severidade: ${r.severity} | Regra: ${r.rule_description}${r.justification_template ? ` | Template: "${r.justification_template}"` : ''}`
     ).join('\n')
 
-    const prompt = `Você é um auditor especialista em convênios de saúde pet no Brasil.
+    const prompt = `Você é um auditor especialista em convênios de saúde animal no Brasil.
 
 CONVÊNIO: ${provider.name} — Plano: ${ins.plan_type}
 

@@ -594,7 +594,7 @@ function NewPrescriptionForm({
         <p className="text-[10px] text-slate-400 mt-1">
           {echoLocalInput(startAt)
             ? <>Início selecionado: <b className="text-violet-700">{echoLocalInput(startAt)}</b> — confira também os minutos. A próxima dose é calculada a partir dele.</>
-            : 'A próxima dose é calculada a partir deste horário. Use um horário passado se o pet já está medicado.'}
+            : 'A próxima dose é calculada a partir deste horário. Use um horário passado se o animal já está medicado.'}
         </p>
       </div>
 

@@ -476,12 +476,12 @@ export async function addPatientDirectToVet(params: {
       payment_status:     'pending',
       is_reviewed_by_vet: false,
       inclusion_source:   'direct_inclusion',
-      vet_notes:          'Pet incluso sem consulta — exame solicitado diretamente.',
+      vet_notes:          'Animal incluso sem consulta — exame solicitado diretamente.',
     })
     .select('id')
     .single()
 
-  if (error || !data) return { error: 'Erro ao incluir paciente: ' + ((error ? mensagemErro(error, 'lib/actions/vet.ts') : '')) }
+  if (error || !data) return { error: 'Erro ao incluir animal: ' + ((error ? mensagemErro(error, 'lib/actions/vet.ts') : '')) }
 
   revalidatePath('/dashboard/vet')
   return { id: data.id }

@@ -241,11 +241,11 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
 
     const petId      = defaultPet?.id        ?? selectedPet?.id
     const tutorId    = defaultPet?.tutorId   ?? selectedPet?.tutor.id
-    const petName    = defaultPet?.name      ?? selectedPet?.name ?? 'Pet'
+    const petName    = defaultPet?.name      ?? selectedPet?.name ?? 'Animal'
     const petSpecies = defaultPet?.species   ?? selectedPet?.species ?? ''
     const tutorName  = defaultPet?.tutorName ?? selectedPet?.tutor.name ?? ''
 
-    if (!petId || !tutorId) { setError('Selecione um pet válido.'); return }
+    if (!petId || !tutorId) { setError('Selecione um animal válido.'); return }
 
     // ── Fluxo Vender Pacote (prioridade sobre grooming) ──
     if (scheduleMode === 'package') {
@@ -698,7 +698,7 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
                   <textarea
                     value={groomingNotes}
                     onChange={e => setGroomingNotes(e.target.value)}
-                    placeholder="Ex: Pet agressivo, alergia a perfume..."
+                    placeholder="Ex: Animal agressivo, alergia a perfume..."
                     rows={2}
                     className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none resize-none"
                   />
@@ -864,7 +864,7 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
                   <textarea
                     value={notes}
                     onChange={e => setNotes(e.target.value)}
-                    placeholder="Ex: Pet com histórico de ansiedade, trazer resultado de exame..."
+                    placeholder="Ex: Animal com histórico de ansiedade, trazer resultado de exame..."
                     rows={3}
                     className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm resize-none focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                   />
@@ -883,7 +883,7 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
                 </div>
                 <span className="flex items-center gap-1.5 text-sm text-slate-600">
                   <MessageCircle className="h-3.5 w-3.5 text-teal-500" />
-                  Enviar confirmação ao tutor via WhatsApp
+                  Enviar confirmação ao responsável via WhatsApp
                 </span>
               </label>
             )}

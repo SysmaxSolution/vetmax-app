@@ -142,7 +142,7 @@ export default function OperationalReport() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <StatCard label="Serviços realizados" value={result.grooming.services} />
               <StatCard label="Receita"             value={fmt(result.grooming.revenue)} />
-              <StatCard label="Tutores recorrentes" value={result.grooming.recurring_tutors} />
+              <StatCard label="Responsáveis recorrentes" value={result.grooming.recurring_tutors} />
             </div>
           )}
         </>

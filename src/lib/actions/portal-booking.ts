@@ -118,7 +118,7 @@ export async function submitPortalBooking(
   input: SubmitBookingInput,
 ): Promise<{ mode: 'reception'; requestId: string } | { mode: 'direct'; appointmentId: string } | { error: string }> {
   const r = await loadPetForTutor(input.petId)
-  if (!r.ok) return { error: r.error === 'auth' ? 'Sessão expirada.' : 'Pet não encontrado.' }
+  if (!r.ok) return { error: r.error === 'auth' ? 'Sessão expirada.' : 'Animal não encontrado.' }
   const { admin, pet } = r
   if (!input.date || !input.time) return { error: 'Escolha data e horário.' }
 

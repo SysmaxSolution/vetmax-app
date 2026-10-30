@@ -31,14 +31,14 @@ export type TagFormat =
 
 export const DYNAMIC_TAGS: DynamicTagDef[] = [
   // ── Tutor ────────────────────────────────────────────────────────────────
-  { id: 'tutor.name',    label: 'Nome do Tutor',       group: 'tutor',  path: 'tutor.name',          preview: 'Maria Silva' },
-  { id: 'tutor.cpf',     label: 'CPF do Tutor',        group: 'tutor',  path: 'tutor.cpf',           format: 'cpf_br', preview: '123.456.789-00' },
-  { id: 'tutor.phone',   label: 'Telefone do Tutor',   group: 'tutor',  path: 'tutor.phone',         format: 'phone_br', preview: '(11) 98888-7777' },
-  { id: 'tutor.email',   label: 'E-mail do Tutor',     group: 'tutor',  path: 'tutor.email',         preview: 'maria@exemplo.com' },
-  { id: 'tutor.address', label: 'Endereço do Tutor',   group: 'tutor',  path: 'tutor.address',       preview: 'Rua das Flores, 123' },
+  { id: 'tutor.name',    label: 'Nome do Responsável',       group: 'tutor',  path: 'tutor.name',          preview: 'Maria Silva' },
+  { id: 'tutor.cpf',     label: 'CPF do Responsável',        group: 'tutor',  path: 'tutor.cpf',           format: 'cpf_br', preview: '123.456.789-00' },
+  { id: 'tutor.phone',   label: 'Telefone do Responsável',   group: 'tutor',  path: 'tutor.phone',         format: 'phone_br', preview: '(11) 98888-7777' },
+  { id: 'tutor.email',   label: 'E-mail do Responsável',     group: 'tutor',  path: 'tutor.email',         preview: 'maria@exemplo.com' },
+  { id: 'tutor.address', label: 'Endereço do Responsável',   group: 'tutor',  path: 'tutor.address',       preview: 'Rua das Flores, 123' },
 
   // ── Pet ──────────────────────────────────────────────────────────────────
-  { id: 'pet.name',      label: 'Nome do Pet',         group: 'pet',    path: 'patient.name',        preview: 'Toby' },
+  { id: 'pet.name',      label: 'Nome do Animal',         group: 'pet',    path: 'patient.name',        preview: 'Toby' },
   { id: 'pet.species',   label: 'Espécie',             group: 'pet',    path: 'patient.species',     preview: 'Canino' },
   { id: 'pet.breed',     label: 'Raça',                group: 'pet',    path: 'patient.breed',       preview: 'Golden Retriever' },
   { id: 'pet.sex',       label: 'Sexo',                group: 'pet',    path: 'patient.sex',         preview: 'Macho' },
@@ -99,8 +99,8 @@ export const DYNAMIC_TAGS: DynamicTagDef[] = [
 ]
 
 export const TAG_GROUP_LABEL: Record<TagGroup | ImageTagGroup, string> = {
-  tutor:     'Tutor',
-  pet:       'Pet',
+  tutor:     'Responsável',
+  pet:       'Animal',
   consulta:  'Consulta',
   clinica:   'Clínica',
   vet:       'Médico Veterinário',

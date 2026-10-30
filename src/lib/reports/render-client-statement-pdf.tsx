@@ -152,7 +152,7 @@ function StatementDocument({ data }: { data: ClientStatementResult }) {
         {/* Identificação — o cliente precisa se reconhecer no documento */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
-            {client.kind === 'tutor' ? 'Tutor' : 'Clínica parceira / protetor'}
+            {client.kind === 'tutor' ? 'Responsável' : 'Clínica parceira / protetor'}
           </Text>
           <View style={styles.row}>
             <Field label="Nome"  value={client.name} />
@@ -223,7 +223,7 @@ function StatementDocument({ data }: { data: ClientStatementResult }) {
           <Text style={styles.cDate}>Pago em</Text>
           <Text style={styles.cDoc}>Documento</Text>
           <Text style={styles.cDesc}>Descrição</Text>
-          <Text style={styles.cPet}>Pet</Text>
+          <Text style={styles.cPet}>Animal</Text>
           <Text style={styles.cCompany}>Empresa</Text>
           <Text style={styles.cWho}>Baixa por</Text>
           <Text style={styles.cValue}>Valor</Text>
@@ -259,7 +259,7 @@ function StatementDocument({ data }: { data: ClientStatementResult }) {
           <Text style={styles.cDate}>Vencimento</Text>
           <Text style={styles.cDoc}>Documento</Text>
           <Text style={styles.oDesc}>Descrição</Text>
-          <Text style={styles.cPet}>Pet</Text>
+          <Text style={styles.cPet}>Animal</Text>
           <Text style={styles.cCompany}>Empresa</Text>
           <Text style={styles.oWho}>Atraso</Text>
           <Text style={styles.cValue}>Valor</Text>

@@ -31,7 +31,7 @@ function fmt(v: number) {
 }
 
 const MODULE_LABELS_PT: Record<string, string> = {
-  reception: 'Recepção', patients: 'Pacientes', consultation: 'Consultório',
+  reception: 'Recepção', patients: 'Animais e Responsáveis', consultation: 'Consultório',
   cashier: 'Caixa', management: 'Gestão', grooming: 'Banho e Tosa',
 }
 

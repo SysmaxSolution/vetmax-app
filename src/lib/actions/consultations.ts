@@ -182,7 +182,7 @@ export async function checkInPatientWithContacts(
     })
     .eq('id', data.tutor_id)
 
-  if (tutorErr) return { error: 'Erro ao atualizar dados do tutor: ' + mensagemErro(tutorErr, 'lib/actions/consultations.ts') }
+  if (tutorErr) return { error: 'Erro ao atualizar dados do responsável: ' + mensagemErro(tutorErr, 'lib/actions/consultations.ts') }
 
   // Bloqueia atendimento de pet com óbito registrado ou arquivado.
   const { data: petCheck } = await admin
@@ -289,7 +289,7 @@ export async function updateConsultation(
       .eq('id', updates.tutorId)
       .eq('clinic_id', profile.clinic_id)
 
-    if (tutorErr) return { error: 'Erro ao atualizar tutor: ' + mensagemErro(tutorErr, 'lib/actions/consultations.ts') }
+    if (tutorErr) return { error: 'Erro ao atualizar responsável: ' + mensagemErro(tutorErr, 'lib/actions/consultations.ts') }
   }
 
   // 2. Atualizar consulta (remover campos de tutor da atualização)

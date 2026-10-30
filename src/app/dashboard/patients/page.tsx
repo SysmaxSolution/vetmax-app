@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import PatientsWorkspace from '@/components/patients/PatientsWorkspace'
 import { getPatientsList } from '@/lib/actions/timeline'
 
-export const metadata = { title: 'Pacientes | SysVetMax' }
+export const metadata = { title: 'Animais e Responsáveis | SysVetMax' }
 
 export default async function PatientsPage() {
   const supabase = await createClient()

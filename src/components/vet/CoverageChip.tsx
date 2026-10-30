@@ -177,7 +177,7 @@ export default function CoverageChip({ state, className = '' }: Props) {
           )}
           {rendered.status === 'not_covered' && !rendered.examplePattern && (
             <p className="text-[10px] text-slate-500 leading-snug">
-              Esse procedimento não consta na cobertura do plano deste pet — cobrança particular.
+              Esse procedimento não consta na cobertura do plano deste animal — cobrança particular.
             </p>
           )}
         </div>

@@ -62,8 +62,8 @@ export async function createFullPatient(
   if (!tutorId) {
     const cpfDigits = (input.tutor.cpf ?? '').replace(/\D/g, '')
     if (cpfDigits.length !== 11)   return { error: 'CPF inválido — deve ter 11 dígitos.' }
-    if (!input.tutor.name?.trim()) return { error: 'Nome do Tutor é obrigatório.' }
-    if (!input.tutor.phone?.trim()) return { error: 'Celular do Tutor é obrigatório.' }
+    if (!input.tutor.name?.trim()) return { error: 'Nome do Responsável é obrigatório.' }
+    if (!input.tutor.phone?.trim()) return { error: 'Celular do Responsável é obrigatório.' }
 
     const { data: tutor, error: tutorErr } = await admin
       .from('tutors')
@@ -81,7 +81,7 @@ export async function createFullPatient(
       .select('id')
       .single()
 
-    if (tutorErr || !tutor) return { error: 'Erro ao salvar Tutor: ' + ((tutorErr ? mensagemErro(tutorErr, 'lib/actions/pets.ts') : '')) }
+    if (tutorErr || !tutor) return { error: 'Erro ao salvar Responsável: ' + ((tutorErr ? mensagemErro(tutorErr, 'lib/actions/pets.ts') : '')) }
     tutorId = tutor.id
   }
 
@@ -100,7 +100,7 @@ export async function createFullPatient(
     .select('id')
     .single()
 
-  if (petErr || !pet) return { error: 'Erro ao salvar Pet: ' + ((petErr ? mensagemErro(petErr, 'lib/actions/pets.ts') : '')) }
+  if (petErr || !pet) return { error: 'Erro ao salvar Animal: ' + ((petErr ? mensagemErro(petErr, 'lib/actions/pets.ts') : '')) }
   const patientId = pet.id
 
   // 3. Inserir vacinas (se houver)
@@ -372,7 +372,7 @@ export async function softDeletePatient(
     .limit(1)
     .maybeSingle()
 
-  if (active) return { error: 'O pet possui atendimento ativo. Conclua ou cancele antes de arquivar.' }
+  if (active) return { error: 'O animal possui atendimento ativo. Conclua ou cancele antes de arquivar.' }
 
   const admin = createAdminClient()
   const now = new Date().toISOString()
@@ -383,7 +383,7 @@ export async function softDeletePatient(
     .eq('clinic_id', profile.clinic_id)
     .is('deleted_at', null)
 
-  if (error) return { error: 'Erro ao arquivar pet: ' + mensagemErro(error, 'lib/actions/pets.ts') }
+  if (error) return { error: 'Erro ao arquivar animal: ' + mensagemErro(error, 'lib/actions/pets.ts') }
 
   await logAudit({
     action:      'SOFT_DELETE_PATIENT',
@@ -421,7 +421,7 @@ export async function reactivatePatient(
     .eq('clinic_id', profile.clinic_id)
     .not('deleted_at', 'is', null)
 
-  if (error) return { error: 'Erro ao reativar pet: ' + mensagemErro(error, 'lib/actions/pets.ts') }
+  if (error) return { error: 'Erro ao reativar animal: ' + mensagemErro(error, 'lib/actions/pets.ts') }
 
   await logAudit({
     action:      'REACTIVATE_PATIENT',

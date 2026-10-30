@@ -304,5 +304,5 @@ export async function getPartnerPetImaging(petId: string): Promise<{ petName: st
       link: `${origin}/public/laudo/${link}`, createdAt: (s as any).created_at,
     })
   }
-  return { petName: (pet as any)?.name ?? 'Paciente', imaging }
+  return { petName: (pet as any)?.name ?? 'Animal', imaging }
 }

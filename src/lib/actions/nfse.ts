@@ -436,7 +436,7 @@ export async function buildNfsePayload(
     .select('id, doc_number, total_amount, tutor_id, issue_date, company_id')
     .eq('id', billingDocumentId).eq('clinic_id', clinic_id).maybeSingle()
   if (!doc) return { error: 'Documento não encontrado.' }
-  if (!doc.tutor_id) return { error: 'Documento sem tutor — NFS-e exige tomador.' }
+  if (!doc.tutor_id) return { error: 'Documento sem responsável — NFS-e exige tomador.' }
 
   // Config fiscal EFETIVA da empresa faturante da nota (fallback = clínica).
   const cfg = await resolveFiscalForCompany(admin, clinic_id, (doc.company_id as string | null) ?? null)
@@ -452,7 +452,7 @@ export async function buildNfsePayload(
     .from('tutors')
     .select('name, cpf, email, cep, street, address, address_number, address_complement, neighborhood, city, state')
     .eq('id', doc.tutor_id).eq('clinic_id', clinic_id).maybeSingle()
-  if (!tutor) return { error: 'Tutor não encontrado.' }
+  if (!tutor) return { error: 'Responsável não encontrado.' }
 
   const { data: items } = await admin
     .from('billing_document_items')

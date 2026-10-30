@@ -57,8 +57,8 @@ export default function TutorCreditsPanel({ tutorId }: { tutorId: string }) {
       <Section title="Créditos utilizados" empty="Nenhum crédito utilizado ainda.">
         {used.map(m => (
           <Card key={m.id} kind="out" title={m.os_number ? `OS ${m.os_number}` : 'Uso do crédito'} amount={m.amount}>
-            <Field label="Pet" value={m.patient_name} />
-            <Field label="Tutor" value={m.tutor_name} />
+            <Field label="Animal" value={m.patient_name} />
+            <Field label="Responsável" value={m.tutor_name} />
             <Field label="Data da consulta" value={m.consultation_date ? fmtDate(m.consultation_date) : null} />
             <Field label="Crédito usado em" value={fmtDate(m.created_at)} />
             <Field label="Utilizado por" value={m.user_name} />

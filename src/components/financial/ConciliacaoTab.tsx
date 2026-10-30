@@ -614,7 +614,7 @@ export default function ConciliacaoTab({ bankAccounts, filtroEmpresas }: Props) 
                   </div>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                    <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Filtrar por descrição, tutor, documento…"
+                    <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Filtrar por descrição, responsável, documento…"
                       className="w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 py-1.5 text-xs focus:border-teal-500 focus:outline-none" />
                   </div>
 

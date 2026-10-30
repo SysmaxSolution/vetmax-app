@@ -179,8 +179,8 @@ function PatientBlock({
   const isSolid = blockStyle === 'solid'
 
   const rows: Array<[string, string | undefined]> = [
-    ['Pet',     p.patient_name],
-    ['Tutor',   p.tutor_name],
+    ['Animal',     p.patient_name],
+    ['Responsável',   p.tutor_name],
     ['Espécie', p.species],
     ['Raça',    p.breed],
     ['Idade',   p.age],

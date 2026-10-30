@@ -108,7 +108,7 @@ export default function PartnerProfessionalsPanel({ partnerClinicId }: { partner
         <KeyRound className="h-4 w-4 text-teal-600" />
         <h3 className="text-sm font-semibold text-slate-800">Profissionais &amp; Acesso ao Portal</h3>
       </div>
-      <p className="text-[11px] text-slate-500 -mt-2">O portal do veterinário deixa a clínica parceira ver os pets que encaminhou. Sem profissionais cadastrados, só o <strong>acesso geral</strong> (vê todos). Cada profissional tem um código que filtra só os que <strong>ele</strong> encaminhou.</p>
+      <p className="text-[11px] text-slate-500 -mt-2">O portal do veterinário deixa a clínica parceira ver os animais que encaminhou. Sem profissionais cadastrados, só o <strong>acesso geral</strong> (vê todos). Cada profissional tem um código que filtra só os que <strong>ele</strong> encaminhou.</p>
 
       {error && <p className="text-xs text-red-600">{error}</p>}
 

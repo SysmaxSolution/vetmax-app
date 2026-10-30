@@ -105,8 +105,8 @@ export default function BillingDocumentDetail({ documentId, onClose, onChanged, 
           <>
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <Info label="Tutor" value={doc.tutor_name} />
-                <Info label="Pet" value={doc.patient_name} />
+                <Info label="Responsável" value={doc.tutor_name} />
+                <Info label="Animal" value={doc.patient_name} />
                 <Info label="Profissional" value={doc.professional_name} />
                 <Info label="Emissão" value={fmtDate(doc.issue_date)} />
                 <Info label="Faturamento" value={fmtDate(doc.billed_date)} />

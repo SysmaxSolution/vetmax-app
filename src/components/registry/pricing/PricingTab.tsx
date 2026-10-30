@@ -221,7 +221,7 @@ export default function PricingTab({ userRole = 'admin' }: Props) {
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
             </select>
-            <p className="mt-1 text-xs text-slate-500">Aplicada ao tutor que chega direto, sem parceira.</p>
+            <p className="mt-1 text-xs text-slate-500">Aplicada ao responsável que chega direto, sem parceira.</p>
           </div>
 
           {/* Precedência */}

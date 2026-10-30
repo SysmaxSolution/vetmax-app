@@ -74,7 +74,7 @@ async function loadPending(
     consMap.set(c.id as string, {
       os: (c.os_number as string | null) ?? null,
       petId: pat?.id ?? (c.patient_id as string),
-      petName: pat?.name ?? 'Pet',
+      petName: pat?.name ?? 'Animal',
     })
   }
 
@@ -83,7 +83,7 @@ async function loadPending(
     return {
       serviceLineId: l.id as string,
       petId:      c?.petId ?? '',
-      petName:    c?.petName ?? 'Pet',
+      petName:    c?.petName ?? 'Animal',
       examName:   l.name_snapshot as string,
       reason:     l.exam_rejection_reason_id ? (reasonMap.get(l.exam_rejection_reason_id as string) ?? 'Não informado') : 'Não informado',
       note:       (l.exam_rejection_note as string | null) ?? null,
@@ -195,7 +195,7 @@ export async function submitTutorExamDecision(
 
     const res = await applyExamDecision({
       admin, clinicId: link.clinic_id, serviceLineId,
-      decision, actorKind: 'tutor', actorLabel: ctx.fullName ?? 'Tutor',
+      decision, actorKind: 'tutor', actorLabel: ctx.fullName ?? 'Responsável',
     })
     if ('error' in res) return res
     revalidatePath('/portal')

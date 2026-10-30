@@ -267,7 +267,7 @@ export default function ConsultationServicesPanel({
       {petHasInsurance && (tutorDue !== total || repassPetlove > 0) && (
         <div className="px-4 py-2.5 border-b border-slate-100 bg-indigo-50/40 grid grid-cols-2 gap-2 text-[11px]">
           <div className="flex justify-between">
-            <span className="text-slate-600">Tutor pagará (Coparticipação):</span>
+            <span className="text-slate-600">Responsável pagará (Coparticipação):</span>
             <span className="font-bold text-emerald-700 font-mono tabular-nums">{formatBRL(tutorDue)}</span>
           </div>
           <div className="flex justify-between">
@@ -457,7 +457,7 @@ export default function ConsultationServicesPanel({
                             : 'Salvar split'}
                       </button>
                       <p className="text-[9px] text-slate-400 italic">
-                        Vale para esta consulta e fica salvo no cadastro do pet para as próximas.
+                        Vale para esta consulta e fica salvo no cadastro do animal para as próximas.
                       </p>
                     </div>
                   </div>

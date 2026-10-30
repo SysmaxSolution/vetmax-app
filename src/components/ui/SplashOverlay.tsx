@@ -74,7 +74,7 @@ export function SplashOverlay() {
             SysVetMax
           </div>
           <div className="splash-tag mt-1.5 text-[11px] md:text-xs uppercase tracking-[0.18em] text-emerald-300">
-            Cuidando do pet e de você
+            Cuidando do animal e de você
           </div>
           <div className="splash-progress mt-7 mx-auto" />
         </div>

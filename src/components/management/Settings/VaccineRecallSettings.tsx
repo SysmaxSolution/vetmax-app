@@ -65,7 +65,7 @@ export default function VaccineRecallSettings({ initialConfig, onToast }: {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-slate-900">Aviso automático de vacina (recall)?</h3>
-            <p className="text-xs text-slate-500">Mensagem de WhatsApp ao Tutor quando a próxima dose está chegando</p>
+            <p className="text-xs text-slate-500">Mensagem de WhatsApp ao Responsável quando a próxima dose está chegando</p>
           </div>
         </div>
         <button
@@ -81,8 +81,8 @@ export default function VaccineRecallSettings({ initialConfig, onToast }: {
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
           <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
           <p className="text-[11px] text-amber-800">
-            <strong>Ligar isto ENVIA MENSAGENS DE WHATSAPP AOS TUTORES</strong>, automaticamente, todos os dias no
-            horário escolhido, em nome da clínica. Certifique-se de que os tutores consentiram receber avisos
+            <strong>Ligar isto ENVIA MENSAGENS DE WHATSAPP AOS RESPONSÁVEIS</strong>, automaticamente, todos os dias no
+            horário escolhido, em nome da clínica. Certifique-se de que os responsáveis consentiram receber avisos
             (LGPD) — o envio em massa sem consentimento também aumenta o risco de bloqueio do número.
             Cada vacina é avisada uma única vez.
           </p>
@@ -114,7 +114,7 @@ export default function VaccineRecallSettings({ initialConfig, onToast }: {
           <p className="text-xs text-slate-500">
             {uses
               ? `Uma vez por dia, a partir das ${String(hour).padStart(2, '0')}:00, o sistema avisa por WhatsApp os tutores dos pets com vacina vencendo nos próximos ${days} dia(s). Cada vacina é avisada uma única vez.`
-              : 'Quando desativado, nenhuma mensagem automática de vacina é enviada. Ligar o Portal do Tutor, sozinho, NÃO dispara esses avisos.'}
+              : 'Quando desativado, nenhuma mensagem automática de vacina é enviada. Ligar o Portal do Responsável, sozinho, NÃO dispara esses avisos.'}
           </p>
           <button
             onClick={handleSave}

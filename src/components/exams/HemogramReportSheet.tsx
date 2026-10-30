@@ -219,7 +219,7 @@ function PageHeader({ d }: { d: ExamReportData }) {
         </div>
 
         <div className="ld-block">
-          <div className="ld-lbl">Tutor:</div>
+          <div className="ld-lbl">Responsável:</div>
           <div className="ld-vals">
             <div className="ld-strong">{d.header.tutor.name ?? '—'}</div>
             <div className="ld-strong">

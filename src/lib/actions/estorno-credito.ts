@@ -54,7 +54,7 @@ async function reverterUsoDeCredito(
   motivo: string,
 ): Promise<{ ok: true; devolvido: number } | { error: string }> {
   if (titulo.status === 'cancelled') return { error: 'Esta utilização de crédito já foi estornada.' }
-  if (!titulo.invoice_id || !titulo.tutor_id) return { error: 'Utilização de crédito sem fatura ou sem tutor — não dá para estornar automaticamente.' }
+  if (!titulo.invoice_id || !titulo.tutor_id) return { error: 'Utilização de crédito sem fatura ou sem responsável — não dá para estornar automaticamente.' }
 
   const invoiceId = titulo.invoice_id
   const short = invoiceId.slice(0, 8)
@@ -71,7 +71,7 @@ async function reverterUsoDeCredito(
   }
   const disponivel = r2(usado - devolvidoAntes)
   const devolver = r2(Math.min(Number(titulo.amount), Math.max(0, disponivel)))
-  if (devolver <= 0.005) return { error: 'O crédito desta fatura já foi devolvido ao tutor.' }
+  if (devolver <= 0.005) return { error: 'O crédito desta fatura já foi devolvido ao responsável.' }
 
   // 2) Devolve o saldo no extrato do tutor, na empresa que o consumiu.
   //    (Transferências entre CNPJs feitas no uso permanecem: o dinheiro

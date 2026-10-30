@@ -78,7 +78,7 @@ export default async function CoverageChip(props: Props) {
             <p className="mt-1 inline-flex items-center gap-1 opacity-90">
               <Wallet className="h-3 w-3" />
               {res.copay_charger === 'clinic'   && 'Cobrar no caixa'}
-              {res.copay_charger === 'provider' && 'Cobrança automática no cartão do tutor'}
+              {res.copay_charger === 'provider' && 'Cobrança automática no cartão do responsável'}
               {res.copay_charger === 'mixed'    && 'Coparticipação dividida'}
             </p>
           )}

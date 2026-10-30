@@ -130,7 +130,7 @@ export default async function PublicVaccinesPage({ params }: { params: Promise<{
 
           {(tutorName || tutorCpfMasked) && (
             <>
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 mt-4">Tutor responsável</h2>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 mt-4">Responsável responsável</h2>
               <ResenhaRow label="Nome" value={tutorName} />
               <ResenhaRow label="CPF" value={tutorCpfMasked} />
             </>

@@ -43,7 +43,7 @@ export default function ImagingWorkspace({ studies, partners, services = [], rol
             <FileImage className="h-6 w-6 text-teal-600" />Imagem & Laudos
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Entrega de imagens e laudos ao veterinário solicitante e ao tutor.
+            Entrega de imagens e laudos ao veterinário solicitante e ao responsável.
           </p>
         </div>
         <button onClick={() => setShowCreate(true)}
@@ -63,7 +63,7 @@ export default function ImagingWorkspace({ studies, partners, services = [], rol
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs uppercase text-slate-400 border-b border-slate-100">
-                <th className="px-4 py-3 font-semibold">Paciente</th>
+                <th className="px-4 py-3 font-semibold">Animal</th>
                 <th className="px-4 py-3 font-semibold">Exame</th>
                 <th className="px-4 py-3 font-semibold">Solicitante</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
@@ -95,7 +95,7 @@ export default function ImagingWorkspace({ studies, partners, services = [], rol
                     <div className="flex gap-1.5 mt-1">
                       {s.images_uploaded_at && <span title="Imagens enviadas"><FileImage className="h-3.5 w-3.5 text-amber-500" /></span>}
                       {s.laudo_released_at && <span title="Laudo liberado"><CheckCircle2 className="h-3.5 w-3.5 text-green-500" /></span>}
-                      {s.released_to_tutor_at && <span title="Liberado ao tutor" className="text-[10px] text-slate-400">tutor</span>}
+                      {s.released_to_tutor_at && <span title="Liberado ao responsável" className="text-[10px] text-slate-400">responsável</span>}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-400 flex items-center gap-1"><Clock className="h-3 w-3" />{fmt(s.created_at)}</td>

@@ -128,7 +128,7 @@ export default function PackagesTab({ userRole }: Props) {
           <Gift className="h-12 w-12 text-slate-200" />
           <p className="text-slate-500 font-medium">Nenhum pacote cadastrado</p>
           <p className="text-sm text-slate-400 max-w-xs">
-            Crie pacotes de banho, tosa ou protocolos de vacinas para oferecer aos tutores.
+            Crie pacotes de banho, tosa ou protocolos de vacinas para oferecer aos responsáveis.
           </p>
         </div>
       ) : (
@@ -519,7 +519,7 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
               />
               <div className="flex-1">
                 <p className="text-xs text-teal-700 font-medium">
-                  Quantas vezes o pet será atendido com este pacote
+                  Quantas vezes o animal será atendido com este pacote
                 </p>
                 {autoTotal > 0 && totalOverridden && parseInt(form.total_sessions) !== autoTotal && (
                   <button

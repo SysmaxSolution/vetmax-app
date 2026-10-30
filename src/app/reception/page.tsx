@@ -4,7 +4,7 @@ export default function ReceptionPage() {
   return (
     <main>
       <h1>Recepção SysVetMax</h1>
-      <p>Em construção — cadastro de Tutor e Pet</p>
+      <p>Em construção — cadastro de Responsável e Animal</p>
     </main>
   )
 }

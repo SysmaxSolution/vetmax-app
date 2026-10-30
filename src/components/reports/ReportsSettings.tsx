@@ -13,7 +13,7 @@ interface Props {
 // admin não tinha como desligá-las. Padrão de todas: ligadas (ver
 // REPORTS_DEFAULTS em reports-g13.ts) — o que muda é poder desligar.
 const LABELS: Record<keyof ReportsEnabled, string> = {
-  pet_frequency:   'Periodicidade por Pet',
+  pet_frequency:   'Periodicidade por Animal',
   productivity:    'Produtividade por Profissional',
   financial:       'Financeiro (Receber/Pagar)',
   dre:             'DRE — Demonstração de Resultado',

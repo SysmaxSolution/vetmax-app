@@ -235,7 +235,7 @@ export async function getClientStatement(params: {
       .eq('clinic_id', ctx.clinic_id)
       .eq('id', params.client_id)
       .single()
-    if (!t) return { error: 'Tutor não encontrado nesta clínica.' }
+    if (!t) return { error: 'Responsável não encontrado nesta clínica.' }
     const tt = t as { id: string; name: string; cpf: string | null; phone: string | null; email: string | null }
     client = { kind: 'tutor', id: tt.id, name: tt.name, document: tt.cpf, phone: tt.phone, email: tt.email }
   } else {

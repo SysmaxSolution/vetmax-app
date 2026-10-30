@@ -27,8 +27,8 @@ interface Props {
 export default function PortalShell({
   brand, tutorName, showLogout, showClinicSwitch, children,
 }: Props) {
-  const title = brand.clinicName ?? 'Área do Tutor'
-  const eyebrow = brand.theme.tagline ?? (brand.clinicName ? 'Portal do Tutor' : 'SYSVETMAX')
+  const title = brand.clinicName ?? 'Área do Responsável'
+  const eyebrow = brand.theme.tagline ?? (brand.clinicName ? 'Portal do Responsável' : 'SYSVETMAX')
 
   return (
     <div

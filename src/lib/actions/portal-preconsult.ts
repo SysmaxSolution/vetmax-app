@@ -38,8 +38,8 @@ export async function submitPreconsultation(input: PreconsultInput): Promise<{ o
   const admin = createAdminClient()
   const { data: pet } = await admin
     .from('patients').select('id, tutor_id, clinic_id').eq('id', input.petId).is('deleted_at', null).maybeSingle()
-  if (!pet) return { error: 'Pet não encontrado.' }
-  if (!canAccessPatient((pet as any).tutor_id, (pet as any).clinic_id, ctx.links)) return { error: 'Sem acesso a este pet.' }
+  if (!pet) return { error: 'Animal não encontrado.' }
+  if (!canAccessPatient((pet as any).tutor_id, (pet as any).clinic_id, ctx.links)) return { error: 'Sem acesso a este animal.' }
 
   const { error } = await admin.from('portal_preconsultations').insert({
     clinic_id: (pet as any).clinic_id, patient_id: (pet as any).id, tutor_user_id: ctx.tutorUserId,

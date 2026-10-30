@@ -155,7 +155,7 @@ export default function OmnisearchPalette({
             ref={inputRef}
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Buscar pet, tutor, atendimento, conversa…"
+            placeholder="Buscar animal, responsável, atendimento, conversa…"
             className="flex-1 bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
           />
           {loading && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}

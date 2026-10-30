@@ -844,7 +844,7 @@ export async function getPatientsList(
     }
 
     const { data: patients, error: pError } = await patientsQuery.limit(100)
-    if (pError) return { error: 'Erro ao buscar pacientes: ' + mensagemErro(pError, 'lib/actions/timeline.ts') }
+    if (pError) return { error: 'Erro ao buscar animais: ' + mensagemErro(pError, 'lib/actions/timeline.ts') }
     if (!patients?.length) return []
 
     const tutorIds = [...new Set(patients.map(p => p.tutor_id).filter(Boolean))] as string[]
@@ -888,7 +888,7 @@ export async function getPatientsList(
     }))
   } catch (err) {
     console.error('[getPatientsList] error:', err)
-    return { error: 'Erro ao listar pacientes.' }
+    return { error: 'Erro ao listar animais.' }
   }
 }
 
@@ -913,7 +913,7 @@ export async function getPatientById(
       .is('deleted_at', null)
       .single()
 
-    if (pErr || !p) return { error: 'Paciente não encontrado.' }
+    if (pErr || !p) return { error: 'Animal não encontrado.' }
 
     const { data: tutor } = await admin
       .from('tutors')
@@ -948,6 +948,6 @@ export async function getPatientById(
       last_visit:           null,
     }
   } catch {
-    return { error: 'Erro ao buscar paciente.' }
+    return { error: 'Erro ao buscar animal.' }
   }
 }

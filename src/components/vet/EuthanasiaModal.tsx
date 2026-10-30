@@ -206,7 +206,7 @@ export default function EuthanasiaModal({
 
           {/* Consentimento do tutor */}
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
-            <p className="text-xs font-bold text-slate-700">Consentimento do Tutor (LGPD Art. 7 + CFMV)</p>
+            <p className="text-xs font-bold text-slate-700">Consentimento do Responsável (LGPD Art. 7 + CFMV)</p>
             <div className="flex items-center gap-2.5">
               <button
                 type="button"

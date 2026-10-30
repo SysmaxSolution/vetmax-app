@@ -23,8 +23,8 @@ const CAMPAIGN_DEFS: {
 }[] = [
   {
     type:        'no_visit',
-    label:       'Reativação de Tutores Inativos',
-    description: 'Envia mensagem para tutores sem consulta ou tosa há mais de X dias.',
+    label:       'Reativação de Responsáveis Inativos',
+    description: 'Envia mensagem para responsáveis sem consulta ou tosa há mais de X dias.',
     showDays:    true,
     daysLabel:   'Dias sem visita',
     defaultDays: 30,
@@ -32,7 +32,7 @@ const CAMPAIGN_DEFS: {
   {
     type:        'vaccine_due',
     label:       'Lembrete de Vacina',
-    description: 'Avisa tutores sobre vacinas vencendo em breve.',
+    description: 'Avisa responsáveis sobre vacinas vencendo em breve.',
     showDays:    true,
     daysLabel:   'Antecedência (dias)',
     defaultDays: 15,
@@ -40,7 +40,7 @@ const CAMPAIGN_DEFS: {
   {
     type:        'pending_return',
     label:       'Retorno Pendente',
-    description: 'Lembra tutores de retornos agendados que não foram realizados.',
+    description: 'Lembra responsáveis de retornos agendados que não foram realizados.',
     showDays:    true,
     daysLabel:   'Dias em atraso',
     defaultDays: 7,
@@ -48,7 +48,7 @@ const CAMPAIGN_DEFS: {
   {
     type:        'grooming_due',
     label:       'Banho e Tosa',
-    description: 'Lembra tutores cujo pet não faz banho/tosa há mais de X dias.',
+    description: 'Lembra responsáveis cujo animal não faz banho/tosa há mais de X dias.',
     showDays:    true,
     daysLabel:   'Dias sem banho/tosa',
     defaultDays: 45,
@@ -56,7 +56,7 @@ const CAMPAIGN_DEFS: {
   {
     type:        'appointment_confirmation',
     label:       'Confirmação de Agendamento',
-    description: 'Bot pergunta ao tutor X dias antes se confirma, remarca ou cancela o agendamento. Resposta atualiza a agenda automaticamente.',
+    description: 'Bot pergunta ao responsável X dias antes se confirma, remarca ou cancela o agendamento. Resposta atualiza a agenda automaticamente.',
     showDays:    true,
     daysLabel:   'Antecedência (dias)',
     defaultDays: 1,

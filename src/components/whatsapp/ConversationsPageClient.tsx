@@ -113,7 +113,7 @@ function Avatar({
     return (
       <img
         src={photoUrl}
-        alt={name ?? 'Tutor'}
+        alt={name ?? 'Responsável'}
         className={`${sizeClass} rounded-full object-cover flex-shrink-0`}
         onError={(e) => { (e.currentTarget as HTMLImageElement).src = '' ; (e.currentTarget as HTMLImageElement).style.display = 'none' }}
       />
@@ -913,7 +913,7 @@ export default function ConversationsPageClient({
                       className={`flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg transition-colors ${
                         showClinicalCtx ? 'bg-teal-600 text-white' : 'text-teal-700 bg-teal-50 hover:bg-teal-100'
                       }`}
-                      title="Contexto Clínico do Tutor">
+                      title="Contexto Clínico do Responsável">
                       <Brain className="h-3.5 w-3.5" />
                       <span className="hidden sm:inline">Contexto</span>
                     </button>
@@ -1234,7 +1234,7 @@ export default function ConversationsPageClient({
                 <Spinner className="text-teal-600" />
               </div>
             ) : linkConsultations.length === 0 ? (
-              <p className="text-xs text-slate-400 px-3 py-3">Nenhuma consulta encontrada para este tutor.</p>
+              <p className="text-xs text-slate-400 px-3 py-3">Nenhuma consulta encontrada para este responsável.</p>
             ) : (
               <ul className="py-1 max-h-52 overflow-y-auto">
                 {linkConsultations.map((c) => (

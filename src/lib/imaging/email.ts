@@ -37,7 +37,7 @@ function shell(inner: string): string {
 
 function detailsBox(p: ImagingEmailParams): string {
   const rows = [
-    ['Paciente', p.petName],
+    ['Animal', p.petName],
     ['Exame', p.studyTitle || p.modality || 'Exame de imagem'],
     ['Solicitado por', p.vetName || '—'],
     ['Local', p.clinicName],

@@ -168,7 +168,7 @@ export default function AmbraSettings({ onToast }: { onToast: Toast }) {
           <ExternalLink className="h-4 w-4 text-slate-400" />Segurança do link de visualização
         </h4>
         <p className="text-xs text-slate-500">
-          O link vai por e-mail e WhatsApp para o tutor e para o veterinário solicitante. Link eterno
+          O link vai por e-mail e WhatsApp para o responsável e para o veterinário solicitante. Link eterno
           e de uso ilimitado circulando em WhatsApp é vazamento de imagem médica — por isso ele
           nasce com prazo e teto de acessos.
         </p>

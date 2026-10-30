@@ -249,7 +249,7 @@ export async function checkProcedureCoverage(args: {
   if (!insurance) {
     return {
       status:  'no_insurance',
-      message: 'Pet sem convênio ativo — cobrar particular',
+      message: 'Animal sem convênio ativo — cobrar particular',
       badge:   'gray',
     }
   }

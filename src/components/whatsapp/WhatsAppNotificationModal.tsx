@@ -19,7 +19,7 @@ import { voiceLock, VOICE_PRIORITY, generateVoiceOwnerId } from '@/lib/voice/loc
 
 const EMOJI_CATEGORIES = [
   { label: 'Expressões', emojis: ['😊','😀','😂','🤩','😍','🥰','🙏','👍','👏','🎉','✅','💪','🤝','😎','🥳','😢','😅','🤗','💯','🔥'] },
-  { label: 'Pets',       emojis: ['🐶','🐱','🐰','🐹','🐦','🦎','🐠','🐾','🦴','🐕','🐈','🐇','🦜','🐿️','🐻','🦊','🐭','🐸','🦔','🐾'] },
+  { label: 'Animais',       emojis: ['🐶','🐱','🐰','🐹','🐦','🦎','🐠','🐾','🦴','🐕','🐈','🐇','🦜','🐿️','🐻','🦊','🐭','🐸','🦔','🐾'] },
   { label: 'Saúde',      emojis: ['💊','💉','🩺','🩹','🏥','❤️‍🩹','🌡️','🔬','🧬','🩻','🦷','👁️','💓','🫀','🧠','🩸','😷','🧪','⚕️','🏨'] },
   { label: 'Símbolos',   emojis: ['✨','⭐','🌟','💡','✔️','⚠️','🚨','📍','📋','📄','📱','💬','📞','📝','🔔','⏰','💰','🎯','📅','🔑'] },
 ]
@@ -99,43 +99,43 @@ interface Props {
 // ─── Títulos por trigger ──────────────────────────────────────────────────────
 
 const TRIGGER_TITLES: Record<WhatsAppTrigger, string> = {
-  triage_called:                   'Avisar Tutor — Chamada para Triagem',
-  triage_completed:                'Avisar Tutor — Triagem Concluída',
-  documents_sent:                  'Enviar Documentos ao Tutor',
-  exam_completed:                  'Avisar Tutor — Exame Realizado',
-  hospitalization_update:          'Atualizar Tutor — Evolução Clínica',
-  hospitalization_discharge:       'Avisar Tutor — Alta da Internação',
+  triage_called:                   'Avisar Responsável — Chamada para Triagem',
+  triage_completed:                'Avisar Responsável — Triagem Concluída',
+  documents_sent:                  'Enviar Documentos ao Responsável',
+  exam_completed:                  'Avisar Responsável — Exame Realizado',
+  hospitalization_update:          'Atualizar Responsável — Evolução Clínica',
+  hospitalization_discharge:       'Avisar Responsável — Alta da Internação',
   hospitalization_evolution_saved: 'Boletim de Plantão — Nova Evolução Registrada',
-  hospitalization_status_changed:  'Avisar Tutor — Transferência de Ala',
-  sent_to_review:                  'Avisar Tutor — Revisão Clínica Pós-Internação',
+  hospitalization_status_changed:  'Avisar Responsável — Transferência de Ala',
+  sent_to_review:                  'Avisar Responsável — Revisão Clínica Pós-Internação',
   consultation_finished:           'Mensagem de Alta — Consulta Concluída',
-  hospitalization_started:         'Avisar Tutor — Pet Admitido na Internação',
-  grooming_ready_for_pickup:       'Avisar Tutor — Pet Pronto para Retirada',
+  hospitalization_started:         'Avisar Responsável — Animal Admitido na Internação',
+  grooming_ready_for_pickup:       'Avisar Responsável — Animal Pronto para Retirada',
   grooming_delivered:              'Mensagem de Agradecimento — Entrega Realizada',
-  grooming_evolution_saved:        'Atualização do Banho e Tosa para o Tutor',
+  grooming_evolution_saved:        'Atualização do Banho e Tosa para o Responsável',
   appointment_scheduled:           'Confirmação de Agendamento',
-  sale_receipt:                    'Enviar Recibo de Venda ao Tutor',
+  sale_receipt:                    'Enviar Recibo de Venda ao Responsável',
   package_renewal:                 'Renovação de Pacote / Plano',
 }
 
 const TRIGGER_SUBTITLES: Record<WhatsAppTrigger, string> = {
-  triage_called:                   'Notificar que chegou a vez do pet',
+  triage_called:                   'Notificar que chegou a vez do animal',
   triage_completed:                'Compartilhar sinais vitais e aguardar veterinário',
   documents_sent:                  'Enviar documentos gerados na consulta',
   exam_completed:                  'Informar que o resultado foi encaminhado ao MV',
-  hospitalization_update:          'Atualizar sobre o estado do pet internado',
-  hospitalization_discharge:       'Informar que o pet recebeu alta e pode ir pra casa',
+  hospitalization_update:          'Atualizar sobre o estado do animal internado',
+  hospitalization_discharge:       'Informar que o animal recebeu alta e pode ir pra casa',
   hospitalization_evolution_saved: 'Boletim rápido e carinhoso com atualização do plantão',
   hospitalization_status_changed:  'Informar transferência entre alas (UTI, Enfermaria, Observação)',
-  sent_to_review:                  'Informar que o pet voltou para consulta de revisão com o MV',
+  sent_to_review:                  'Informar que o animal voltou para consulta de revisão com o MV',
   consultation_finished:           'Resumo carinhoso com diagnóstico, exames e recomendações',
   hospitalization_started:         'Informar motivo, ala e que a equipe está cuidando com atenção',
-  grooming_ready_for_pickup:       'Avisar que o serviço foi concluído e o pet está esperando',
+  grooming_ready_for_pickup:       'Avisar que o serviço foi concluído e o animal está esperando',
   grooming_delivered:              'Agradecer a visita e convidar para a próxima sessão',
-  grooming_evolution_saved:        'Informar que o pet está sendo atendido e tudo corre bem',
+  grooming_evolution_saved:        'Informar que o animal está sendo atendido e tudo corre bem',
   appointment_scheduled:           'Confirmar data, horário e orientar sobre pontualidade',
   sale_receipt:                    'Comprovante de venda com itens e forma de pagamento',
-  package_renewal:                 'Convidar tutor a renovar o pacote/plano do pet',
+  package_renewal:                 'Convidar responsável a renovar o pacote/plano do animal',
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -478,7 +478,7 @@ export default function WhatsAppNotificationModal({
                   onChange={(e) => setMessage(e.target.value.slice(0, 4096))}
                   rows={6}
                   className="w-full text-sm text-slate-800 border border-slate-200 rounded-xl p-3 pr-10 resize-none focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent bg-slate-50 leading-relaxed"
-                  placeholder="Mensagem para o tutor..."
+                  placeholder="Mensagem para o responsável..."
                 />
                 <button
                   type="button"

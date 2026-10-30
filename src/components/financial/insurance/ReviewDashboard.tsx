@@ -49,7 +49,7 @@ export default function ReviewDashboard({
   }
 
   function handleRunEngine() {
-    setEngineMsg('Cruzando ' + data.remittance.lines_total + ' linhas com pets, consultas e invoice_items…')
+    setEngineMsg('Cruzando ' + data.remittance.lines_total + ' linhas com animais, consultas e invoice_items…')
     startTransition(async () => {
       const result = await runMatchEngine(data.remittance.id)
       if ('error' in result) {
@@ -142,7 +142,7 @@ export default function ReviewDashboard({
           <div className="flex-1">
             <p className="font-semibold text-amber-900">Esta remessa ainda não foi cruzada</p>
             <p className="text-sm text-amber-700 mt-0.5">
-              Clique para o sistema procurar pets, consultas e procedimentos no banco da clínica.
+              Clique para o sistema procurar animais, consultas e procedimentos no banco da clínica.
             </p>
             {engineMsg && <p className="text-xs text-amber-600 mt-2">{engineMsg}</p>}
           </div>
@@ -163,8 +163,8 @@ export default function ReviewDashboard({
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-5">{/* keepalive */}
           <div className="flex items-center gap-2 mb-3">
             <PawPrint className="h-4 w-4 text-slate-400" />
-            <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Pets na remessa</h2>
-            <span className="text-xs text-slate-400 ml-auto">distintos por chip ou nome+tutor</span>
+            <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Animais na remessa</h2>
+            <span className="text-xs text-slate-400 ml-auto">distintos por chip ou nome+responsável</span>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <PetStatBox
@@ -251,7 +251,7 @@ export default function ReviewDashboard({
           onClick={() => setActiveTab('missing_patient_profile')}
           count={data.counts.unique_pets_to_register}
           value={data.counts.missing_patient_value}
-          label="Novos Pets"
+          label="Novos Animais"
           sublabel={`${data.counts.missing_patient_profile} linha${data.counts.missing_patient_profile !== 1 ? 's' : ''}`}
         />
       </div>
@@ -261,7 +261,7 @@ export default function ReviewDashboard({
         {activeTab === 'matched' && (
           <LineList
             heading="Atendimentos Casados"
-            description="O sistema encontrou o pet, a consulta e o invoice_item com valor dentro da tolerância."
+            description="O sistema encontrou o animal, a consulta e o invoice_item com valor dentro da tolerância."
             lines={data.matched}
             emptyHint="Execute o matching para ver os casados."
             tone="green"
@@ -270,7 +270,7 @@ export default function ReviewDashboard({
         {activeTab === 'partial' && (
           <LineList
             heading="Cadastros Desatualizados / Divergências"
-            description="Match parcial: cadastro do pet precisa ser atualizado ou houve drift de valor."
+            description="Match parcial: cadastro do animal precisa ser atualizado ou houve drift de valor."
             lines={data.partial}
             emptyHint="Nenhuma divergência encontrada nesta remessa."
             tone="amber"
@@ -336,7 +336,7 @@ export default function ReviewDashboard({
                 <div className="text-xs text-slate-700 mt-1 space-y-0.5">
                   <p>
                     O sistema vai processar <strong>{data.remittance.lines_total}</strong> linhas
-                    {data.counts.unique_pets_total > 0 && <> de <strong>{data.counts.unique_pets_total}</strong> pets</>}
+                    {data.counts.unique_pets_total > 0 && <> de <strong>{data.counts.unique_pets_total}</strong> animais</>}
                     {' '}totalizando{' '}
                     <strong className="text-emerald-700">{formatBRL(data.remittance.total_gross_value)}</strong>:
                   </p>
@@ -351,7 +351,7 @@ export default function ReviewDashboard({
                     {data.counts.orphan_invoice > 0 && (
                       <li>• <strong>{data.counts.orphan_invoice}</strong> lançamento{data.counts.orphan_invoice !== 1 ? 's' : ''} retroativo{data.counts.orphan_invoice !== 1 ? 's' : ''} (Petlove pagou e o sistema não tinha invoice)</li>
                     )}
-                    <li>• <strong>~{data.remittance.lines_total}</strong> preços fixados nos perfis dos pets</li>
+                    <li>• <strong>~{data.remittance.lines_total}</strong> preços fixados nos perfis dos animais</li>
                     {data.remittance.referral_bonus_value > 0 && (
                       <li>• Bônus de indicação <strong>{formatBRL(data.remittance.referral_bonus_value)}</strong> como título avulso</li>
                     )}

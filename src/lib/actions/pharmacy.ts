@@ -582,10 +582,10 @@ RETORNE UM JSON com exatamente estas ${totalKeys} chaves: ${dynamicKeys}
 
 6. "pet_profile_updates": objeto com fofocas e fatos novos sobre o histórico fixo do paciente (Cadastro Vivo) que não sejam apenas desta consulta.
    {"medical_history": "novo histórico/alergia ou null", "reproductive_status": "Castrado|Inteiro ou null", "coat_color": "cor da pelagem ou null", "behavior_tags": ["Agressivo", "Medroso", "Dócil"] ou []}
-   Exemplo: Se o médico disser "Tutor relata que ele desenvolveu alergia a frango", adicione isso ao medical_history. Se disser "Foi castrado semana passada", coloque "Castrado". Se não houver atualizações cadastrais, retorne {"medical_history": null, "reproductive_status": null, "coat_color": null, "behavior_tags": []}.${triageBlock}${examsBlock}
+   Exemplo: Se o médico disser "Responsável relata que ele desenvolveu alergia a frango", adicione isso ao medical_history. Se disser "Foi castrado semana passada", coloque "Castrado". Se não houver atualizações cadastrais, retorne {"medical_history": null, "reproductive_status": null, "coat_color": null, "behavior_tags": []}.${triageBlock}${examsBlock}
 
 7. "suggested_routing": string com a intenção do médico para o fim da consulta. 
-   Retorne "discharge" se ele disser "dar alta", "liberar paciente", "vai para casa". 
+   Retorne "discharge" se ele disser "dar alta", "liberar animal", "vai para casa". 
    Retorne "hospitalization" se ele disser "internar", "vai para UTI", "ficará em observação". 
    Retorne "exams" se ele disser "aguardar exames", "fazer ultrassom agora". 
    Retorne null se não houver clareza.
@@ -661,7 +661,7 @@ export async function extractHospitalizationVoice(transcript: string) {
   RETORNE ESTE JSON:
   {
     "improvement_level": "melhorou" | "estavel" | "piorou",
-    "notes": "Resumo clínico detalhado da evolução do paciente",
+    "notes": "Resumo clínico detalhado da evolução do animal",
     "medications": [
       { "name": "Nome do remédio", "dose": "Dose", "route": "Via de admin", "notes": "Frequência/Obs" }
     ]

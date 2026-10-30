@@ -22,8 +22,11 @@ Leia sempre `vetmax-docs.md` e `.clauderules`.
 6.  **Design System**: Toda UI segue `DESIGN_SYSTEM.md` (tokens em `globals.css` + `Skeleton`/`Spinner` compartilhados). Ação primária = teal; cor de módulo só para navegação; loading sempre com skeleton; motion 120–240ms com reduced-motion.
 
 ## Terminologia Técnica (CFMV)
-- Pet/Animal (não usar "Paciente" na interface)
-- Tutor (termo técnico legal, não usar "Dono")
+- **Animal** na interface (decisão do cliente em 30/10/2026; não usar "Pet" nem "Paciente")
+- **Responsável** na interface (decisão do cliente em 30/10/2026; não usar "Tutor" nem "Dono").
+  O banco segue com `patients` e `tutors` — a troca foi só de texto visível; textos
+  legais (DPA, política de privacidade, termos) mantêm "tutor", que é o termo da norma.
+- Módulo "Pacientes" chama-se **Animais e Responsáveis**
 - Médico Veterinário / MV (não usar apenas "Médico")
 - Auxiliar Veterinário
 

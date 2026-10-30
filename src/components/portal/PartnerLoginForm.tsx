@@ -28,7 +28,7 @@ export default function PartnerLoginForm() {
         <Stethoscope className="h-6 w-6 text-[var(--pt-accent)]" />
       </div>
       <h1 className="text-2xl text-[var(--pt-text)] text-center" style={serif}>Portal do Veterinário</h1>
-      <p className="text-sm text-[var(--pt-muted)] mt-1.5 text-center">Veja os resultados dos pets que você encaminhou. Entre com o código de acesso da sua clínica.</p>
+      <p className="text-sm text-[var(--pt-muted)] mt-1.5 text-center">Veja os resultados dos animais que você encaminhou. Entre com o código de acesso da sua clínica.</p>
 
       <form onSubmit={submit} className="mt-6 space-y-3">
         <div>

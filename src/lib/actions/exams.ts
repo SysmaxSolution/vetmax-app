@@ -569,7 +569,7 @@ async function loadSample(admin: ReturnType<typeof createAdminClient>, clinicId:
   return {
     consultation_id: c.id as string,
     sample_code: (c.os_number as string | null) ?? (c.id as string).slice(0, 8),
-    patient_name: pat?.name ?? 'Pet',
+    patient_name: pat?.name ?? 'Animal',
     species: pat?.species ?? null,
     tutor_name: tut?.name ?? null,
     status: c.status as string,

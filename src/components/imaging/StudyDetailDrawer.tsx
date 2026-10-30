@@ -90,7 +90,7 @@ export default function StudyDetailDrawer({ studyId, role, onClose, onChanged, n
     const res = await releaseStudyToTutor(studyId)
     setBusy(false)
     if ('error' in res) { notify('error', res.error); return }
-    notify('success', 'Liberado ao tutor.')
+    notify('success', 'Liberado ao responsável.')
     await reload(); onChanged()
   }
 
@@ -275,7 +275,7 @@ export default function StudyDetailDrawer({ studyId, role, onClose, onChanged, n
                 <div className="flex items-center gap-2">
                   <select value={selectedLaudo} onChange={e => setSelectedLaudo(e.target.value)}
                           className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    <option value="">Selecionar documento (laudo) do pet…</option>
+                    <option value="">Selecionar documento (laudo) do animal…</option>
                     {laudos.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                   </select>
                   <button onClick={handleAttachLaudo} disabled={busy || !selectedLaudo}
@@ -287,7 +287,7 @@ export default function StudyDetailDrawer({ studyId, role, onClose, onChanged, n
                 <p className="text-xs text-slate-400">Somente o Médico Veterinário pode liberar o laudo.</p>
               )}
               {canReleaseLaudo && laudos.length === 0 && !detail.laudo_released_at && (
-                <p className="text-[11px] text-slate-400 mt-2">Nenhum documento com PDF gerado para este pet. Gere o laudo em Laudos/Documentos primeiro.</p>
+                <p className="text-[11px] text-slate-400 mt-2">Nenhum documento com PDF gerado para este animal. Gere o laudo em Laudos/Documentos primeiro.</p>
               )}
             </div>
 
@@ -305,7 +305,7 @@ export default function StudyDetailDrawer({ studyId, role, onClose, onChanged, n
                   {!detail.released_to_tutor_at && (
                     <button onClick={handleReleaseTutor} disabled={busy}
                             className="text-xs font-medium text-slate-700 border border-slate-200 rounded-lg px-2.5 py-1 hover:bg-slate-50 disabled:opacity-50">
-                      Liberar ao tutor
+                      Liberar ao responsável
                     </button>
                   )}
                 </div>
@@ -317,7 +317,7 @@ export default function StudyDetailDrawer({ studyId, role, onClose, onChanged, n
                   {detail.links.map(l => (
                     <div key={l.id} className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${l.revoked ? 'border-slate-200 bg-slate-50 opacity-60' : 'border-slate-200'}`}>
                       <span className="text-[11px] font-semibold uppercase text-slate-400 w-16 flex-shrink-0">
-                        {l.audience === 'referring_vet' ? 'Vet' : 'Tutor'}
+                        {l.audience === 'referring_vet' ? 'Vet' : 'Responsável'}
                       </span>
                       <span className="text-xs text-slate-500 truncate flex-1">{l.url}</span>
                       <span className="text-[11px] text-slate-400 flex-shrink-0">{l.views} views</span>

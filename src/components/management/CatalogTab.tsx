@@ -239,7 +239,7 @@ export default function CatalogTab({ initialItems, onToast }: Props) {
                 className="mt-0.5 h-4 w-4 accent-emerald-600"
               />
               <span>
-                <span className="block text-sm font-medium text-slate-700">Publicar resultado no Portal do Tutor</span>
+                <span className="block text-sm font-medium text-slate-700">Publicar resultado no Portal do Responsável</span>
                 <span className="block text-[10px] text-slate-400">Quando o MV liberar, o resultado/laudo deste serviço vai automaticamente ao portal. (Exames/imagem)</span>
               </span>
             </label>

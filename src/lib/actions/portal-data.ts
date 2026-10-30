@@ -70,7 +70,7 @@ export async function getPortalPets(clinicId?: string): Promise<PortalPet[] | { 
     .is('deleted_at', null)
     .order('name', { ascending: true })
 
-  if (error) return { error: 'Erro ao carregar pets.' }
+  if (error) return { error: 'Erro ao carregar animais.' }
 
   return (data ?? [])
     .filter((p: any) => canAccessPatient(p.tutor_id, p.clinic_id, scoped))

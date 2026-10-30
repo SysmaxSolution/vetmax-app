@@ -197,7 +197,7 @@ export function BehaviorTagsSelector({
           <button
             type="button"
             onClick={() => void removerTag(label)}
-            title="Remover esta tag da clínica (os pets que já a têm não mudam)"
+            title="Remover esta tag da clínica (os animais que já a têm não mudam)"
             className="ml-0.5 rounded-full p-0.5 text-slate-300 hover:bg-slate-100 hover:text-rose-600"
           >
             <X className="h-3 w-3" />
@@ -251,7 +251,7 @@ export function BehaviorTagsSelector({
               Cancelar
             </button>
           </div>
-          <p className="text-[11px] text-slate-500">A tag fica disponível para todos os pets desta clínica.</p>
+          <p className="text-[11px] text-slate-500">A tag fica disponível para todos os animais desta clínica.</p>
           {erro && <p className="text-xs text-rose-600">{erro}</p>}
         </div>
       )}

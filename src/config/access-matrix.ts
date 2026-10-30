@@ -154,7 +154,7 @@ export const PAYWALL_COPY: Record<string, PaywallCopy> = {
   },
   '/dashboard/registry': {
     title:       'Cadastros Avançados',
-    description: 'Cadastros de tutores, animais, fornecedores, funcionários e tabelas de preços personalizadas.',
+    description: 'Cadastros de responsáveis, animais, fornecedores, funcionários e tabelas de preços personalizadas.',
     feature:     'Cadastros PRO',
   },
   // ── Sub-tabs bloqueadas da Gestão ────────────────────────────────────────────

@@ -4,7 +4,7 @@ import TutorSummaryPrint from '@/components/financial/TutorSummaryPrint'
 
 interface Props {
   consultationId: string
-  /** Quando passados, exibe o botão "Resumo para o tutor" no rodapé. */
+  /** Quando passados, exibe o botão "Resumo para o responsável" no rodapé. */
   patientName?:   string
   tutorName?:     string
   serviceDate?:   string
@@ -72,7 +72,7 @@ export default async function CheckoutInsurancePreview({ consultationId, patient
         <div className="rounded-lg bg-white px-3 py-2 border border-sky-100">
           <div className="flex items-center gap-1.5 text-[11px] text-sky-700 font-medium mb-0.5">
             <Wallet className="h-3 w-3" />
-            Cobrar do tutor AGORA
+            Cobrar do responsável AGORA
           </div>
           <div className="text-base font-bold text-sky-900 font-mono tabular-nums">{BRL(totals.charge_now)}</div>
         </div>
@@ -93,7 +93,7 @@ export default async function CheckoutInsurancePreview({ consultationId, patient
         <div className="rounded-lg bg-emerald-50 px-3 py-2 border border-emerald-200">
           <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 font-medium mb-0.5">
             <TrendingDown className="h-3 w-3" />
-            Tutor economizou
+            Responsável economizou
           </div>
           <div className="text-base font-bold text-emerald-800 font-mono tabular-nums">{BRL(totals.tutor_saved)}</div>
         </div>
@@ -131,7 +131,7 @@ export default async function CheckoutInsurancePreview({ consultationId, patient
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-600 inline-flex items-center gap-1">
                       <Wallet className="h-3 w-3 text-emerald-600" />
-                      Coparticipação · cobrar do tutor
+                      Coparticipação · cobrar do responsável
                       {it.deferred_provider > 0 && (
                         <em className="text-[9px] text-slate-400">(Petlove cobra no cartão)</em>
                       )}

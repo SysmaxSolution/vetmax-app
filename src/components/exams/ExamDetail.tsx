@@ -265,10 +265,10 @@ export default function ExamDetail({
           <p style={{ fontSize: 13, color: '#6b7280', textAlign: 'right' }}>{new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 32px', marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid #d1d5db', fontSize: 13 }}>
-          <div><strong>Pet: </strong>{patient.name}</div>
-          <div><strong>Tutor: </strong>{tutor.name}</div>
+          <div><strong>Animal: </strong>{patient.name}</div>
+          <div><strong>Responsável: </strong>{tutor.name}</div>
           <div><strong>Espécie: </strong>{SPECIES_LABELS[patient.species] ?? patient.species}{patient.breed ? ` — ${patient.breed}` : ''}</div>
-          <div><strong>CPF Tutor: </strong>{tutor.cpf}</div>
+          <div><strong>CPF Responsável: </strong>{tutor.cpf}</div>
         </div>
         <div style={{ marginBottom: 40 }}>
           {printData.extracted_fields.map(f => {
@@ -292,7 +292,7 @@ export default function ExamDetail({
           </div>
           <div style={{ flex: 1, textAlign: 'center' }}>
             <hr style={{ borderColor: '#000', marginBottom: 8, width: 256, margin: '0 auto 8px' }} />
-            <p style={{ fontSize: 11, fontWeight: 600, color: '#374151' }}>Tutor / Responsável</p>
+            <p style={{ fontSize: 11, fontWeight: 600, color: '#374151' }}>Responsável / Responsável</p>
             <p style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>CPF: {tutor.cpf}</p>
           </div>
         </div>
@@ -455,7 +455,7 @@ export default function ExamDetail({
 
           <div className="border-t border-slate-100 px-6 py-4 flex items-center justify-between">
             <div>
-              <p className="text-xs text-slate-500">Tutor</p>
+              <p className="text-xs text-slate-500">Responsável</p>
               <p className="text-sm font-medium text-slate-800">{tutor.name}</p>
             </div>
             <div className="text-right">
@@ -716,7 +716,7 @@ export default function ExamDetail({
             </div>
             <div className="space-y-4 px-6 py-5">
               <p className="text-xs text-slate-500">
-                O valor do exame será lançado no caixa para cobrança do tutor e o exame ficará com status
+                O valor do exame será lançado no caixa para cobrança do responsável e o exame ficará com status
                 <span className="font-medium text-slate-700"> “Aguardando resultado de laboratório parceiro”</span>.
               </p>
               <div>

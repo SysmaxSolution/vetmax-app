@@ -94,7 +94,7 @@ export async function extractAdmissionReason(transcript: string): Promise<string
       max_tokens: 256,
       messages: [{
         role:    'user',
-        content: `Você é um assistente veterinário clínico. A partir do relato oral a seguir, extraia e resuma em 1-3 frases objetivas o MOTIVO DA INTERNAÇÃO do animal, conforme diretrizes do CFMV. Use linguagem clínica formal. Não repita o nome do animal nem do tutor.
+        content: `Você é um assistente veterinário clínico. A partir do relato oral a seguir, extraia e resuma em 1-3 frases objetivas o MOTIVO DA INTERNAÇÃO do animal, conforme diretrizes do CFMV. Use linguagem clínica formal. Não repita o nome do animal nem do responsável.
 
 Relato: "${transcript}"
 

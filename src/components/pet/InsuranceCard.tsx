@@ -26,7 +26,7 @@ export default function InsuranceCard({ data }: { data: InsuranceCardData }) {
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 px-5 py-4">
         <div className="flex items-center gap-2 text-sm text-slate-500">
           <ShieldCheck className="h-4 w-4 text-slate-300" />
-          Pet sem convênio ativo — atendimentos cobrados particular
+          Animal sem convênio ativo — atendimentos cobrados particular
         </div>
       </div>
     )

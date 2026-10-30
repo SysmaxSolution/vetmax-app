@@ -253,7 +253,7 @@ export async function updateConsultationServicePricingSplit(input: {
   if (!line) return { error: 'Linha de serviço não encontrada.' }
 
   const patient_id = (line.consultations as any)?.patient_id as string | undefined
-  if (!patient_id) return { error: 'Consulta sem paciente.' }
+  if (!patient_id) return { error: 'Consulta sem animal.' }
 
   // 2) Atualiza snapshots na consulta atual
   const { error: csErr } = await admin
@@ -285,7 +285,7 @@ export async function updateConsultationServicePricingSplit(input: {
     }, {
       onConflict: 'clinic_id,patient_id,stock_item_id',
     })
-  if (pcpErr) return { error: 'Erro ao salvar preço do pet: ' + mensagemErro(pcpErr, 'lib/actions/insurance-pricing.ts') }
+  if (pcpErr) return { error: 'Erro ao salvar preço do animal: ' + mensagemErro(pcpErr, 'lib/actions/insurance-pricing.ts') }
 
   // 4) Audit em patient_petlove_history (best effort — não bloqueia se falhar)
   try {

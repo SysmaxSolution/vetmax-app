@@ -74,7 +74,7 @@ export default function ClinicalContextPanel({ context, loading, isOpen, onClose
       ) : !context || !context.tutor ? (
         <div className="flex flex-col items-center gap-2 py-6 px-4 text-center">
           <User size={28} className="text-slate-300" />
-          <p className="text-sm text-slate-400">Tutor não encontrado no sistema</p>
+          <p className="text-sm text-slate-400">Responsável não encontrado no sistema</p>
         </div>
       ) : (
         <div className="overflow-y-auto" style={{ maxHeight: 420 }}>
@@ -82,13 +82,13 @@ export default function ClinicalContextPanel({ context, loading, isOpen, onClose
           <div className="flex items-center gap-2 px-3 pt-3 pb-2">
             <User size={14} className="text-slate-400 shrink-0" />
             <span className="text-sm font-medium text-slate-800 truncate">
-              {context.tutor.name ?? 'Tutor sem nome'}
+              {context.tutor.name ?? 'Responsável sem nome'}
             </span>
           </div>
 
           {/* Pets */}
           {context.patients.length === 0 ? (
-            <p className="px-3 pb-3 text-xs text-slate-400">Nenhum pet cadastrado</p>
+            <p className="px-3 pb-3 text-xs text-slate-400">Nenhum animal cadastrado</p>
           ) : (
             <ul className="divide-y divide-slate-50 pb-2">
               {context.patients.map((pet) => (

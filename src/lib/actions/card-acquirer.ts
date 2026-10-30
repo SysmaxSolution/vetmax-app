@@ -527,7 +527,7 @@ export async function cobrarPorLink(input: {
     pay_url: r.dados.payUrl,
     mensagem: splits.length
       ? `Link gerado com repasse automático de ${splits.length} profissional.`
-      : 'Link gerado. Envie ao tutor para pagamento.',
+      : 'Link gerado. Envie ao responsável para pagamento.',
     avisos,
   }
 }

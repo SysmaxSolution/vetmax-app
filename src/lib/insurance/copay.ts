@@ -13,7 +13,7 @@ export const ROTULO_MODO_COPAY: Record<ModoCopay, string> = {
   per_item: 'Negociado item a item',
   percent:  'Percentual do valor',
   fixed:    'Valor fixo por item',
-  none:     'Tutor não paga nada',
+  none:     'Responsável não paga nada',
 }
 
 export interface RegraCopay {
@@ -76,12 +76,12 @@ export function calcularSplitDoConvenio(
 export function descreverRegraCopay(regra: RegraCopay): string {
   switch (regra.modo) {
     case 'none':
-      return 'O tutor não paga nada; o convênio deve o valor integral.'
+      return 'O responsável não paga nada; o convênio deve o valor integral.'
     case 'percent':
       return `O tutor paga ${Number(regra.percent ?? 0).toString().replace('.', ',')}% do valor; o restante é repasse do convênio.`
     case 'fixed':
       return `O tutor paga R$ ${Number(regra.fixed ?? 0).toFixed(2).replace('.', ',')} por item; o restante é repasse do convênio.`
     default:
-      return 'O valor que o tutor paga vem do que está negociado para cada item (ou para o pet).'
+      return 'O valor que o responsável paga vem do que está negociado para cada item (ou para o animal).'
   }
 }

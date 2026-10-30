@@ -39,7 +39,7 @@ export default function PreconsultForm({ petId, petName }: { petId: string; petN
         <p className="text-lg text-[var(--pt-text)]" style={{ fontFamily: 'var(--pt-heading-font)' }}>Pré-consulta enviada</p>
         <p className="mt-1 text-sm text-[var(--pt-muted-soft)]">A recepção já verá estas informações quando {petName} chegar. Obrigado por adiantar!</p>
         <button onClick={() => router.push(`/portal/pet/${petId}`)} className="mt-6 rounded-full bg-[var(--pt-primary-dark)] px-6 py-2.5 text-sm font-semibold text-white hover:bg-[var(--pt-primary-mid)]">
-          Voltar ao pet
+          Voltar ao animal
         </button>
       </div>
     )

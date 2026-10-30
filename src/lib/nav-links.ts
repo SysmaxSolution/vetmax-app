@@ -46,7 +46,7 @@ export interface NavLink {
 
 export const NAV_LINKS: NavLink[] = [
   { label: 'Recepção',     href: '/dashboard/reception',       icon: Home,          roles: ['receptionist','admin','vet','assistant'], moduleKey: 'reception'       },
-  { label: 'Pacientes',    href: '/dashboard/patients',        icon: PawPrint,      roles: ['receptionist','admin','vet','assistant'], moduleKey: 'patients'        },
+  { label: 'Animais e Responsáveis', href: '/dashboard/patients',        icon: PawPrint,      roles: ['receptionist','admin','vet','assistant'], moduleKey: 'patients'        },
   { label: 'Caixa',        href: '/dashboard/cashier',         icon: Banknote,      roles: ['admin','accountant' as UserRole],         moduleKey: 'cashier',        id: 'nav-cashier' },
   { label: 'Triagem',      href: '/dashboard/triage',          icon: Users,         roles: ['assistant','admin'],                      moduleKey: 'triage'          },
   { label: 'Consultório',  href: '/dashboard/vet',             icon: Stethoscope,   roles: ['vet','admin'],                            moduleKey: 'consultation'    },
@@ -65,7 +65,7 @@ export const NAV_LINKS: NavLink[] = [
   { label: 'Gestão',       href: '/dashboard/management',      icon: BarChart3,     roles: ['admin']                                                                },
   { label: 'WhatsApp',     href: '/dashboard/whatsapp',        icon: MessageCircle, roles: ['receptionist','admin','vet','assistant'], moduleKey: 'whatsapp_intelligent' },
   { label: 'Chat Interno', href: '/dashboard/internal-chat',   icon: MessageSquare, roles: ['receptionist','admin','vet','assistant'], moduleKey: 'internal_chat' },
-  { label: 'Portal (Tutores)', href: '/dashboard/portal-mensagens', icon: MessageCircle, roles: ['receptionist','admin','vet','assistant'], moduleKey: 'reception' },
+  { label: 'Portal (Responsáveis)', href: '/dashboard/portal-mensagens', icon: MessageCircle, roles: ['receptionist','admin','vet','assistant'], moduleKey: 'reception' },
   { label: 'Treinamento',  href: '/dashboard/treinamento',     icon: GraduationCap, roles: ['receptionist','admin','vet','assistant'], id: 'nav-treinamento' },
 ]
 

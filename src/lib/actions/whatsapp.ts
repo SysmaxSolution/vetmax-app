@@ -236,7 +236,7 @@ const SYSTEM_PROMPT = `Você é um assistente especializado em comunicação vet
 Gera mensagens de WhatsApp curtas (máx. 3 parágrafos), calorosas e em português brasileiro informal-cordial, para enviar a tutores de animais.
 NÃO use asteriscos para negrito. NÃO use emojis em excesso (no máx. 2 por mensagem, apenas se naturais).
 NÃO mencione laudos, receitas ou prontuários como "documentos jurídicos". Use linguagem leve.
-Sempre mencione o nome do pet. Seja empático, positivo e objetivo.
+Sempre mencione o nome do animal. Seja empático, positivo e objetivo.
 Retorne SOMENTE a mensagem, sem explicações adicionais.`
 
 const TRIGGER_PROMPTS: Record<WhatsAppTrigger, (ctx: WhatsAppContext) => string> = {
@@ -298,7 +298,7 @@ const TRIGGER_PROMPTS: Record<WhatsAppTrigger, (ctx: WhatsAppContext) => string>
       ? `Documentos gerados e disponíveis: ${ctx.documentTitles.join(', ')}.`
       : ''
 
-    return `DADOS DO PACIENTE:
+    return `DADOS DO ANIMAL:
 Nome: ${ctx.petName}. Espécie: ${speciesLabel}${breedLabel}. Tutor: ${ctx.tutorName}.
 Status atual: ${statusLabel}. ${meds} ${notes} ${docs}
 
@@ -339,7 +339,7 @@ Mencione as medicações se houver. NÃO use termos técnicos frios nem asterisc
     const wardLabel  = wardMap[ctx.hospitalizationStatus ?? ''] ?? ctx.hospitalizationStatus ?? 'internação'
     const reasonInfo = ctx.hospitalizationReason ? `Motivo: ${ctx.hospitalizationReason}.` : ''
 
-    return `DADOS DO PACIENTE (use OBRIGATORIAMENTE):
+    return `DADOS DO ANIMAL (use OBRIGATORIAMENTE):
 Nome: ${ctx.petName}. Espécie: ${speciesLabel}${breedLabel ? ` ${breedLabel}` : ''}. Sexo: ${isMale ? 'macho' : isFemale ? 'fêmea' : 'não informado'}.
 Ala: ${wardLabel}. ${reasonInfo}
 
@@ -350,7 +350,7 @@ Gere uma mensagem para o tutor ${ctx.tutorName} informando que ${ctx.petName} fo
 - Se for UTI, use tom sério mas tranquilizador (sem alarmar);
 - Se for observação/enfermaria, tom seja acolhedor e positivo;
 - Diga que a equipe está cuidando com atenção e carinho;
-- Convide o tutor a entrar em contato se tiver dúvidas.
+- Convide o responsável a entrar em contato se tiver dúvidas.
 Máx. 3 parágrafos.`
   },
 
@@ -616,7 +616,7 @@ export async function sendWhatsAppMessage(params: {
     // a notificação só deve sair para quem tem a flag ativa no cadastro.
     if (!tutor || tutor.whatsapp_consent !== true) {
       console.info(`[WhatsApp LGPD] Envio bloqueado: tutor ${params.tutorId} sem consentimento WhatsApp ativo`)
-      return { error: 'LGPD: tutor não consentiu com notificações via WhatsApp. Habilite em Recepção → Dados do Tutor.' }
+      return { error: 'LGPD: responsável não consentiu com notificações via WhatsApp. Habilite em Recepção → Dados do Responsável.' }
     }
   }
 

@@ -241,14 +241,14 @@ export default function ConveniosTab({ onToast }: Props) {
               {/* Valor intermediario: o que o tutor paga quando o pet e conveniado */}
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
                 <div>
-                  <label className="block text-[11px] font-medium text-slate-500 mb-1">Quanto o tutor paga no balcão?</label>
+                  <label className="block text-[11px] font-medium text-slate-500 mb-1">Quanto o responsável paga no balcão?</label>
                   <select className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-teal-500"
                     value={pCopayModo} onChange={e => setPCopayModo(e.target.value as ModoCopay)}>
                     {(Object.entries(ROTULO_MODO_COPAY) as [ModoCopay, string][]).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                   </select>
                 </div>
                 {pCopayModo === 'percent' && (
-                  <input type="text" inputMode="decimal" placeholder="Percentual que fica com o tutor (ex.: 20)"
+                  <input type="text" inputMode="decimal" placeholder="Percentual que fica com o responsável (ex.: 20)"
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-teal-500"
                     value={pCopayPct} onChange={e => setPCopayPct(e.target.value)} />
                 )}

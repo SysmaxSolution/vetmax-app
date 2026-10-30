@@ -689,7 +689,7 @@ export default function FinancialWorkspace({
                 <input
                   value={search}
                   onChange={e => setSearch(e.target.value)}
-                  placeholder={activeTab === 'payable' ? 'Buscar por fornecedor, CNPJ, descrição ou pet...' : 'Buscar por cliente, CPF, descrição ou pet...'}
+                  placeholder={activeTab === 'payable' ? 'Buscar por fornecedor, CNPJ, descrição ou animal...' : 'Buscar por cliente, CPF, descrição ou animal...'}
                   className="w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-sm placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                 />
               </div>

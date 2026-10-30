@@ -135,7 +135,7 @@ function colonEndX(labelItems: PdfTextItem[]): number | null {
  */
 const VET_LABEL_VOCABULARY = new Set([
   // Identidade do animal
-  'paciente', 'pet', 'animal', 'nome do animal', 'nome do pet',
+  'paciente', 'pet', 'animal', 'nome do animal', 'nome do animal',
   'especie', 'raca', 'idade', 'sexo', 'peso', 'pelagem', 'cor',
   // Tutor
   'proprietario', 'tutor', 'responsavel', 'dono', 'cpf', 'telefone',
@@ -447,9 +447,9 @@ const DOCX_PLACEHOLDER_MATCHERS: DocxPlaceholderMatcher[] = [
 
   // Cadastro animal/tutor
   { test: n => /^custom[\s_]*tutor$/i.test(n)
-      ? { field_name: 'tutor_nome', description: 'Nome do tutor' } : null },
+      ? { field_name: 'tutor_nome', description: 'Nome do responsável' } : null },
   { test: n => /^(custom[\s_]*)?(patient|paciente)([\s_]*nome)?$/i.test(n)
-      ? { field_name: 'paciente_nome', description: 'Nome do paciente' } : null },
+      ? { field_name: 'paciente_nome', description: 'Nome do animal' } : null },
   { test: n => /^custom[\s_]*idade$/i.test(n)
       ? { field_name: 'idade', description: 'Idade' } : null },
   { test: n => /^custom[\s_]*peso$/i.test(n)
