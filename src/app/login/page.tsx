@@ -1,8 +1,8 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { login, selectClinic } from '@/lib/actions/auth'
-import type { AuthState } from '@/lib/actions/auth'
+import { login, selectClinic, reenviarConfirmacaoDeCadastro } from '@/lib/actions/auth'
+import type { AuthState } from '@/types/auth'
 import { SysmaxFooter } from '@/components/ui/SysmaxFooter'
 import Link from 'next/link'
 import { Building2, ChevronRight, ArrowLeft, Eye, EyeOff } from 'lucide-react'
@@ -110,6 +110,18 @@ export default function LoginPage() {
   }
 
   const errorMsg = state && 'error' in state ? state.error : null
+  // Falta confirmar o e-mail: além da mensagem certa, a pessoa consegue pedir
+  // um link novo sem acionar o suporte.
+  const precisaConfirmar = Boolean(state && 'precisaConfirmar' in state && state.precisaConfirmar)
+  const emailDoErro = state && 'email' in state ? state.email : ''
+  const [reenvio, setReenvio] = useState<{ estado: 'pronto' | 'enviando' | 'enviado'; msg?: string }>({ estado: 'pronto' })
+  async function reenviarConfirmacao() {
+    setReenvio({ estado: 'enviando' })
+    const r = await reenviarConfirmacaoDeCadastro(emailDoErro)
+    setReenvio('error' in r
+      ? { estado: 'pronto', msg: r.error }
+      : { estado: 'enviado', msg: 'Pronto! Enviamos um link novo para ' + emailDoErro + '. Ele vale 24 horas.' })
+  }
 
   return (
     <div
@@ -190,7 +202,20 @@ export default function LoginPage() {
             </div>
 
             {errorMsg && (
-              <p className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-600">{errorMsg}</p>
+              <div className={`rounded-xl border px-3 py-2 text-sm ${precisaConfirmar ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-red-50 border-red-200 text-red-600'}`}>
+                <p>{errorMsg}</p>
+                {precisaConfirmar && (
+                  <button
+                    type="button"
+                    onClick={() => void reenviarConfirmacao()}
+                    disabled={reenvio.estado !== 'pronto'}
+                    className="mt-2 font-semibold underline underline-offset-2 hover:text-amber-900 disabled:no-underline disabled:opacity-70"
+                  >
+                    {reenvio.estado === 'enviando' ? 'Enviando…' : reenvio.estado === 'enviado' ? 'Link enviado' : 'Reenviar e-mail de confirmação'}
+                  </button>
+                )}
+                {reenvio.msg && <p className="mt-1 text-[13px]">{reenvio.msg}</p>}
+              </div>
             )}
 
             <button
