@@ -13,6 +13,7 @@ import { useMedicationScheduler, type MedicationAlert } from '@/hooks/useMedicat
 import { medicationTickStore } from '@/lib/medication-tick'
 import StockItemSelector from '@/components/stock/StockItemSelector'
 import type { StockItemLite } from '@/types/stock-consumption'
+import { unidadeDe, paraSaldo } from '@/lib/stock/unidades'
 
 /**
  * Modal de controle de medicação do paciente internado.
@@ -619,7 +620,7 @@ function NewPrescriptionForm({
         {stockItem && (
           <div>
             <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
-              Quantidade por dose ({stockItem.unit}) *
+              Quantidade por dose ({unidadeDe(stockItem, 'use')}) *
             </label>
             <input
               type="number"
@@ -630,7 +631,7 @@ function NewPrescriptionForm({
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none"
             />
             <p className="text-[10px] text-slate-400 mt-1">
-              Cada aplicação decrementa {qtyPerDose || '?'} {stockItem.unit} de "{stockItem.name}" automaticamente.
+              Cada aplicação decrementa {paraSaldo(stockItem, Number(qtyPerDose || 0), 'use') || '?'} {stockItem.unit} de "{stockItem.name}" automaticamente.
             </p>
           </div>
         )}

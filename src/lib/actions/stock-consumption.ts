@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { paraSaldo } from '@/lib/stock/unidades'
 import { revalidatePath } from 'next/cache'
 
 import { mensagemErro } from '@/lib/errors'
@@ -86,11 +87,26 @@ export async function consumeStockForApplication(
     return { error: 'quantity deve ser positiva.' }
   }
 
+  // A equipe aplica na UNIDADE DE USO (uma dose de 0,1 mL), mas o saldo é
+  // contado na unidade de saldo (mL). Sem esta conversão, aplicar uma dose
+  // tirava 1 mL do frasco (migration 0532). Produto sem fator próprio
+  // atravessa sem mudança: fator 1.
+  let quantidadeNoSaldo = payload.quantity
+  if (payload.stock_item_id) {
+    const { data: item } = await admin
+      .from('stock_items')
+      .select('unit, unit_use, factor_use, units_per_package')
+      .eq('id', payload.stock_item_id)
+      .eq('clinic_id', profile.clinic_id)
+      .maybeSingle()
+    if (item) quantidadeNoSaldo = paraSaldo(item as Parameters<typeof paraSaldo>[0], payload.quantity, 'use')
+  }
+
   const { data, error } = await admin.rpc('rpc_apply_stock_consumption', {
     p_clinic_id:       profile.clinic_id,
     p_stock_item_id:   payload.stock_item_id ?? null,
     p_medication_name: payload.medication_name.trim(),
-    p_quantity:        payload.quantity,
+    p_quantity:        quantidadeNoSaldo,
     p_source:          payload.source,
     p_reference_id:    payload.reference_id ?? null,
     p_notes:           payload.notes?.trim() || null,

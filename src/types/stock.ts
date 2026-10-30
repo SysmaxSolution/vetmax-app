@@ -40,7 +40,22 @@ export type StockItemV2 = {
   name:         string
   category:     StockCategory
   quantity:     number
+  /** Unidade de SALDO: aquela em que o estoque é contado (migration 0532). */
   unit:         string
+  /** Como o fornecedor vende (CX, FR). Nulo = igual à unidade de saldo. */
+  unit_purchase?:   string | null
+  /** Quantas unidades de saldo há em 1 unidade de compra. */
+  factor_purchase?: number | null
+  /** Como a equipe aplica (mL, dose). Nulo = igual à unidade de saldo. */
+  unit_use?:        string | null
+  /** Quantas unidades de saldo saem em 1 unidade de uso. */
+  factor_use?:      number | null
+  /** Como o balcão vende (FR, UN). Nulo = igual à unidade de saldo. */
+  unit_sale?:       string | null
+  /** Quantas unidades de saldo saem em 1 unidade de venda. */
+  factor_sale?:     number | null
+  /** Fator de compra antigo (migration 0404), ainda usado como fallback. */
+  units_per_package?: number | null
   min_quantity: number
   unit_price:   number
   last_restock: string | null

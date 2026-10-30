@@ -9,6 +9,7 @@ import type { AjustesDaEntrada } from '@/types/entrada-mercadoria'
 
 import { mensagemErro } from '@/lib/errors'
 import { cfopDeEntrada, naturezaDaNota, EFEITO_DA_NATUREZA } from '@/lib/fiscal/cfop'
+import { fatorDe, precoPorUnidadeDeSaldo, unidadeDe } from '@/lib/stock/unidades'
 import type { PurchaseOrder, PurchaseOrderItem, NCMData, PublicProduct, ManualPurchaseItem, ManualPurchasePayload, PurchaseInstallmentInput, StockMatchSuggestion } from '@/types/purchases'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -511,7 +512,7 @@ export async function confirmPurchaseReceipt(
     // Atualizar preço e quantidade do item no estoque
     const { data: stock } = await admin
       .from('stock_items')
-      .select('quantity, unit_price, units_per_package')
+      .select('quantity, unit_price, units_per_package, unit, unit_purchase, factor_purchase, unit_use, factor_use, unit_sale, factor_sale')
       .eq('id', item.stock_item_id)
       .single()
 
@@ -519,11 +520,14 @@ export async function confirmPurchaseReceipt(
 
     const qtyBefore = Number(stock.quantity ?? 0)
 
-    // M13(b) — converte embalagem → itens-base. Ex.: 2 caixas × 30 = 60 comprimidos.
-    // upp=1 (default) mantém o comportamento atual.
-    const upp = Number((stock as { units_per_package?: number }).units_per_package ?? 1) || 1
-    const creditQty   = Number(item.quantity) * upp
-    const perUnitPrice = upp > 1 ? Number(item.unit_price ?? 0) / upp : Number(item.unit_price ?? 0)
+    // A nota vem na unidade do fornecedor (1 CX, 1 FR); o saldo é contado na
+    // unidade menor do produto (mL). O fator de compra faz a ponte — e o
+    // units_per_package antigo continua valendo quando não há fator novo
+    // (migrations 0404 e 0532).
+    const unidades = stock as Parameters<typeof fatorDe>[0]
+    const upp = fatorDe(unidades, 'purchase')
+    const creditQty    = Number(item.quantity) * upp
+    const perUnitPrice = precoPorUnidadeDeSaldo(unidades, Number(item.unit_price ?? 0))
 
     // ── Retroalimentação FIFO: TODA entrada de NF-e cria um lote em
     //    stock_batches (sem furo de FIFO na entrada de notas). Lote-base do
@@ -570,8 +574,8 @@ export async function confirmPurchaseReceipt(
       quantity_after:  newQty,
       source:          'RESTOCK',
       reference_id:    orderId,
-      notes:           upp > 1
-        ? `Recebimento NF-e — Ordem #${orderId.substring(0, 8)} (${item.quantity}×${upp} = ${creditQty})`
+      notes:           upp !== 1
+        ? `Recebimento NF-e — Ordem #${orderId.substring(0, 8)} (${item.quantity} ${unidadeDe(unidades, 'purchase')} × ${upp} = ${creditQty} ${unidades.unit ?? ''})`
         : `Recebimento NF-e — Ordem #${orderId.substring(0, 8)}`,
       created_by:      ctx.user_id,
       // HISTÓRICO do Livro de Controlados

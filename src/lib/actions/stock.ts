@@ -290,7 +290,17 @@ import type { StockItem, StockMovement, StockItemV2, BulkImportRow } from '@/typ
 // actions deste módulo (era a causa do "não salva" em Estoque > Serviços).
 // Consumidores importam StockCategory direto de '@/lib/stock-constants'.
 
-const STOCK_V2_FIELDS = 'id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at, is_controlled, is_sellable, sector, substance, concentration, is_human_use, control_class, brand, sku, barcode, batch_number, expiry_date, supplier, is_service, ncm, ncm_description, cfop, unit_com, supplier_id, default_insurance_price, insurance_card_interest_percent, nfse_item_lista_servico, nfse_codigo_tributario_municipio, cost_price, entry_tax_percent, margin_percent, purchase_price, supplier_discount_percent, entry_tax_icms, entry_tax_st, entry_tax_ipi, entry_tax_freight, entry_tax_ibs_cbs, sale_tax_percent'
+/**
+ * Fator de conversão só entra se for positivo. Zero ou negativo faria o saldo
+ * sumir ou inverter — a CHECK da 0532 recusaria, e o erro chegaria ao operador
+ * como "regra do sistema", que não ajuda ninguém.
+ */
+function fatorValido(v: number | null | undefined): number | null {
+  const n = Number(v)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+const STOCK_V2_FIELDS = 'id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at, is_controlled, is_sellable, sector, substance, concentration, is_human_use, control_class, brand, sku, barcode, batch_number, expiry_date, supplier, is_service, ncm, ncm_description, cfop, unit_com, supplier_id, default_insurance_price, insurance_card_interest_percent, nfse_item_lista_servico, nfse_codigo_tributario_municipio, cost_price, entry_tax_percent, margin_percent, purchase_price, supplier_discount_percent, entry_tax_icms, entry_tax_st, entry_tax_ipi, entry_tax_freight, entry_tax_ibs_cbs, sale_tax_percent, units_per_package, unit_purchase, factor_purchase, unit_use, factor_use, unit_sale, factor_sale'
 
 export async function getPharmacyStockV2(): Promise<StockItemV2[] | { error: string }> {
   const ctx = await getClinicAndUser()
@@ -325,7 +335,14 @@ export async function getLowStockItemsV2(): Promise<StockItemV2[] | { error: str
 export async function addStockItemV2(input: {
   name:           string
   quantity:       number
+  /** Unidade de SALDO (a menor). As de compra/uso/venda convertem para ela. */
   unit:           string
+  unit_purchase?:   string | null
+  factor_purchase?: number | null
+  unit_use?:        string | null
+  factor_use?:      number | null
+  unit_sale?:       string | null
+  factor_sale?:     number | null
   min_quantity:   number
   category?:      StockCategory
   unit_price?:    number
@@ -375,6 +392,13 @@ export async function addStockItemV2(input: {
       name:            input.name.trim(),
       quantity:        input.quantity,
       unit:            input.unit,
+      // Unidades de compra, uso e venda (0532). Nulo = igual à de saldo.
+      unit_purchase:   input.unit_purchase?.trim() || null,
+      factor_purchase: fatorValido(input.factor_purchase),
+      unit_use:        input.unit_use?.trim() || null,
+      factor_use:      fatorValido(input.factor_use),
+      unit_sale:       input.unit_sale?.trim() || null,
+      factor_sale:     fatorValido(input.factor_sale),
       min_quantity:    input.min_quantity,
       category:        input.category ?? 'medication',
       unit_price:      input.unit_price ?? 0,
@@ -452,6 +476,12 @@ export async function updateStockItemV2(
   if (input.name          !== undefined) patch.name          = input.name.trim()
   if (input.category      !== undefined) patch.category      = input.category
   if (input.unit          !== undefined) patch.unit          = input.unit
+  if ('unit_purchase'   in input) patch.unit_purchase   = (input as any).unit_purchase?.trim() || null
+  if ('factor_purchase' in input) patch.factor_purchase = fatorValido((input as any).factor_purchase)
+  if ('unit_use'        in input) patch.unit_use        = (input as any).unit_use?.trim() || null
+  if ('factor_use'      in input) patch.factor_use      = fatorValido((input as any).factor_use)
+  if ('unit_sale'       in input) patch.unit_sale       = (input as any).unit_sale?.trim() || null
+  if ('factor_sale'     in input) patch.factor_sale     = fatorValido((input as any).factor_sale)
   if (input.min_quantity  !== undefined) patch.min_quantity  = input.min_quantity
   if (input.unit_price    !== undefined) patch.unit_price    = input.unit_price
   if (input.is_sellable   !== undefined) patch.is_sellable   = input.is_sellable
