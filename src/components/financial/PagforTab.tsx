@@ -19,7 +19,7 @@ import {
 const BRL = (v: number | null) => (v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
 const fmtD = (iso: string | null) => { if (!iso) return '—'; const [y, m, d] = iso.slice(0, 10).split('-'); return `${d}/${m}/${y}` }
 
-export default function PagforTab({ empresas = [] }: { empresas?: string[] } = {}) {
+export default function PagforTab({ empresas = [], filtroEmpresas }: { empresas?: string[]; filtroEmpresas?: React.ReactNode } = {}) {
   const [parsed, setParsed]   = useState<DdaBoleto[]>([])
   const [result, setResult]   = useState<DdaMatchResult | null>(null)
   const [selected, setSelected] = useState<Set<number>>(new Set())
@@ -276,7 +276,8 @@ export default function PagforTab({ empresas = [] }: { empresas?: string[] } = {
             )}
           </div>
         </div>
-        <div className="flex items-end gap-2">
+        <div className="flex flex-wrap items-end gap-2">
+          {filtroEmpresas && <div className="min-w-[180px]">{filtroEmpresas}</div>}
           <SeletorDeConta empresasFiltro={empresas}
             value={contaId}
             onChange={id => {

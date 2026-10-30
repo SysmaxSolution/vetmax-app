@@ -16,9 +16,15 @@ const CONC: Record<ExtratoMovement['status'], { label: string; cls: string; Icon
   pending:    { label: 'Pendente',   cls: 'bg-slate-100 text-slate-500',    Icon: Circle },
 }
 
-interface Props { bankAccounts: BankAccount[]; /** ids das empresas do filtro ([] = todas) */ empresas?: string[] }
+interface Props {
+  bankAccounts: BankAccount[]
+  /** ids das empresas do filtro ([] = todas) */
+  empresas?: string[]
+  /** Filtro de empresa renderizado junto dos demais filtros desta aba. */
+  filtroEmpresas?: React.ReactNode
+}
 
-export default function ExtratoTab({ bankAccounts, empresas = [] }: Props) {
+export default function ExtratoTab({ bankAccounts, empresas = [], filtroEmpresas }: Props) {
   const [selectedBank, setSelectedBank] = useState<string>('')   // '' = todas as contas
   const [startDate, setStartDate] = useState(firstDayOfMonth())
   const [endDate, setEndDate]     = useState(todayStr())
@@ -52,6 +58,7 @@ export default function ExtratoTab({ bankAccounts, empresas = [] }: Props) {
       {/* Filtros */}
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
         <div className="flex flex-wrap items-end gap-3">
+          {filtroEmpresas && <div className="w-full sm:w-auto sm:min-w-[180px]">{filtroEmpresas}</div>}
           <div className="w-full sm:w-auto sm:min-w-[160px] flex-1">
             <label className="block text-xs font-semibold text-slate-500 mb-1.5">Conta (opcional)</label>
             <select value={selectedBank} onChange={e => setSelectedBank(e.target.value)}

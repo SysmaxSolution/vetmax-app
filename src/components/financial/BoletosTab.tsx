@@ -21,7 +21,7 @@ const SIT: Record<string, { label: string; cls: string }> = {
   erro: { label: 'Erro', cls: 'bg-rose-100 text-rose-700' },
 }
 
-export default function BoletosTab({ empresas = [], padraoId = null }: { empresas?: string[]; padraoId?: string | null } = {}) {
+export default function BoletosTab({ empresas = [], padraoId = null, filtroEmpresas }: { empresas?: string[]; padraoId?: string | null; filtroEmpresas?: React.ReactNode } = {}) {
   const [receivables, setReceivables] = useState<ReceivableRow[]>([])
   const [boletos, setBoletos] = useState<BoletoRow[]>([])
   const [accounts, setAccounts] = useState<BankAccountBoleto[]>([])
@@ -80,8 +80,9 @@ export default function BoletosTab({ empresas = [], padraoId = null }: { empresa
           <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2"><Barcode className="h-4.5 w-4.5 text-slate-400" />Boletos — Cobrança</h2>
           <p className="text-xs text-slate-500">Emita boletos das duplicatas em aberto ou reimprima os já emitidos. Configure a carteira em <strong>Cadastros → Bancos → (conta) → Carteira Bancária</strong>.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-slate-500">Conta:</label>
+        <div className="flex flex-wrap items-end gap-2">
+          {filtroEmpresas && <div className="min-w-[180px]">{filtroEmpresas}</div>}
+          <label className="text-xs text-slate-500 pb-2">Conta:</label>
           {accounts.length === 0
             ? <span className="text-xs text-amber-600 flex items-center gap-1"><Settings className="h-3.5 w-3.5" />nenhuma carteira habilitada</span>
             : <select value={accountId} onChange={e => setAccountId(e.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm">

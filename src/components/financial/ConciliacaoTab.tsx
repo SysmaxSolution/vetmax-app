@@ -14,9 +14,13 @@ import {
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const fmtDate = (d: string) => { if (!d) return '—'; const [y, m, day] = d.slice(0, 10).split('-'); return `${day}/${m}/${y}` }
 
-interface Props { bankAccounts: BankAccount[] }
+interface Props {
+  bankAccounts: BankAccount[]
+  /** Filtro de empresa renderizado junto dos demais filtros desta aba. */
+  filtroEmpresas?: React.ReactNode
+}
 
-export default function ConciliacaoTab({ bankAccounts }: Props) {
+export default function ConciliacaoTab({ bankAccounts, filtroEmpresas }: Props) {
   const defaultAccount = bankAccounts.find(b => b.is_default) ?? bankAccounts[0]
 
   const [selectedBank, setSelectedBank] = useState<string>(defaultAccount?.id ?? '')
@@ -381,6 +385,7 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
       {/* Importação */}
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4 space-y-3">
         <div className="flex flex-wrap items-end gap-3">
+          {filtroEmpresas && <div className="w-full sm:w-auto sm:min-w-[180px]">{filtroEmpresas}</div>}
           <div className="w-full sm:min-w-[200px] flex-1">
             <label className="block text-xs font-semibold text-slate-500 mb-1.5">Conta Bancária</label>
             <select value={selectedBank} onChange={e => setSelectedBank(e.target.value)}
