@@ -1,55 +1,49 @@
 /**
- * Normalização do CRMV.
+ * CRMV — campo livre.
  *
- * O banco exige `UF + número` (chk_crmv_format: ^[A-Z]{2}[0-9]{4,10}$), mas as
- * pessoas digitam o que está na carteirinha: "28856", "CRMV-SP 28856",
- * "SP/28856". Sem tratar isso, o UPDATE estourava a CHECK e a tela mostrava
- * "Os dados informados não atendem a uma regra do sistema." — o Dr. Vinícius
- * ficou preso nisso em 30/10/2026 tentando salvar o próprio cadastro.
+ * Até 30/10/2026 o banco exigia "UF + número" (chk_crmv_format). O Dr. Vinícius
+ * digitou "28856", o número da carteirinha dele, e a tela respondeu "Os dados
+ * informados não atendem a uma regra do sistema". A Aline então pediu o campo
+ * livre: na clínica o número vem antes da sigla, e cada profissional escreve do
+ * jeito que o registro dele usa. A migration 0529 soltou a regra de formato.
  *
- * Aqui a entrada é limpa e, quando vem só o número, recebe a sigla do estado
- * da clínica. O que não der para resolver vira uma frase que diz o que fazer.
+ * Sobra aqui a higiene mínima (espaços) e a leitura da sigla do estado, que os
+ * documentos usam como UF padrão.
  */
 
-/** Siglas válidas de unidade federativa — evita aceitar "CR12345" como UF. */
-const UFS = new Set([
+/** Siglas de unidade federativa, para achar o estado dentro do texto livre. */
+const UFS = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
   'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
-])
+]
 
-export const EXEMPLO_CRMV = 'SP12345'
+/** Limite que a CHECK do banco aceita (0529). */
+export const CRMV_MAX = 30
 
 /**
- * @param valor    o que a pessoa digitou (pode ser vazio)
- * @param ufClinica sigla do estado da clínica, usada quando só vem o número
+ * Tira espaços das pontas e colapsa os do meio. Não muda maiúscula/minúscula
+ * nem reordena nada: o que a pessoa escreveu é o que fica gravado.
  */
-export function normalizarCrmv(
-  valor: string | null | undefined,
-  ufClinica?: string | null,
-): { crmv: string | null } | { error: string } {
-  const bruto = (valor ?? '').trim()
-  if (!bruto) return { crmv: null }
+export function limparCrmv(valor: string | null | undefined): string | null {
+  const s = (valor ?? '').replace(/\s+/g, ' ').trim()
+  return s || null
+}
 
-  // Tira o prefixo "CRMV" e tudo que não for letra ou número.
-  const limpo = bruto.toUpperCase().replace(/CRMV/g, '').replace(/[^A-Z0-9]/g, '')
-  if (!limpo) return { crmv: null }
+/** `true` se o valor cabe no campo (a única regra que sobrou no banco). */
+export function crmvCabe(valor: string | null | undefined): boolean {
+  const s = limparCrmv(valor)
+  return s === null || (s.length >= 2 && s.length <= CRMV_MAX)
+}
 
-  const so_numero = /^[0-9]{1,10}$/.test(limpo)
-  if (so_numero) {
-    const uf = (ufClinica ?? '').trim().toUpperCase()
-    if (!UFS.has(uf)) {
-      return { error: `Informe o CRMV com a sigla do estado, por exemplo ${EXEMPLO_CRMV}.` }
-    }
-    if (limpo.length < 4) {
-      return { error: `O número do CRMV é curto demais. Informe como ${EXEMPLO_CRMV}.` }
-    }
-    return { crmv: uf + limpo }
-  }
-
-  const m = /^([A-Z]{2})([0-9]{1,10})$/.exec(limpo)
-  if (!m) return { error: `CRMV inválido. Use a sigla do estado e o número, por exemplo ${EXEMPLO_CRMV}.` }
-  const [, uf, numero] = m
-  if (!UFS.has(uf)) return { error: `"${uf}" não é uma sigla de estado. Use, por exemplo, ${EXEMPLO_CRMV}.` }
-  if (numero.length < 4) return { error: `O número do CRMV é curto demais. Informe como ${EXEMPLO_CRMV}.` }
-  return { crmv: uf + numero }
+/**
+ * Sigla do estado dentro do CRMV escrito livremente — serve para preencher a
+ * UF padrão nos documentos. Aceita "SP28856", "28856-SP", "CRMV/SP 28856".
+ * Devolve `''` quando não dá para afirmar.
+ */
+export function ufDoCrmv(valor: string | null | undefined): string {
+  const s = (valor ?? '').toUpperCase()
+  // "CRMV" contém "MV", que não é UF, mas pode esconder a sigla seguinte.
+  const semPrefixo = s.replace(/CRMV/g, ' ')
+  const achadas = (semPrefixo.match(/[A-Z]{2}/g) ?? []).filter(x => UFS.includes(x))
+  return achadas.length === 1 ? achadas[0] : (achadas[0] ?? '')
 }

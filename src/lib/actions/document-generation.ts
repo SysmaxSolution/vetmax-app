@@ -22,6 +22,7 @@ import { revalidatePath } from 'next/cache'
 import { PDFDocument, StandardFonts } from 'pdf-lib'
 import { randomUUID } from 'crypto'
 import { type PageDimensions } from '@/lib/pdf/coordinate-system'
+import { ufDoCrmv } from '@/lib/crmv'
 import { applyOverlayToPage } from '@/lib/pdf/render-overlay'
 import { SYSTEM_FIELDS } from '@/lib/pdf/canonical-whitelist'
 import type { InterpolationContext } from '@/lib/pdf/interpolate-vars'
@@ -130,12 +131,12 @@ async function buildSystemFieldsContext(
   }
 
   const name = profile.full_name ?? ''
-  // CRMV no banco eh armazenado cru (constraint chk_crmv_format: ^[A-Z]{2}[0-9]{4,10}$).
-  // Formata para exibicao: "SP74696" -> "CRMV-SP 74.696"
+  // CRMV e texto livre desde a migration 0529 ("28856-SP", "CRMV-SP 28856").
+  // formatCrmv so embeleza o padrao antigo; o resto sai como foi escrito.
   const crmvRaw = profile.crmv ?? ''
   const crmv = formatCrmv(crmvRaw)
-  // IC-21: extrai UF do CRMV para usar como UF default em data/local
-  const crmvUf = crmvRaw.match(/^([A-Z]{2})/)?.[1] ?? ''
+  // IC-21: UF do CRMV vira a UF padrao em data/local, venha ela antes ou depois.
+  const crmvUf = ufDoCrmv(crmvRaw)
   const specialty = profile.specialty ?? ''
   const roleRaw = profile.role ?? ''
   // INTERVENCAO CIRURGICA: quem tem CRMV cadastrado eh OBRIGATORIAMENTE

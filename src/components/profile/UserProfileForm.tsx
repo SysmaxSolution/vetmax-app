@@ -16,7 +16,8 @@ const SPECIALTY_OPTIONS = [
   'Diagnóstico por Imagem', 'Medicina Felina', 'Medicina de Animais Selvagens',
 ]
 
-const CRMV_RE = /^[A-Z]{2}[0-9]{4,10}$/
+/** Campo livre desde a migration 0529: só o tamanho é regra. */
+const CRMV_MAX = 30
 
 interface Props {
   profile: {
@@ -49,7 +50,7 @@ export default function UserProfileForm({ profile, email }: Props) {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const isVetOrAssistant = profile.role === 'vet' || profile.role === 'assistant'
-  const crmvValid = !crmv || CRMV_RE.test(crmv)
+  const crmvValid = !crmv || crmv.trim().length <= CRMV_MAX
 
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -79,7 +80,7 @@ export default function UserProfileForm({ profile, email }: Props) {
 
   function handleSave() {
     if (!fullName.trim()) { setError('Nome é obrigatório.'); return }
-    if (crmv && !crmvValid) { setError('CRMV inválido. Use o formato UF + dígitos (ex: SP12345).'); return }
+    if (crmv && !crmvValid) { setError(`O CRMV deve ter no máximo ${CRMV_MAX} caracteres.`); return }
     setError('')
     setSaved(false)
 
@@ -175,14 +176,15 @@ export default function UserProfileForm({ profile, email }: Props) {
             </label>
             <input
               value={crmv}
-              onChange={e => setCrmv(e.target.value.toUpperCase())}
-              placeholder="SP12345"
+              onChange={e => setCrmv(e.target.value)}
+              maxLength={30}
+              placeholder="28856-SP"
               className={`w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-500 ${
                 crmv && !crmvValid ? 'border-red-400 bg-red-50' : 'border-slate-300'
               }`}
             />
             {crmv && !crmvValid && (
-              <p className="text-xs text-red-500 mt-1">Formato: 2 letras (UF) + 4–10 dígitos. Ex: SP12345</p>
+              <p className="text-xs text-red-500 mt-1">O CRMV deve ter no máximo {CRMV_MAX} caracteres.</p>
             )}
           </div>
 

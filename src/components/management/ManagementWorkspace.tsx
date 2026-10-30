@@ -280,7 +280,8 @@ export default function ManagementWorkspace({
   const [editingCrmvUserId, setEditingCrmvUserId] = useState<string | null>(null)
   const [crmvInputValue, setCrmvInputValue] = useState('')
   const [savingCrmv, setSavingCrmv] = useState(false)
-  const CRMV_REGEX = /^[A-Za-z]{2}[0-9]{4,10}$/
+  /** Campo livre desde a migration 0529: a única regra é o tamanho. */
+  const CRMV_MAX = 30
 
   const handleEditCrmv = (userId: string, currentCrmv: string | null) => {
     setEditingCrmvUserId(userId)
@@ -288,9 +289,9 @@ export default function ManagementWorkspace({
   }
 
   const handleSaveCrmv = async (userId: string) => {
-    const val = crmvInputValue.trim().toUpperCase()
-    if (val && !CRMV_REGEX.test(val)) {
-      setToast({ type: 'error', message: 'Formato CRMV inválido. Use: UF + 4-10 dígitos (ex: SP12345)' })
+    const val = crmvInputValue.trim()
+    if (val.length > CRMV_MAX) {
+      setToast({ type: 'error', message: `O CRMV deve ter no máximo ${CRMV_MAX} caracteres.` })
       return
     }
     setSavingCrmv(true)
@@ -1004,7 +1005,7 @@ export default function ManagementWorkspace({
                     {u.role === 'vet' && editingCrmvUserId !== u.id && (
                       <div className="flex items-center gap-1.5 mt-0.5">
                         {u.crmv ? (
-                          <span className={`text-xs px-1.5 py-0.5 rounded font-mono ${CRMV_REGEX.test(u.crmv) ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                          <span className="text-xs px-1.5 py-0.5 rounded font-mono bg-green-50 text-green-700">
                             CRMV: {u.crmv}
                           </span>
                         ) : (
@@ -1025,19 +1026,16 @@ export default function ManagementWorkspace({
                         <input
                           data-testid={`crmv-input-${u.id}`}
                           value={crmvInputValue}
-                          onChange={e => setCrmvInputValue(e.target.value.toUpperCase())}
-                          placeholder="SP12345"
-                          className={`text-xs px-2 py-1 rounded border font-mono w-28 outline-none ${
-                            crmvInputValue && !CRMV_REGEX.test(crmvInputValue)
-                              ? 'border-red-400 bg-red-50'
-                              : 'border-teal-400 bg-teal-50 focus:border-teal-600'
-                          }`}
+                          onChange={e => setCrmvInputValue(e.target.value)}
+                          maxLength={CRMV_MAX}
+                          placeholder="28856-SP"
+                          className="text-xs px-2 py-1 rounded border font-mono w-32 outline-none border-teal-400 bg-teal-50 focus:border-teal-600"
                           onKeyDown={e => { if (e.key === 'Enter') handleSaveCrmv(u.id); if (e.key === 'Escape') setEditingCrmvUserId(null) }}
                         />
                         <button
                           data-testid={`crmv-save-${u.id}`}
                           onClick={() => handleSaveCrmv(u.id)}
-                          disabled={savingCrmv || (!!crmvInputValue && !CRMV_REGEX.test(crmvInputValue))}
+                          disabled={savingCrmv || crmvInputValue.trim().length > CRMV_MAX}
                           className="text-[10px] bg-teal-600 text-white px-2 py-1 rounded disabled:opacity-50"
                         >
                           {savingCrmv ? '...' : 'OK'}

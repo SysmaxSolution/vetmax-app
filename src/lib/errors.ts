@@ -58,7 +58,7 @@ const POR_CODIGO: Record<string, string> = {
  * à pessoa o que corrigir (caso do CRMV sem a sigla do estado, 30/10/2026).
  */
 const POR_CONSTRAINT: Record<string, string> = {
-  chk_crmv_format: 'CRMV inválido. Use a sigla do estado e o número, por exemplo SP12345.',
+  chk_crmv_tamanho: 'O CRMV deve ter no máximo 30 caracteres.',
 }
 
 const GENERICA = 'Não foi possível concluir a operação. Tente novamente — se persistir, acione o suporte.'
