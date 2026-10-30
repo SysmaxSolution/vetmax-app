@@ -442,12 +442,13 @@ export default function UserManagementModal({
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">CRMV</label>
                   <input
-                    value={crmv} onChange={e => setCrmv(e.target.value.toUpperCase())}
-                    placeholder="SP12345"
+                    value={crmv} onChange={e => setCrmv(e.target.value)}
+                    maxLength={30}
+                    placeholder="28856-SP"
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
                   />
                   <p className="mt-0.5 text-[10px] text-slate-400">
-                    Sigla do estado + número. Se digitar só o número, usamos o estado da clínica.
+                    Escreva como preferir — é esse texto que sai nos documentos.
                   </p>
                 </div>
                 <div>

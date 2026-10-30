@@ -1,35 +1,39 @@
-import { normalizarCrmv } from '@/lib/crmv'
+import { limparCrmv, crmvCabe, ufDoCrmv, CRMV_MAX } from '@/lib/crmv'
 
-describe('normalizarCrmv — o CRMV como a pessoa digita', () => {
-  const ok = (r: ReturnType<typeof normalizarCrmv>) => ('crmv' in r ? r.crmv : `ERRO: ${r.error}`)
+describe('CRMV — campo livre (migration 0529)', () => {
+  it('guarda o que a pessoa escreveu, só tirando espaço sobrando', () => {
+    expect(limparCrmv('  28856-SP ')).toBe('28856-SP')
+    expect(limparCrmv('CRMV-SP   28856')).toBe('CRMV-SP 28856')
+    expect(limparCrmv('sp28856')).toBe('sp28856')   // não força maiúscula
+  })
 
-  it('só o número vira UF + número usando o estado da clínica', () => {
-    expect(ok(normalizarCrmv('28856', 'SP'))).toBe('SP28856')
-  })
-  it('aceita o que está na carteirinha, com prefixo e pontuação', () => {
-    expect(ok(normalizarCrmv('CRMV-SP 28856', 'SP'))).toBe('SP28856')
-    expect(ok(normalizarCrmv('sp/28856', null))).toBe('SP28856')
-  })
   it('vazio continua vazio', () => {
-    expect(ok(normalizarCrmv('', 'SP'))).toBeNull()
-    expect(ok(normalizarCrmv(null, 'SP'))).toBeNull()
+    expect(limparCrmv('')).toBeNull()
+    expect(limparCrmv('   ')).toBeNull()
+    expect(limparCrmv(null)).toBeNull()
   })
-  it('só número sem estado na clínica explica o que fazer', () => {
-    const r = normalizarCrmv('28856', null)
-    expect('error' in r && r.error).toMatch(/sigla do estado/i)
-  })
-  it('sigla que não é estado é recusada com frase clara', () => {
-    const r = normalizarCrmv('XX28856', 'SP')
-    expect('error' in r && r.error).toMatch(/não é uma sigla de estado/i)
-  })
-  it('número curto demais não passa (a CHECK exige 4 dígitos)', () => {
-    expect('error' in normalizarCrmv('123', 'SP')).toBe(true)
-  })
-  it('o resultado sempre casa com a regra do banco', () => {
-    const regra = /^[A-Z]{2}[0-9]{4,10}$/
-    for (const entrada of ['28856', 'CRMV-SP 28856', 'sp28856', 'MG 123456']) {
-      const r = normalizarCrmv(entrada, 'SP')
-      expect('crmv' in r && regra.test(r.crmv!)).toBe(true)
+
+  it('aceita os formatos que antes eram recusados', () => {
+    for (const v of ['28856', '28856-SP', '28856/SP', 'CRMV-SP 28856', 'SP28856']) {
+      expect(crmvCabe(v)).toBe(true)
     }
+  })
+
+  it('o tamanho é a única regra que sobrou', () => {
+    expect(crmvCabe('x'.repeat(CRMV_MAX))).toBe(true)
+    expect(crmvCabe('x'.repeat(CRMV_MAX + 1))).toBe(false)
+    expect(crmvCabe(null)).toBe(true)
+  })
+
+  it('acha a sigla do estado venha ela antes ou depois do número', () => {
+    expect(ufDoCrmv('28856-SP')).toBe('SP')
+    expect(ufDoCrmv('SP28856')).toBe('SP')
+    expect(ufDoCrmv('CRMV/MG 123456')).toBe('MG')
+    expect(ufDoCrmv('28856')).toBe('')
+    expect(ufDoCrmv(null)).toBe('')
+  })
+
+  it('não confunde o prefixo CRMV com uma sigla de estado', () => {
+    expect(ufDoCrmv('CRMV 28856')).toBe('')
   })
 })

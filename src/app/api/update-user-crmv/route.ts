@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 import { mensagemErro } from '@/lib/errors'
 import { limitarPorIp } from '@/lib/api/rate-limit'
-const CRMV_REGEX = /^[A-Z]{2}[0-9]{4,10}$/
+import { limparCrmv, crmvCabe, CRMV_MAX } from '@/lib/crmv'
 
 /**
  * POST /api/update-user-crmv
@@ -13,7 +13,7 @@ const CRMV_REGEX = /^[A-Z]{2}[0-9]{4,10}$/
  *
  * Body:
  *   - user_id: UUID do usuário alvo
- *   - crmv: string (ex: "SP12345") ou null para limpar
+ *   - crmv: texto livre (ex: "28856-SP") ou null para limpar
  */
 export async function POST(request: NextRequest) {
   const barrado = await limitarPorIp(request, { escopo: 'app:crmv', limite: 30 })
@@ -33,15 +33,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'user_id obrigatório' }, { status: 400 })
     }
 
-    // Valida formato CRMV se fornecido
-    if (crmv !== null && crmv !== undefined && crmv !== '') {
-      const upper = String(crmv).trim().toUpperCase()
-      if (!CRMV_REGEX.test(upper)) {
-        return NextResponse.json(
-          { error: `Formato CRMV inválido: "${crmv}". Use 2 letras (UF) + 4-10 dígitos. Ex: SP12345` },
-          { status: 400 }
-        )
-      }
+    // Campo livre (migration 0529): só o tamanho é regra.
+    if (!crmvCabe(crmv)) {
+      return NextResponse.json(
+        { error: `O CRMV deve ter no máximo ${CRMV_MAX} caracteres.` },
+        { status: 400 },
+      )
     }
 
     // Verifica permissão: caller deve ser admin/owner/manager da mesma clínica
@@ -75,7 +72,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Usuário não encontrado nesta clínica' }, { status: 404 })
     }
 
-    const normalizedCrmv = crmv ? String(crmv).trim().toUpperCase() : null
+    const normalizedCrmv = limparCrmv(crmv == null ? null : String(crmv))
 
     const { error } = await admin
       .from('profiles')
