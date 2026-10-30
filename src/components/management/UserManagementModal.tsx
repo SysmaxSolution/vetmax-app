@@ -446,6 +446,9 @@ export default function UserManagementModal({
                     placeholder="SP12345"
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
                   />
+                  <p className="mt-0.5 text-[10px] text-slate-400">
+                    Sigla do estado + número. Se digitar só o número, usamos o estado da clínica.
+                  </p>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">

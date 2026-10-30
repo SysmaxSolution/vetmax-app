@@ -52,6 +52,15 @@ const POR_CODIGO: Record<string, string> = {
   'PGRST301': 'Sua sessão expirou. Entre novamente.',
 }
 
+/**
+ * CHECK do banco explicada em português. Sem isto, violar uma regra de formato
+ * devolve "Os dados informados não atendem a uma regra do sistema", que não diz
+ * à pessoa o que corrigir (caso do CRMV sem a sigla do estado, 30/10/2026).
+ */
+const POR_CONSTRAINT: Record<string, string> = {
+  chk_crmv_format: 'CRMV inválido. Use a sigla do estado e o número, por exemplo SP12345.',
+}
+
 const GENERICA = 'Não foi possível concluir a operação. Tente novamente — se persistir, acione o suporte.'
 
 /**
@@ -77,6 +86,11 @@ export function mensagemErro(erro: unknown, contexto?: string): string {
   }
 
   if (code === NOSSO) return msg || GENERICA        // nossa exceção: passa inteira
+  // A CHECK violada vem no texto do erro ("violates check constraint \"x\"").
+  // Quando conhecemos a regra, dizemos o que corrigir em vez da frase genérica.
+  for (const [nome, frase] of Object.entries(POR_CONSTRAINT)) {
+    if (msg.includes(nome)) return frase
+  }
   if (code && POR_CODIGO[code]) return POR_CODIGO[code]
   if (code) return GENERICA                          // qualquer outro código = motor
   if (msg && !CHEIRO_DE_MOTOR.test(msg)) return msg  // erro nosso, sem código
