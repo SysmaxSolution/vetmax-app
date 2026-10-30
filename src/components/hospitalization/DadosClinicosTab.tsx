@@ -6,7 +6,8 @@ import {
   getHospitalizationClinicalData, updateHospitalizationClinicalData,
   type HospClinicalData,
 } from '@/lib/actions/hospitalizations'
-import { getRooms, type Room } from '@/lib/actions/rooms'
+import { getRooms } from '@/lib/actions/rooms'
+import type { Room } from '@/types/rooms'
 
 /**
  * Aba "Dados Clínicos" do card de internação (Internação Completa) — ficha

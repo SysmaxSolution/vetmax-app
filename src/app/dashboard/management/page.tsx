@@ -12,7 +12,7 @@ import type { DocumentTemplate } from '@/types'
 import { urlAssinatura, type PerfilComAssinatura } from '@/lib/storage/assinatura'
 export const metadata = { title: 'Gestão | SysVetMax' }
 
-const COLUNAS_USUARIO = 'id, full_name, last_name, role, crmv, mapa_code, phone, specialties, nickname, photo_url, address, is_active, room, electronic_signature_url, electronic_signature_path, appointment_interval_minutes'
+const COLUNAS_USUARIO = 'id, full_name, last_name, role, crmv, mapa_code, phone, specialties, nickname, photo_url, address, is_active, room, sector, electronic_signature_url, electronic_signature_path, appointment_interval_minutes'
 
 // Quem pertence à clínica = quem tem vínculo em user_clinics OU está com ela
 // como clínica ativa. Filtrar só por profiles.clinic_id escondia quem tem

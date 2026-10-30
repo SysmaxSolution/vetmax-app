@@ -3,35 +3,8 @@
 import { createClient } from '@/lib/supabase/server'
 
 import { mensagemErro } from '@/lib/errors'
+import type { CalendarEventType, UnifiedCalendarEvent, CalendarProfessional, ScheduleResource } from '@/types/calendar'
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-export type CalendarEventType = 'appointment' | 'grooming'
-
-export interface UnifiedCalendarEvent {
-  id:               string
-  type:             CalendarEventType
-  title:            string
-  datetime:         string        // ISO datetime of start
-  status:           string
-  petId:            string
-  petName:          string
-  tutorName:        string
-  petSpecies:       string
-  sourceId:         string
-  reason?:          string        // appointment reason
-  services?:        string[]      // grooming services
-  source?:          string        // 'manual' | 'whatsapp'
-  professionalId:   string | null
-  professionalName: string | null
-  durationMinutes:  number        // duração do bloco na agenda (default 60 / 120 grooming)
-  botConfirmationStatus?: 'confirmed' | 'rescheduled' | 'cancelled' | null
-}
-
-export interface CalendarProfessional {
-  id:   string
-  name: string
-  role: string
-}
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
@@ -124,6 +97,10 @@ export async function getUnifiedCalendarEvents(
       professionalName: prof?.full_name ?? null,
       durationMinutes:  (a as any).duration_minutes ?? prof?.appointment_interval_minutes ?? 60,
       botConfirmationStatus: ((a as any).bot_confirmation_status ?? null) as UnifiedCalendarEvent['botConfirmationStatus'],
+      roomId:           (a as any).room_id ?? null,
+      roomName:         (Array.isArray((a as any).room) ? (a as any).room[0] : (a as any).room)?.name ?? null,
+      appointmentTypeName:  (Array.isArray((a as any).appointment_type) ? (a as any).appointment_type[0] : (a as any).appointment_type)?.name ?? null,
+      appointmentTypeColor: (Array.isArray((a as any).appointment_type) ? (a as any).appointment_type[0] : (a as any).appointment_type)?.color ?? null,
     })
   }
 
@@ -174,10 +151,12 @@ export async function getUnifiedEventsForRange(
   const [apptRes, groomRes] = await Promise.all([
     supabase
       .from('appointments')
-      .select(`id, appointment_datetime, reason, status, source, professional_id, duration_minutes, bot_confirmation_status,
+      .select(`id, appointment_datetime, reason, status, source, professional_id, duration_minutes, bot_confirmation_status, room_id,
                patients:pet_id ( id, name, species ),
                tutors:tutor_id ( id, name ),
-               professional:profiles!professional_id ( full_name, appointment_interval_minutes )`)
+               professional:profiles!professional_id ( full_name, appointment_interval_minutes ),
+               room:rooms!room_id ( name ),
+               appointment_type:appointment_types!appointment_type_id ( name, color )`)
       .eq('clinic_id', auth.clinicId)
       .gte('appointment_datetime', rangeStart)
       .lte('appointment_datetime', rangeEnd)
@@ -223,6 +202,10 @@ export async function getUnifiedEventsForRange(
       professionalName: prof?.full_name ?? null,
       durationMinutes:  (a as any).duration_minutes ?? prof?.appointment_interval_minutes ?? 60,
       botConfirmationStatus: ((a as any).bot_confirmation_status ?? null) as UnifiedCalendarEvent['botConfirmationStatus'],
+      roomId:           (a as any).room_id ?? null,
+      roomName:         (Array.isArray((a as any).room) ? (a as any).room[0] : (a as any).room)?.name ?? null,
+      appointmentTypeName:  (Array.isArray((a as any).appointment_type) ? (a as any).appointment_type[0] : (a as any).appointment_type)?.name ?? null,
+      appointmentTypeColor: (Array.isArray((a as any).appointment_type) ? (a as any).appointment_type[0] : (a as any).appointment_type)?.color ?? null,
     })
   }
 
@@ -260,16 +243,37 @@ export async function getClinicProfessionals(): Promise<CalendarProfessional[] |
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, full_name, role')
+    .select('id, full_name, role, sector')
     .eq('clinic_id', auth.clinicId)
     .in('role', ['vet', 'groomer', 'admin', 'owner', 'manager'])
     .order('full_name')
-
   if (error) return { error: mensagemErro(error, 'lib/actions/calendar.ts') }
   return (data ?? []).map((p: any) => ({
     id:   p.id,
     name: p.full_name ?? 'Profissional',
     role: p.role ?? '',
+    sector: p.sector ?? null,
+  }))
+}
+
+/** Salas/aparelhos marcados como recurso de agenda (rooms.schedulable), ativos. */
+export async function getScheduleResources(): Promise<ScheduleResource[] | { error: string }> {
+  const auth = await getUserClinic()
+  if ('error' in auth) return auth
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('rooms')
+    .select('id, name, type, sector, color, capacity')
+    .eq('clinic_id', auth.clinicId)
+    .eq('active', true)
+    .eq('schedulable', true)
+    .order('sector', { ascending: true, nullsFirst: false })
+    .order('name')
+  if (error) return { error: mensagemErro(error, 'lib/actions/calendar.ts') }
+  return ((data ?? []) as unknown as Record<string, unknown>[]).map(r => ({
+    id: r.id as string, name: r.name as string, type: (r.type as string) ?? 'exam',
+    sector: (r.sector as string | null) ?? null, color: (r.color as string | null) ?? null,
+    capacity: Math.max(1, Number(r.capacity ?? 1)),
   }))
 }
 

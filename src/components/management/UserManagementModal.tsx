@@ -12,7 +12,7 @@ import { adminUpdateUser, adminChangePassword, uploadUserSignature } from '@/lib
 import type { ClinicUserFull } from '@/types/user-management'
 import { listUserCommissions, upsertUserCommission, deleteUserCommission, searchItemsForCommission, listItemSectors } from '@/lib/actions/commissions'
 import type { UserCommission, CommissionableItem } from '@/types/commissions'
-import type { Room } from '@/lib/actions/rooms'
+import type { Room } from '@/types/rooms'
 import type { UserRole } from '@/types'
 import { listarAcessoDoUsuarioNoGrupo, definirAcessoDoUsuarioNaClinica } from '@/lib/actions/clinic-group-access'
 import type { AcessoClinicaDoGrupo } from '@/types/clinic-group'
@@ -90,6 +90,7 @@ export default function UserManagementModal({
   const [nickname,   setNickname]   = useState(user?.nickname ?? '')
   const [specialties, setSpecialties] = useState<string[]>(user?.specialties ?? [])
   const [room,       setRoom]       = useState(user?.room ?? '')
+  const [sector,     setSector]     = useState(user?.sector ?? '')
   const [isActive,            setIsActive]            = useState(user?.is_active ?? true)
   const [photoUrl,            setPhotoUrl]            = useState<string | null>(user?.photo_url ?? null)
   const [signatureUrl,        setSignatureUrl]        = useState<string | null>(user?.electronic_signature_url ?? null)
@@ -181,7 +182,7 @@ export default function UserManagementModal({
       full_name: fullName, last_name: lastName,
       role, crmv: crmv || null, mapa_code: mapaCode || null,
       phone: phone || null, address: address || null,
-      nickname: nickname || null, specialties, room: room || null,
+      nickname: nickname || null, specialties, room: room || null, sector: sector.trim() || null,
       is_active: isActive,
       appointment_interval_minutes: (!isNaN(intervalNum) && intervalNum > 0) ? intervalNum : 60,
     })
@@ -476,6 +477,15 @@ export default function UserManagementModal({
                       <option key={r.id} value={r.name}>{r.name}</option>
                     ))}
                   </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Setor (agenda)</label>
+                  <input type="text" value={sector} onChange={e => setSector(e.target.value)} list="setores-agenda-usuario"
+                    placeholder="Imagem, Clínica, Cirurgia…"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500" />
+                  <datalist id="setores-agenda-usuario">
+                    {[...new Set(rooms.map(r => r.sector).filter(Boolean))].map(s => <option key={s as string} value={s as string} />)}
+                  </datalist>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">

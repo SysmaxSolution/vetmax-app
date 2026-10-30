@@ -4,13 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 import { mensagemErro } from '@/lib/errors'
-export type BookedRange = { start: string; end: string } // 'HH:MM'
-
-export type SlotInfo = {
-  bookedTimes:     string[]
-  bookedRanges:    BookedRange[]
-  intervalMinutes: number
-}
+import type { BookedRange, SlotInfo } from '@/types/appointment-slots'
 
 // Fuso horário de referência (todas as clínicas no Brasil — Brasília).
 // Importante: server actions rodam na Vercel em UTC; usar getHours() aqui

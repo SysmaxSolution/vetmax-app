@@ -2,10 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { Loader2, Plus, Pencil, X, BedDouble, DoorOpen, Wrench, CheckCircle2, EyeOff } from 'lucide-react'
-import {
-  getRooms, createRoom, updateRoom, toggleRoomActive,
-  type Room, type RoomType, type RoomOperationalStatus, type RoomCareLevel,
-} from '@/lib/actions/rooms'
+import { getRooms, createRoom, updateRoom, toggleRoomActive } from '@/lib/actions/rooms'
+import type { Room, RoomType, RoomOperationalStatus, RoomCareLevel } from '@/types/rooms'
 
 /**
  * CRUD de infraestrutura física (Cadastros). Reutilizável:

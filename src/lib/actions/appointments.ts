@@ -5,40 +5,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
 import { mensagemErro } from '@/lib/errors'
+import type { AppointmentStatus, AppointmentItem, CreateAppointmentPayload, UpcomingAppointment, AppointmentFull, UpdateAppointmentPayload, ProfessionalCount } from '@/types/appointments'
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-export type AppointmentStatus = 'scheduled' | 'confirmed' | 'cancelled' | 'arrived'
-
-export interface AppointmentItem {
-  id: string
-  pet_id: string
-  tutor_id: string
-  appointment_datetime: string
-  reason: string
-  status: AppointmentStatus
-  notes: string | null
-  created_at: string
-  patient: { id: string; name: string; species: string; breed: string | null }
-  tutor:   { id: string; name: string; phone: string }
-}
-
-export interface CreateAppointmentPayload {
-  pet_id:               string
-  tutor_id:             string
-  appointment_datetime: string   // 'YYYY-MM-DDTHH:MM:00' — naive local time
-  reason:               string
-  notes?:               string
-  professional_id?:     string
-  duration_minutes?:    number   // M4 — NULL usa o intervalo do profissional
-}
-
-export interface UpcomingAppointment {
-  id:                   string
-  appointment_datetime: string
-  reason:               string
-  status:               AppointmentStatus
-  notes:                string | null
-}
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
@@ -64,6 +32,11 @@ export async function createAppointment(
   if ('error' in auth) return auth
 
   const supabase = await createClient()
+  // Recurso (sala/aparelho): recusa se já estiver tomado no intervalo (0527).
+  if (payload.room_id) {
+    const conflito = await conflitoDeRecurso(auth.clinicId, payload.room_id, payload.appointment_datetime, payload.duration_minutes ?? 30)
+    if (conflito) return { error: conflito }
+  }
   const { data, error } = await supabase.from('appointments').insert({
     clinic_id:            auth.clinicId,
     pet_id:               payload.pet_id,
@@ -73,6 +46,8 @@ export async function createAppointment(
     notes:                payload.notes ?? null,
     professional_id:      payload.professional_id ?? null,
     duration_minutes:     payload.duration_minutes ?? null,
+    room_id:              payload.room_id ?? null,
+    appointment_type_id:  payload.appointment_type_id ?? null,
     status:               'scheduled',
     created_by:           auth.userId,
   }).select('id').single()
@@ -168,21 +143,6 @@ export async function getMonthAppointmentCounts(
 
 // ─── Full appointment (edit) ──────────────────────────────────────────────────
 
-export interface AppointmentFull {
-  id:                   string
-  pet_id:               string
-  tutor_id:             string
-  professional_id:      string | null
-  appointment_datetime: string
-  reason:               string
-  status:               string
-  notes:                string | null
-  duration_minutes:     number | null
-  patient:              { id: string; name: string; species: string }
-  tutor:                { id: string; name: string; phone: string }
-  professional:         { id: string; full_name: string } | null
-}
-
 export async function getAppointmentById(
   id: string,
 ): Promise<AppointmentFull | { error: string }> {
@@ -226,13 +186,6 @@ export async function getAppointmentById(
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────
-
-export interface UpdateAppointmentPayload {
-  appointment_datetime?: string
-  professional_id?:      string | null
-  notes?:                string | null
-  duration_minutes?:     number | null
-}
 
 export async function updateAppointment(
   id: string,
@@ -369,12 +322,6 @@ export async function markAppointmentArrived(
 
 // ─── Contagem de atendimentos por profissional (hoje) ─────────────────────────
 
-export interface ProfessionalCount {
-  vet_id: string
-  vet_name: string
-  count: number
-}
-
 export async function getTodayCountsByProfessional(): Promise<ProfessionalCount[] | { error: string }> {
   try {
     const auth = await getUserClinic()
@@ -444,4 +391,36 @@ export async function getPetUpcomingAppointments(
   } catch {
     return []
   }
+}
+
+// ─── Conflito de recurso (sala/aparelho) ──────────────────────────────────────
+// A marcação ocupa o recurso pela duração informada (ou 30 min). Respeita a
+// capacidade da sala (box com N vagas). Mensagem diz quem está lá e a hora.
+async function conflitoDeRecurso(clinicId: string, roomId: string, inicioIso: string, duracaoMin: number): Promise<string | null> {
+  const admin = createAdminClient()
+  const inicio = new Date(inicioIso.replace(' ', 'T'))
+  if (Number.isNaN(inicio.getTime())) return null
+  const fim = new Date(inicio.getTime() + Math.max(5, duracaoMin) * 60000)
+  const janelaIni = new Date(inicio.getTime() - 12 * 3600000).toISOString()
+  const janelaFim = new Date(fim.getTime() + 12 * 3600000).toISOString()
+  const [{ data: sala }, { data: marcados }] = await Promise.all([
+    admin.from('rooms').select('name, capacity').eq('id', roomId).eq('clinic_id', clinicId).maybeSingle(),
+    admin.from('appointments')
+      .select('appointment_datetime, duration_minutes, patients:pet_id ( name )')
+      .eq('clinic_id', clinicId).eq('room_id', roomId).neq('status', 'cancelled')
+      .gte('appointment_datetime', janelaIni).lte('appointment_datetime', janelaFim),
+  ])
+  const capacidade = Math.max(1, Number((sala as { capacity?: number } | null)?.capacity ?? 1))
+  const ocupando: { nome: string; hora: string }[] = []
+  for (const m of ((marcados ?? []) as unknown as Array<{ appointment_datetime: string; duration_minutes: number | null; patients: unknown }>)) {
+    const mi = new Date(String(m.appointment_datetime).replace(' ', 'T'))
+    const mf = new Date(mi.getTime() + Math.max(5, Number(m.duration_minutes ?? 30)) * 60000)
+    if (mi < fim && mf > inicio) {
+      const pet = Array.isArray(m.patients) ? m.patients[0] : m.patients
+      ocupando.push({ nome: (pet as { name?: string } | null)?.name ?? 'outro pet', hora: mi.toTimeString().slice(0, 5) })
+    }
+  }
+  if (ocupando.length < capacidade) return null
+  const nome = (sala as { name?: string } | null)?.name ?? 'o recurso'
+  return `${nome} já está ocupado neste horário (${ocupando.map(o => `${o.nome} às ${o.hora}`).join(', ')}). Escolha outro horário ou outro recurso.`
 }

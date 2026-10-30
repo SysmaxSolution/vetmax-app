@@ -27,13 +27,14 @@ import { hydrateCanvasState, type CanvasState } from '@/lib/canva/canvas-state'
 import { Toast } from '@/components/ui/toast'
 import ConveniosTab from './ConveniosTab'
 import RoomsTab from './RoomsTab'
+import AppointmentTypesTab from './AppointmentTypesTab'
 import AppearanceTab from './AppearanceTab'
 import ErrorMonitoringDashboard from './ErrorMonitoringDashboard'
 import SettingsWorkspace from './Settings/SettingsWorkspace'
 import BusinessHoursTab from './BusinessHoursTab'
 import { updateUserPhone, getUserModuleAccess, setUserModuleAccess, updateUserNickname } from '@/lib/actions/user-management'
 import type { ClinicUserFull } from '@/types/user-management'
-import type { Room } from '@/lib/actions/rooms'
+import type { Room } from '@/types/rooms'
 import UserManagementModal from './UserManagementModal'
 import UserAccessRightsModal from './UserAccessRightsModal'
 import SubscriptionTab from './subscription/SubscriptionTab'
@@ -756,7 +757,10 @@ export default function ManagementWorkspace({
 
       {/* ── Tab: Salas/Boxes ── */}
       {activeTab === 'salas' && (
-        <RoomsTab initialRooms={initialRooms} />
+        <>
+          <RoomsTab initialRooms={initialRooms} />
+          <AppointmentTypesTab rooms={initialRooms} />
+        </>
       )}
 
       {/* ── Tab: Aparência ── */}

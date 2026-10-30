@@ -14,15 +14,11 @@ import {
   Clock, User, Stethoscope, Loader2, CheckCircle2, AlertCircle,
   CalendarOff, Trash2,
 } from 'lucide-react'
-import {
-  confirmArrival, markAppointmentArrived, cancelAppointment,
-  getTodayCountsByProfessional, type ProfessionalCount,
-} from '@/lib/actions/appointments'
+import { confirmArrival, markAppointmentArrived, cancelAppointment, getTodayCountsByProfessional } from '@/lib/actions/appointments'
+import type { ProfessionalCount } from '@/types/appointments'
 import { cancelGroomingSession } from '@/lib/actions/grooming'
-import {
-  getUnifiedEventsForRange, getClinicProfessionals,
-  type UnifiedCalendarEvent, type CalendarProfessional,
-} from '@/lib/actions/calendar'
+import { getUnifiedEventsForRange, getClinicProfessionals } from '@/lib/actions/calendar'
+import type { UnifiedCalendarEvent, CalendarProfessional } from '@/types/calendar'
 import { sendDailyScheduleToVets } from '@/lib/actions/daily-schedule-whatsapp'
 import { listUnavailabilitiesInRange, deleteUnavailability } from '@/lib/actions/unavailabilities'
 import { getPatientById, type PatientsListItem } from '@/lib/actions/timeline'

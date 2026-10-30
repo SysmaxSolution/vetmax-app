@@ -5,6 +5,10 @@ import { createPortal } from 'react-dom'
 import { X, Search, CalendarDays, Scissors, Tag, DollarSign, Loader2, Save, Calendar, MessageCircle, Gift, Check } from 'lucide-react'
 import { getPatientsList, type PatientsListItem } from '@/lib/actions/timeline'
 import { createAppointment } from '@/lib/actions/appointments'
+import { listAppointmentTypes } from '@/lib/actions/appointment-types'
+import { getScheduleResources } from '@/lib/actions/calendar'
+import type { AppointmentType } from '@/types/appointment-types'
+import type { ScheduleResource } from '@/types/calendar'
 import { createGroomingSession, getGroomingCatalog, updateGroomingPricing, type GroomingCatalogItem, type GroomingServicePrice } from '@/lib/actions/grooming'
 import { sendWhatsAppMessage } from '@/lib/actions/whatsapp'
 import { useModules } from '@/components/providers/ModulesProvider'
@@ -14,7 +18,7 @@ import { getProfessionalSlots, checkProfessionalAvailability } from '@/lib/actio
 import { listCatalogPackages, sellPackageToPet, linkSessionToAppointment, type CatalogPackage } from '@/lib/actions/packages'
 import { localDateTimeToISO, localDateTimeInputToISO } from '@/lib/utils/datetime'
 import TimeWheelPicker from '@/components/ui/TimeWheelPicker'
-import type { BookedRange } from '@/lib/actions/appointment-slots'
+import type { BookedRange } from '@/types/appointment-slots'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -97,6 +101,27 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
   const [bookedRanges, setBookedRanges]         = useState<BookedRange[]>([])
   const [intervalMinutes, setIntervalMinutes]   = useState(60)
   const [durationMinutes, setDurationMinutes]   = useState<string>('')  // M4: '' = usa o intervalo do profissional
+  // Tipo de atendimento e sala/aparelho (0527) — opcionais; o tipo preenche duração e recurso.
+  const [apptTypes, setApptTypes]   = useState<AppointmentType[]>([])
+  const [apptTypeId, setApptTypeId] = useState('')
+  const [recursos, setRecursos]     = useState<ScheduleResource[]>([])
+  const [roomId, setRoomId]         = useState('')
+  useEffect(() => {
+    let vivo = true
+    Promise.all([listAppointmentTypes(), getScheduleResources()]).then(([t, r]) => {
+      if (!vivo) return
+      if (Array.isArray(t)) setApptTypes(t)
+      if (Array.isArray(r)) setRecursos(r)
+    })
+    return () => { vivo = false }
+  }, [])
+  function escolherTipo(id: string) {
+    setApptTypeId(id)
+    const t = apptTypes.find(x => x.id === id)
+    if (!t) return
+    setDurationMinutes(String(t.duration_minutes))
+    if (t.default_room_id) setRoomId(t.default_room_id)
+  }
   const [wheelTime, setWheelTime]               = useState<string | null>(null)
   const [loadingSlots, setLoadingSlots]         = useState(false)
   const [scheduleMode,         setScheduleMode]         = useState<'regular' | 'package'>('regular')
@@ -240,6 +265,8 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
         notes:                notes.trim() || undefined,
         professional_id:      professionalId || undefined,
         duration_minutes:     durationMinutes ? parseInt(durationMinutes) : undefined,
+        room_id:              roomId || undefined,
+        appointment_type_id:  apptTypeId || undefined,
       })
       if ('error' in apptResult) { setSubmitting(false); setError(apptResult.error); return }
 
@@ -308,6 +335,8 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
       notes:                notes.trim() || undefined,
       professional_id:      professionalId || undefined,
       duration_minutes:     durationMinutes ? parseInt(durationMinutes) : undefined,
+      room_id:              roomId || undefined,
+      appointment_type_id:  apptTypeId || undefined,
     })
 
     setSubmitting(false)
@@ -720,6 +749,33 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
                     placeholder="DD/MM/AAAA"
                   />
                 </div>
+
+                {/* Tipo de atendimento e sala/aparelho (0527) — só aparecem quando a clínica cadastrou */}
+                {(apptTypes.length > 0 || recursos.length > 0) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {apptTypes.length > 0 && (
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Tipo de atendimento</label>
+                        <select value={apptTypeId} onChange={e => escolherTipo(e.target.value)}
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
+                          <option value="">— livre —</option>
+                          {apptTypes.map(t => <option key={t.id} value={t.id}>{t.name} · {t.duration_minutes} min{t.sector ? ` · ${t.sector}` : ''}</option>)}
+                        </select>
+                      </div>
+                    )}
+                    {recursos.length > 0 && (
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Sala / aparelho</label>
+                        <select value={roomId} onChange={e => setRoomId(e.target.value)}
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
+                          <option value="">— nenhum —</option>
+                          {recursos.map(r => <option key={r.id} value={r.id}>{r.name}{r.sector ? ` · ${r.sector}` : ''}</option>)}
+                        </select>
+                        <p className="mt-1 text-[10px] text-slate-400">O sistema recusa a marcação se a sala/aparelho já estiver ocupado no horário.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* M4 — duração do atendimento (default = bloco do profissional) */}
                 <div>
