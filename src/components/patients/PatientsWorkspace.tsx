@@ -136,7 +136,7 @@ function PatientCard({
             onClick={() => onReactivate?.(patient)}
             disabled={reactivating}
             className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
-            title="Reativar pet"
+            title="Reativar animal"
           >
             <ArchiveRestore className="h-3.5 w-3.5" />
             {reactivating ? 'Reativando...' : 'Reativar'}
@@ -169,7 +169,7 @@ function PatientCard({
                 type="button"
                 onClick={() => setShowPortal(true)}
                 className="flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 hover:bg-teal-100 transition-colors"
-                title="Gerar acesso do tutor ao portal"
+                title="Gerar acesso do responsável ao portal"
               >
                 <KeyRound className="h-3.5 w-3.5" />
                 <span className="hidden xs:inline">Acesso Portal</span>
@@ -323,7 +323,7 @@ export default function PatientsWorkspace({ initialPatients, clinicName }: Props
       {/* Page Header */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">Pacientes</h1>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">Animais e Responsáveis</h1>
           <p className="mt-0.5 text-sm text-slate-500">
             Diretório clínico — {initialPatients.length} paciente{initialPatients.length !== 1 ? 's' : ''} cadastrado{initialPatients.length !== 1 ? 's' : ''}
           </p>
@@ -335,7 +335,7 @@ export default function PatientsWorkspace({ initialPatients, clinicName }: Props
           className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors shadow-sm flex-shrink-0"
         >
           <Plus className="h-4 w-4" />
-          Novo Paciente
+          Novo Animal
         </button>
       </div>
 
@@ -413,12 +413,12 @@ export default function PatientsWorkspace({ initialPatients, clinicName }: Props
           <p className="text-sm font-medium text-slate-500">
             {query
               ? `Nenhum paciente encontrado para "${query}"`
-              : tab === 'archived' ? 'Nenhum pet arquivado' : 'Nenhum paciente cadastrado'}
+              : tab === 'archived' ? 'Nenhum animal arquivado' : 'Nenhum animal cadastrado'}
           </p>
           <p className="mt-1 text-xs text-slate-400">
             {query
               ? 'Tente um nome diferente'
-              : tab === 'archived' ? 'Pets arquivados aparecem aqui e podem ser reativados' : 'Os pacientes aparecem aqui após o primeiro check-in'}
+              : tab === 'archived' ? 'Animais arquivados aparecem aqui e podem ser reativados' : 'Os animais aparecem aqui após o primeiro check-in'}
           </p>
         </div>
       ) : (

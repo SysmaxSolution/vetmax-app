@@ -13,9 +13,9 @@ const MODE_LABEL: Record<Mode, string> = {
   direct:    'Direto na agenda',
 }
 const MODE_HELP: Record<Mode, string> = {
-  off:       'o tutor não agenda por este canal',
+  off:       'o responsável não agenda por este canal',
   reception: 'vira solicitação; a recepção confirma o horário e o veterinário',
-  direct:    'o tutor escolhe um horário livre e já cai na agenda, sem confirmação',
+  direct:    'o responsável escolhe um horário livre e já cai na agenda, sem confirmação',
 }
 
 interface Props {
@@ -57,8 +57,8 @@ export default function PortalBookingSettings({ initialConfig, onToast }: Props)
           <Smartphone className="h-4 w-4 text-teal-600" />
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-slate-900">Portal do Tutor &amp; Agendamento Online</h3>
-          <p className="text-xs text-slate-500">Controle o acesso do tutor e como ele pode agendar</p>
+          <h3 className="text-sm font-semibold text-slate-900">Portal do Responsável &amp; Agendamento Online</h3>
+          <p className="text-xs text-slate-500">Controle o acesso do responsável e como ele pode agendar</p>
         </div>
       </div>
 
@@ -66,7 +66,7 @@ export default function PortalBookingSettings({ initialConfig, onToast }: Props)
         {/* Portal ligado */}
         <label className="flex items-center justify-between gap-4 cursor-pointer">
           <div>
-            <p className="text-sm font-medium text-slate-800">Usar o Portal do Tutor</p>
+            <p className="text-sm font-medium text-slate-800">Usar o Portal do Responsável</p>
             <p className="text-xs text-slate-500">
               Libera a Área do Tutor (histórico, exames, vacinas e agendamento) e o item
               &quot;Portal (Tutores)&quot; no menu da equipe. Desligado, o tutor não entra e a caixa de

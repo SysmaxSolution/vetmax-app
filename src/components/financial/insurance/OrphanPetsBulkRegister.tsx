@@ -34,7 +34,7 @@ function groupLinesByPet(lines: RemittanceLineRow[]): OrphanPetGroup[] {
         key,
         rep_line_id:  l.id,
         pet_name:     l.pet_name_raw ?? '(sem nome)',
-        tutor_name:   l.tutor_name_raw ?? '(sem tutor)',
+        tutor_name:   l.tutor_name_raw ?? '(sem responsável)',
         species:      l.species_raw ?? '?',
         breed:        l.breed_raw,
         plan_name:    l.plan_name_raw,
@@ -84,7 +84,7 @@ export default function OrphanPetsBulkRegister({
   function handleBulk(scope: 'selected' | 'all') {
     const targetGroups = scope === 'all' ? groups : groups.filter(g => selected.has(g.key))
     if (targetGroups.length === 0) {
-      setErrorMsg('Selecione pelo menos um pet.')
+      setErrorMsg('Selecione pelo menos um animal.')
       return
     }
     setErrorMsg(null)
@@ -111,12 +111,12 @@ export default function OrphanPetsBulkRegister({
         <header className="px-5 py-4 border-b border-purple-200 bg-purple-50">
           <h2 className="font-semibold text-purple-900 flex items-center gap-2">
             <PawPrint className="h-4 w-4" />
-            Pets na Planilha Não Cadastrados no Sistema
+            Animais na Planilha Não Cadastrados no Sistema
           </h2>
         </header>
         <div className="px-5 py-12 text-center">
           <CheckCircle2 className="h-10 w-10 text-emerald-400 mx-auto mb-3" />
-          <p className="text-sm text-slate-600 font-medium">Todos os pets desta remessa já estão cadastrados.</p>
+          <p className="text-sm text-slate-600 font-medium">Todos os animais desta remessa já estão cadastrados.</p>
           <p className="text-xs text-slate-400 mt-1">Nenhuma ação necessária aqui.</p>
         </div>
       </>
@@ -129,12 +129,12 @@ export default function OrphanPetsBulkRegister({
         <div>
           <h2 className="font-semibold text-purple-900 flex items-center gap-2">
             <PawPrint className="h-4 w-4" />
-            Pets na Planilha Não Cadastrados no Sistema
+            Animais na Planilha Não Cadastrados no Sistema
           </h2>
           <p className="text-xs text-purple-600 mt-0.5">
             {groups.length} pet{groups.length !== 1 ? 's' : ''} novo{groups.length !== 1 ? 's' : ''}
             {' · '}
-            cadastro rápido cria tutor + pet + vínculo Petlove em 1 clique
+            cadastro rápido cria responsável + animal + vínculo Petlove em 1 clique
           </p>
         </div>
       </header>
@@ -202,8 +202,8 @@ export default function OrphanPetsBulkRegister({
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50">
               <th className="px-5 py-2 text-left w-10"></th>
-              <th className="px-2 py-2 text-left font-medium text-slate-500 text-xs uppercase tracking-wide">Pet</th>
-              <th className="px-2 py-2 text-left font-medium text-slate-500 text-xs uppercase tracking-wide">Tutor</th>
+              <th className="px-2 py-2 text-left font-medium text-slate-500 text-xs uppercase tracking-wide">Animal</th>
+              <th className="px-2 py-2 text-left font-medium text-slate-500 text-xs uppercase tracking-wide">Responsável</th>
               <th className="px-2 py-2 text-left font-medium text-slate-500 text-xs uppercase tracking-wide">Plano</th>
               <th className="px-2 py-2 text-left font-medium text-slate-500 text-xs uppercase tracking-wide">Microchip</th>
               <th className="px-2 py-2 text-right font-medium text-slate-500 text-xs uppercase tracking-wide">Atend.</th>

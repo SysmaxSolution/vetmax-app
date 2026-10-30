@@ -193,7 +193,7 @@ export default function AgendaKanban({ initialColumns, clinicId, checkinRequired
                             onClick={e => { e.stopPropagation(); onOpenPet(card.patient.id) }}
                             onMouseDown={e => e.stopPropagation()}
                             draggable={false}
-                            title="Abrir cadastro do pet/tutor"
+                            title="Abrir cadastro do animal/responsável"
                             className="flex-shrink-0 rounded-full hover:ring-2 hover:ring-teal-300 transition-shadow"
                           >
                             <PetAvatar
@@ -218,7 +218,7 @@ export default function AgendaKanban({ initialColumns, clinicId, checkinRequired
                               onClick={e => { e.stopPropagation(); onOpenPet(card.patient.id) }}
                               onMouseDown={e => e.stopPropagation()}
                               draggable={false}
-                              title="Abrir cadastro do pet/tutor"
+                              title="Abrir cadastro do animal/responsável"
                               className="text-xs font-semibold text-slate-900 truncate text-left hover:text-teal-700 hover:underline"
                             >
                               {card.patient.name}

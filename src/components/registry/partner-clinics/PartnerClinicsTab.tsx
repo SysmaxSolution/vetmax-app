@@ -154,7 +154,7 @@ export default function PartnerClinicsTab({ userRole }: Props) {
             {query ? `Nenhuma clínica encontrada para "${query}"` : 'Nenhuma clínica parceira cadastrada'}
           </p>
           <p className="mt-1 text-xs text-slate-400">
-            {query ? 'Tente um nome diferente' : 'Cadastre as clínicas que encaminham pacientes (B2B)'}
+            {query ? 'Tente um nome diferente' : 'Cadastre as clínicas que encaminham animais (B2B)'}
           </p>
         </div>
       ) : (

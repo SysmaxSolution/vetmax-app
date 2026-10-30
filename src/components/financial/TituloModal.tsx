@@ -120,7 +120,7 @@ export default function TituloModal({
   const [excedente, setExcedente] = useState<'troco' | 'credito' | null>(null)
 
   const ehReceber = entryType === 'receivable'
-  const rotuloDono = ehReceber ? 'Cliente (Tutor)' : 'Fornecedor'
+  const rotuloDono = ehReceber ? 'Cliente (Responsável)' : 'Fornecedor'
 
   useEffect(() => {
     const termo = ownerBusca.trim()
@@ -518,7 +518,7 @@ export default function TituloModal({
                         value={ownerBusca}
                         onChange={e => { setOwnerBusca(e.target.value); setOwnerAberto(true) }}
                         onFocus={() => setOwnerAberto(true)}
-                        placeholder={ehReceber ? 'Busque pelo nome do tutor…' : 'Busque pelo nome do fornecedor…'}
+                        placeholder={ehReceber ? 'Busque pelo nome do responsável…' : 'Busque pelo nome do fornecedor…'}
                         className={fc}
                       />
                       {ownerAberto && ownerOpcoes.length > 0 && (

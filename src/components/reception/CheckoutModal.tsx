@@ -550,7 +550,7 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
               </div>
 
               {/* Épico B — C1 (04/06): adicionar item avulso ao recebimento
-                  ("o tutor quer levar um petisco na saída"). Sempre particular. */}
+                  ("o responsável quer levar um petisco na saída"). Sempre particular. */}
               {(invoice.status === 'pending' || invoice.status === 'paid_partial') && (
                 <div className="mt-2">
                   {!showAddItem ? (
@@ -712,7 +712,7 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
               <div className="rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-800 space-y-2">
                 <div className="flex items-center gap-2">
                   <span className="text-lg">💳</span>
-                  <span>Este tutor possui <strong>R$ {creditBalance.toFixed(2)}</strong> de crédito/adiantamento disponível.</span>
+                  <span>Este responsável possui <strong>R$ {creditBalance.toFixed(2)}</strong> de crédito/adiantamento disponível.</span>
                 </div>
                 {totalDue > 0.005 && (
                   <div className="flex items-center gap-2">

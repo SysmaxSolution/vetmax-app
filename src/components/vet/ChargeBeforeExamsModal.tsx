@@ -59,7 +59,7 @@ export default function ChargeBeforeExamsModal({ consultationId, patientName, on
             Os exames pedidos a seguir ficam em uma <strong>fatura separada</strong>, gerada quando você encerrar o atendimento.
           </p>
           <ul className="text-xs text-slate-500 space-y-1.5 list-disc list-inside">
-            <li><strong className="text-emerald-700">Cobrar agora:</strong> o tutor paga a consulta no balcão enquanto o pet vai pra exames.</li>
+            <li><strong className="text-emerald-700">Cobrar agora:</strong> o responsável paga a consulta no balcão enquanto o animal vai pra exames.</li>
             <li><strong className="text-slate-700">Cobrar tudo no final:</strong> uma única fatura sai quando os exames chegarem e você fechar a consulta.</li>
           </ul>
 

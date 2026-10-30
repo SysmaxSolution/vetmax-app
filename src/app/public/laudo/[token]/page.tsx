@@ -75,7 +75,7 @@ export default async function PublicLaudoPage({ params }: { params: Promise<{ to
           <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">{modalityLabel}</p>
           <h1 className="text-2xl font-bold text-slate-900 mt-1">{title || `Exame de ${petName}`}</h1>
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-slate-500">
-            <span className="flex items-center gap-1"><Stethoscope className="h-3.5 w-3.5 text-slate-400" />Paciente: <strong className="text-slate-700">{petName}</strong></span>
+            <span className="flex items-center gap-1"><Stethoscope className="h-3.5 w-3.5 text-slate-400" />Animal: <strong className="text-slate-700">{petName}</strong></span>
             {referringVetName && <span>Solicitado por: <strong className="text-slate-700">{referringVetName}</strong></span>}
             <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5 text-slate-400" />{fmtDateTime(createdAt)}</span>
           </div>
@@ -153,7 +153,7 @@ export default async function PublicLaudoPage({ params }: { params: Promise<{ to
             <ShieldCheck className="h-4 w-4 text-emerald-500 flex-shrink-0 mt-0.5" />
             <span>
               Acesso seguro por link individual. Este conteúdo é sigiloso e destinado
-              {audience === 'referring_vet' ? ' ao médico-veterinário solicitante' : ' ao tutor responsável'}.
+              {audience === 'referring_vet' ? ' ao médico-veterinário solicitante' : ' ao responsável responsável'}.
               O laudo assinado é o documento oficial do exame, sob responsabilidade do médico-veterinário do centro de diagnóstico.
             </span>
           </p>

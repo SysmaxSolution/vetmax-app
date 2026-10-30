@@ -51,7 +51,7 @@ export async function sendPortalMessage(petId: string, body: string): Promise<{ 
   if (text.length > 2000) return { error: 'Mensagem muito longa.' }
   const admin = createAdminClient()
   const pc = await petClinic(admin, petId, ctx.links)
-  if (!pc) return { error: 'Sem acesso a este pet.' }
+  if (!pc) return { error: 'Sem acesso a este animal.' }
   const { error } = await admin.from('portal_messages').insert({
     clinic_id: pc.clinicId, tutor_user_id: ctx.tutorUserId, patient_id: petId, sender: 'tutor', body: text,
   })
@@ -81,7 +81,7 @@ async function staff(): Promise<{ userId: string; clinicId: string } | { error: 
   // mensagens do Portal é inerte, mesmo por chamada direta da action.
   const admin = createAdminClient()
   if (!(await clinicFlowFlag(admin, profile.clinic_id as string, 'portal_enabled'))) {
-    return routineOffError('O Portal do Tutor')
+    return routineOffError('O Portal do Responsável')
   }
   return { userId: user.id, clinicId: profile.clinic_id as string }
 }

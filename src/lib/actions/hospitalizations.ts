@@ -164,7 +164,7 @@ export async function createHospitalization(data: {
     .not('status', 'in', '("discharged","cancelled")')
     .maybeSingle()
   if (activeForPatient) {
-    return { error: 'Este paciente JÁ possui uma internação ativa — ele deve aparecer no mapa de internação.' }
+    return { error: 'Este animal JÁ possui uma internação ativa — ele deve aparecer no mapa de internação.' }
   }
 
   // Se existe uma internação encerrada (saiu para revisão e voltou), REATIVA-a.
@@ -209,10 +209,10 @@ export async function createHospitalization(data: {
     const msg = error?.message ?? ''
     if (msg.includes('pet') || msg.includes('INTERNADO') || msg.includes('internação ativa') || msg.includes('uniq_hospitalization_active')) {
       return { error: msg.includes('uniq_hospitalization_active')
-        ? 'Este paciente JÁ possui uma internação ativa — ele deve aparecer no mapa de internação.'
+        ? 'Este animal JÁ possui uma internação ativa — ele deve aparecer no mapa de internação.'
         : msg }
     }
-    return { error: 'Erro ao internar paciente: ' + msg }
+    return { error: 'Erro ao internar animal: ' + msg }
   }
 
   // Remove o paciente do Kanban de Consultório atualizando o status da consulta

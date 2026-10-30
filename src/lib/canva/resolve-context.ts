@@ -24,7 +24,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 const BUSINESS_TYPE_LABELS: Record<string, string> = {
   vet_clinic:     'Clínica Veterinária',
-  pet_aesthetics: 'Estética Pet',
+  pet_aesthetics: 'Estética Animal',
 }
 
 const VISIT_REASON_LABELS: Record<string, string> = {

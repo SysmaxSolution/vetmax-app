@@ -148,7 +148,7 @@ export default function PartnerClinicFullModal({ clinic, priceTables, onClose, o
                 {isEdit ? 'Editar Clínica Parceira' : 'Nova Clínica Parceira'}
               </h2>
               <p className="text-xs text-slate-500">
-                {isEdit ? 'Atualize os dados e a tabela de preço da parceira' : 'Clínica que encaminha pacientes (B2B)'}
+                {isEdit ? 'Atualize os dados e a tabela de preço da parceira' : 'Clínica que encaminha animais (B2B)'}
               </p>
             </div>
           </div>

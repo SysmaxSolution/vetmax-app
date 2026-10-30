@@ -23,7 +23,7 @@ import TutorRightsClient from './TutorRightsClient'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Direitos LGPD do Tutor — SysVetMax',
+  title: 'Direitos LGPD do Responsável — SysVetMax',
   robots: { index: false, follow: false },
 }
 

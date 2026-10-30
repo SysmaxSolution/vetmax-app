@@ -385,8 +385,8 @@ export default function PetloveReconciliationClient({
                 <p className="text-xs font-semibold text-amber-900 mb-1">A exclusão também vai apagar:</p>
                 <ul className="text-xs text-amber-800 space-y-0.5 ml-1">
                   <li>• Os <strong>{deleteRequest.linesCount}</strong> lançamentos financeiros criados</li>
-                  <li>• Os preços fixados dos pets que vieram desta remessa</li>
-                  <li>• Os eventos do histórico de conciliação dos pets</li>
+                  <li>• Os preços fixados dos animais que vieram desta remessa</li>
+                  <li>• Os eventos do histórico de conciliação dos animais</li>
                   <li>• As baixas no extrato bancário ligadas a esta remessa</li>
                 </ul>
                 <p className="text-xs text-amber-700 mt-2 italic">

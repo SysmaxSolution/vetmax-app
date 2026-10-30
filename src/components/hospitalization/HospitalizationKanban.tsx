@@ -483,7 +483,7 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
           <div className="flex-1 text-sm">
             <p className="font-semibold text-amber-900">Modo Demonstrativo · Plano Free</p>
             <p className="text-amber-800 mt-0.5">
-              A internação está disponível apenas para visualização. Para admitir pacientes, registrar evolução clínica
+              A internação está disponível apenas para visualização. Para admitir animais, registrar evolução clínica
               e dar alta, faça upgrade para um plano pago.
             </p>
           </div>
@@ -502,12 +502,12 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
             <BedDouble className="h-5 w-5 text-violet-600" />
             Mapa de Internação
           </h1>
-          <p className="text-sm text-slate-600">Gerencie o fluxo de pacientes críticos e observações em tempo real.</p>
+          <p className="text-sm text-slate-600">Gerencie o fluxo de animais críticos e observações em tempo real.</p>
         </div>
         <button
           type="button"
           onClick={() => {
-            if (isFreePlan) { alert('Funcionalidade disponível em planos pagos. Faça upgrade para admitir pacientes.'); return }
+            if (isFreePlan) { alert('Funcionalidade disponível em planos pagos. Faça upgrade para admitir animais.'); return }
             setShowAdmitModal(true)
           }}
           aria-hidden={showAdmitModal ? 'true' : undefined}
@@ -518,7 +518,7 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
           }`}
         >
           <Plus className="h-4 w-4" />
-          Admitir Paciente
+          Admitir Animal
         </button>
       </div>
       {admitSuccessMsg && (
@@ -661,7 +661,7 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
                 {cards.length === 0 ? (
                   <div className={`flex flex-col items-center justify-center py-10 rounded-xl border-2 border-dashed ${col.border} text-center`}>
                     <span className="text-2xl mb-1 opacity-30">{col.emoji}</span>
-                    <p className="text-xs text-slate-400">Sem pacientes aqui</p>
+                    <p className="text-xs text-slate-400">Sem animais aqui</p>
                   </div>
                 ) : (
                   cards.map(card => (
@@ -1057,7 +1057,7 @@ function printDischargePdf(s: DischargeSummary) {
     <div class="grid">
       <div class="f"><label>Animal</label><span>${s.patient.name}</span></div>
       <div class="f"><label>Espécie / Raça</label><span>${speciesLabel(s.patient.species)}${s.patient.breed ? ` — ${s.patient.breed}` : ' (SRD)'}</span></div>
-      <div class="f"><label>Tutor</label><span>${s.tutor.name}</span></div>
+      <div class="f"><label>Responsável</label><span>${s.tutor.name}</span></div>
       <div class="f"><label>Contato</label><span>${s.tutor.phone ?? '—'}</span></div>
     </div>
     <h2>Internação</h2>
@@ -1261,7 +1261,7 @@ function AdmitModal({ onClose, onSuccess, preselectedBox }: { onClose: () => voi
           <div className="relative">
             <input
               type="text"
-              placeholder="Buscar por tutor ou pet..."
+              placeholder="Buscar por responsável ou animal..."
               value={selected ? selected.tutor.name + ' — ' + selected.name : search}
               onChange={e => handleSearch(e.target.value)}
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"

@@ -630,7 +630,7 @@ export default function TriageForm({
 
           <div className="mt-4 pt-4 border-t border-slate-200 space-y-1">
             <p className="text-sm">
-              <span className="font-medium text-slate-700">Tutor:</span> {consultation.tutor.name}
+              <span className="font-medium text-slate-700">Responsável:</span> {consultation.tutor.name}
             </p>
             <p className="text-sm text-slate-600">{consultation.tutor.phone}</p>
             <div className="mt-1">

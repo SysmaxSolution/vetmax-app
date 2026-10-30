@@ -22,7 +22,7 @@ const SPECIES_LABELS: Record<string, string> = {
 }
 
 export async function generateMetadata(_: { params: Promise<{ id: string }> }) {
-  return { title: 'Perfil do Paciente' }
+  return { title: 'Perfil do Animal' }
 }
 
 export default async function PatientProfilePage({ params }: { params: Promise<{ id: string }> }) {
@@ -64,7 +64,7 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
           className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
-          Lista de Pacientes
+          Lista de Animais
         </Link>
 
         {/* Banner Cadastro Rápido (criado via importação Petlove) */}
@@ -80,10 +80,10 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
                 {!patient.gender || patient.gender === 'unknown' ? <li>Sexo (macho/fêmea)</li> : null}
                 {!patient.birth_date ? <li>Data de nascimento</li> : null}
                 <li>Peso, alergias, doenças crônicas e foto</li>
-                {patient.tutor?.phone === '(não informado)' ? <li>Telefone e CPF do tutor (placeholder gerado)</li> : null}
+                {patient.tutor?.phone === '(não informado)' ? <li>Telefone e CPF do responsável (placeholder gerado)</li> : null}
               </ul>
               <p className="text-xs text-amber-700 mt-1.5">
-                Complete na próxima visita do tutor à clínica.
+                Complete na próxima visita do responsável à clínica.
               </p>
             </div>
           </div>
@@ -139,7 +139,7 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-3">
             <h2 className="font-semibold text-slate-800 flex items-center gap-2">
               <User className="h-4 w-4 text-slate-400" />
-              Tutor
+              Responsável
             </h2>
             <p className="font-medium text-slate-900">{patient.tutor?.name ?? '—'}</p>
             {patient.tutor?.phone && (

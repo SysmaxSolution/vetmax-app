@@ -538,7 +538,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
   // Criar pet (modo criação) — chamado pelo botão "Criar Cadastro" na aba Pet
   const handleCreate = () => {
     setCreateError(null)
-    if (!petName.trim()) { setCreateError('Nome do Pet é obrigatório.'); return }
+    if (!petName.trim()) { setCreateError('Nome do Animal é obrigatório.'); return }
 
     // LGPD: para novo tutor com algum dado pessoal, exige consentimento
     const isNewTutor = !isEdit && !isPetOnly && !foundTutorId
@@ -694,7 +694,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
 
   const handleRemoveInsurance = async () => {
     const patId = isEdit ? patient.id : createdPatientId
-    if (!confirm('Desvincular convênio deste pet?') || !patId) return
+    if (!confirm('Desvincular convênio deste animal?') || !patId) return
     setSavingInsurance(true)
     const res = await removePetInsurance(patId)
     if ('error' in res) { alert('Erro: ' + res.error) }
@@ -719,7 +719,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
     ? `Novo Pet — ${propTutorName}`
     : 'Novo Cadastro'
 
-  const modalSubtitle = isEdit ? 'Gestão de Cadastro' : 'Cadastrar Tutor e Pet'
+  const modalSubtitle = isEdit ? 'Gestão de Cadastro' : 'Cadastrar Responsável e Animal'
 
   // ─── JSX ─────────────────────────────────────────────────────────────────────
   return (
@@ -754,8 +754,8 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
 
           {/* ── Tabs ── */}
           <div className="flex gap-1 mb-[-1px] overflow-x-auto">
-            <TabButton active={tab === 'pet'}     onClick={() => setTab('pet')}     icon={<Dog     className="h-4 w-4" />} label="Paciente" />
-            <TabButton active={tab === 'tutor'}   onClick={() => setTab('tutor')}   icon={<User    className="h-4 w-4" />} label="Tutor" />
+            <TabButton active={tab === 'pet'}     onClick={() => setTab('pet')}     icon={<Dog     className="h-4 w-4" />} label="Animal" />
+            <TabButton active={tab === 'tutor'}   onClick={() => setTab('tutor')}   icon={<User    className="h-4 w-4" />} label="Responsável" />
             <TabButton active={tab === 'vacinas'} onClick={() => setTab('vacinas')} icon={<Syringe  className="h-4 w-4" />} label="Vacinas" />
             <TabButton active={tab === 'convenio'} onClick={() => setTab('convenio')} icon={<Shield  className="h-4 w-4" />} label="Convênio" />
             <TabButton active={tab === 'documentos'} onClick={() => setTab('documentos')} icon={<Paperclip className="h-4 w-4" />} label="Documentos" />
@@ -810,7 +810,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
               {/* Banner pós-criação */}
               {!isEdit && createdPatientId && (
                 <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm font-medium text-emerald-800">
-                  Pet cadastrado com sucesso! Complete as abas Vacinas e Convênio ou clique em Concluir.
+                  Animal cadastrado com sucesso! Complete as abas Vacinas e Convênio ou clique em Concluir.
                 </div>
               )}
 
@@ -1066,7 +1066,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                   </div>
                   {cpfLookupStatus === 'found' && (
                     <p className="mt-1.5 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-700 font-medium">
-                      Tutor encontrado — dados preenchidos automaticamente.
+                      Responsável encontrado — dados preenchidos automaticamente.
                     </p>
                   )}
                   {cpfLookupStatus === 'not_found' && cpfCnpjStatus !== 'invalid' && (
@@ -1463,7 +1463,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                 <>
                   {/* Botão upload — opcionalmente seguido de staging com título/data/observação */}
                   <div className="flex items-center justify-between">
-                    <p className="text-sm text-slate-500">Arquivos do pet (PDF, imagem, laudo...)</p>
+                    <p className="text-sm text-slate-500">Arquivos do animal (PDF, imagem, laudo...)</p>
                     <button
                       type="button"
                       onClick={() => docInputRef.current?.click()}
@@ -1802,7 +1802,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
               type="button"
               onClick={() => setShowDeleteModal(true)}
               className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-              title="Arquivar pet (soft delete com motivo)"
+              title="Arquivar animal (soft delete com motivo)"
             >
               <Trash2 className="h-4 w-4" />
               Arquivar
@@ -1847,10 +1847,10 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6 space-y-4">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-red-500" />
-              <h2 className="text-base font-semibold text-slate-900">Arquivar Pet</h2>
+              <h2 className="text-base font-semibold text-slate-900">Arquivar Animal</h2>
             </div>
             <p className="text-sm text-slate-600">
-              O pet será arquivado e removido das filas. O histórico clínico é preservado para fins de auditoria.
+              O animal será arquivado e removido das filas. O histórico clínico é preservado para fins de auditoria.
             </p>
             {deleteError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{deleteError}</p>}
             <div>
@@ -1860,7 +1860,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
               <textarea
                 value={deleteReason}
                 onChange={e => setDeleteReason(e.target.value)}
-                placeholder="Ex: Óbito, mudança de cidade, tutor solicitou remoção..."
+                placeholder="Ex: Óbito, mudança de cidade, responsável solicitou remoção..."
                 rows={3}
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                 autoFocus
@@ -1909,7 +1909,7 @@ function LockedTabPlaceholder({ icon, message }: { icon: React.ReactNode; messag
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <div className="mb-3 opacity-40">{icon}</div>
       <p className="text-sm font-bold text-slate-400">{message}</p>
-      <p className="text-xs text-slate-400 mt-1">Preencha as abas Paciente e Recepção e clique em Criar Cadastro.</p>
+      <p className="text-xs text-slate-400 mt-1">Preencha as abas Animal e Recepção e clique em Criar Cadastro.</p>
     </div>
   )
 }

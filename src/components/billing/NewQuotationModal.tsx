@@ -90,7 +90,7 @@ export default function NewQuotationModal({ clinicId, currentUserId, professiona
   }
 
   function pickTutor(res: SearchResult) {
-    setTutor({ id: res.tutor.id, name: res.tutor.name ?? 'Tutor' })
+    setTutor({ id: res.tutor.id, name: res.tutor.name ?? 'Responsável' })
     setPetOptions(res.patients.map(p => ({ id: p.id, name: p.name })))
     setPetId(res.patients.length === 1 ? res.patients[0].id : '')
     setTutorResults([])
@@ -157,7 +157,7 @@ export default function NewQuotationModal({ clinicId, currentUserId, professiona
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-600"><FileText className="h-5 w-5 text-white" /></div>
             <div>
               <h2 className="text-base font-bold text-slate-900">Novo Orçamento de Serviços</h2>
-              <p className="text-[11px] text-slate-500">Sem compromisso — pode enviar ao tutor e faturar depois</p>
+              <p className="text-[11px] text-slate-500">Sem compromisso — pode enviar ao responsável e faturar depois</p>
             </div>
           </div>
           <button onClick={onClose} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button>
@@ -167,7 +167,7 @@ export default function NewQuotationModal({ clinicId, currentUserId, professiona
           {/* Tutor + Pet */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="relative" ref={tutorWrapRef}>
-              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1 flex items-center gap-1"><UserCircle className="h-3 w-3" /> Tutor (opcional)</span>
+              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1 flex items-center gap-1"><UserCircle className="h-3 w-3" /> Responsável (opcional)</span>
               {tutor ? (
                 <div className="flex items-center gap-2 bg-teal-50 border border-teal-200 rounded-xl px-3 py-2">
                   <span className="flex-1 text-sm font-semibold text-teal-800 truncate">{tutor.name}</span>
@@ -177,14 +177,14 @@ export default function NewQuotationModal({ clinicId, currentUserId, professiona
                 <>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                    <input value={tutorQuery} onChange={e => handleTutorQuery(e.target.value)} placeholder="CPF, nome do tutor ou pet" className="w-full pl-8 pr-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
+                    <input value={tutorQuery} onChange={e => handleTutorQuery(e.target.value)} placeholder="CPF, nome do responsável ou animal" className="w-full pl-8 pr-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
                   </div>
                   {tutorResults.length > 0 && (
                     <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg max-h-52 overflow-y-auto">
                       {tutorResults.map(r => (
                         <button key={r.tutor.id} onClick={() => pickTutor(r)} className="w-full text-left px-3 py-2 hover:bg-teal-50 border-b border-slate-100 last:border-0">
                           <p className="text-sm font-semibold text-slate-800">{r.tutor.name}</p>
-                          <p className="text-xs text-slate-400">{r.patients.map(p => p.name).join(', ') || 'sem pets'}</p>
+                          <p className="text-xs text-slate-400">{r.patients.map(p => p.name).join(', ') || 'sem animais'}</p>
                         </button>
                       ))}
                     </div>
@@ -193,9 +193,9 @@ export default function NewQuotationModal({ clinicId, currentUserId, professiona
               )}
             </div>
             <div>
-              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1 flex items-center gap-1"><PawPrint className="h-3 w-3" /> Pet (opcional)</span>
+              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1 flex items-center gap-1"><PawPrint className="h-3 w-3" /> Animal (opcional)</span>
               <select value={petId} onChange={e => setPetId(e.target.value)} disabled={petOptions.length === 0} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20">
-                <option value="">{petOptions.length ? '— Selecionar —' : 'Selecione o tutor primeiro'}</option>
+                <option value="">{petOptions.length ? '— Selecionar —' : 'Selecione o responsável primeiro'}</option>
                 {petOptions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>

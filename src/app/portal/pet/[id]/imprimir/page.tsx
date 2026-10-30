@@ -37,7 +37,7 @@ export default async function PortalPrintPage({ params }: { params: Promise<{ id
           <div className="border-b-2 border-slate-800 pb-3 mb-5 flex items-baseline justify-between">
             <div>
               <p className="text-lg font-bold">{pet.clinicName}</p>
-              <p className="text-xs text-slate-500">Histórico de saúde — Portal do Tutor</p>
+              <p className="text-xs text-slate-500">Histórico de saúde — Portal do Responsável</p>
             </div>
             <p className="text-xs text-slate-500">Emitido em {new Date().toLocaleDateString('pt-BR')}</p>
           </div>
@@ -45,7 +45,7 @@ export default async function PortalPrintPage({ params }: { params: Promise<{ id
           {/* Pet */}
           <table className="w-full text-sm mb-6">
             <tbody>
-              <tr><td className="py-0.5 pr-4 text-slate-500 w-32">Paciente</td><td className="font-medium">{pet.name}</td></tr>
+              <tr><td className="py-0.5 pr-4 text-slate-500 w-32">Animal</td><td className="font-medium">{pet.name}</td></tr>
               {pet.breed && <tr><td className="py-0.5 pr-4 text-slate-500">Raça</td><td>{pet.breed}</td></tr>}
               {pet.clinicPhone && <tr><td className="py-0.5 pr-4 text-slate-500">Clínica</td><td>{pet.clinicPhone}</td></tr>}
             </tbody>
@@ -88,7 +88,7 @@ export default async function PortalPrintPage({ params }: { params: Promise<{ id
           </Section>
 
           <p className="text-[10px] text-slate-400 mt-8 pt-3 border-t border-slate-200">
-            Documento gerado pelo Portal do Tutor sob responsabilidade do médico-veterinário. * valor fora da faixa de referência.
+            Documento gerado pelo Portal do Responsável sob responsabilidade do médico-veterinário. * valor fora da faixa de referência.
           </p>
         </div>
       </div>

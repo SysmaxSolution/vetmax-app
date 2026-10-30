@@ -132,7 +132,7 @@ export async function generateInvoice(
 
   const patient = consultation.patients as any
   const tutor   = patient?.tutors as any
-  if (!patient?.id || !tutor?.id) return { error: 'Paciente ou tutor não encontrado.' }
+  if (!patient?.id || !tutor?.id) return { error: 'Animal ou responsável não encontrado.' }
 
   // Guard de encerramento: sem serviços ativos a fatura iria zerada para o
   // Caixa Central. Decisão do PO: nunca permitir alta zerada.
@@ -1586,7 +1586,7 @@ export async function generatePartialInvoice(
 
   const patient = consult.patients as any
   const tutor   = patient?.tutors as any
-  if (!patient?.id || !tutor?.id) return { error: 'Paciente ou tutor não encontrado.' }
+  if (!patient?.id || !tutor?.id) return { error: 'Animal ou responsável não encontrado.' }
 
   // Fluxo de Rejeição de Exame (opt-in): exame travado não entra na parcial.
   // Flag desligada → a query abaixo é exatamente a de antes.

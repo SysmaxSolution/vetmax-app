@@ -22,7 +22,7 @@ function fmtDate(iso: string | null) {
 }
 
 function exportCSV(rows: PetFrequencyRow[]) {
-  const header = 'Pet,Espécie,Raça,Tutor,Telefone,Consultas,Última Visita'
+  const header = 'Animal,Espécie,Raça,Responsável,Telefone,Consultas,Última Visita'
   const lines  = rows.map(r =>
     [r.pet_name, r.species, r.breed ?? '', r.tutor_name, r.tutor_phone ?? '',
      r.consult_count, fmtDate(r.last_visit)].join(',')
@@ -111,7 +111,7 @@ export default function PetFrequencyReport() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50">
               <tr>
-                {['Pet', 'Espécie', 'Raça', 'Tutor', 'Telefone', 'Consultas', 'Última Visita'].map(h => (
+                {['Animal', 'Espécie', 'Raça', 'Responsável', 'Telefone', 'Consultas', 'Última Visita'].map(h => (
                   <th key={h} className="px-4 py-3 text-left font-semibold text-slate-500 text-xs uppercase tracking-wide">{h}</th>
                 ))}
               </tr>

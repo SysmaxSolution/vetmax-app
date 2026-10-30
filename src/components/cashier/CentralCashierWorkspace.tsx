@@ -358,7 +358,7 @@ export default function CentralCashierWorkspace({
           data-mentor-step="cashier-kpis"
           className="grid grid-cols-2 sm:grid-cols-4 gap-4"
         >
-          <div className="bg-white rounded-xl border border-sky-200 p-5 shadow-sm" title="O que os tutores ainda vão pagar no balcão. Repasses futuros de convênio (Petlove) NÃO entram aqui — eles ficam em Contas a Receber no Financeiro.">
+          <div className="bg-white rounded-xl border border-sky-200 p-5 shadow-sm" title="O que os responsáveis ainda vão pagar no balcão. Repasses futuros de convênio (Petlove) NÃO entram aqui — eles ficam em Contas a Receber no Financeiro.">
             <div className="flex items-center gap-3 mb-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-50">
                 <Clock className="h-4 w-4 text-sky-600" />
@@ -366,7 +366,7 @@ export default function CentralCashierWorkspace({
               <p className="text-xs font-medium text-sky-600 uppercase tracking-wide">A Receber</p>
             </div>
             <p data-testid="kpi-total-pending" className="text-2xl font-bold text-sky-700 font-mono tabular-nums">{fmt(summary.total_pending ?? 0)}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">do tutor · sem repasse de convênio</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">do responsável · sem repasse de convênio</p>
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm" title="Tudo que movimentou o caixa no período: entradas recebidas (inclui as já verificadas) menos saídas e sangrias.">
@@ -514,7 +514,7 @@ export default function CentralCashierWorkspace({
               <tr className="border-b border-slate-100 bg-slate-50">
                 <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Data</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Módulo</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Pet / Tutor</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Animal / Responsável</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Descrição</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Forma Pgto</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Valor</th>

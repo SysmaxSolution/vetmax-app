@@ -308,7 +308,7 @@ export function CheckInModal({
           } : {}),
         })
       } else {
-        setError('Erro: Dados do paciente ou tutor não informados.')
+        setError('Erro: Dados do animal ou responsável não informados.')
         return
       }
 
@@ -394,7 +394,7 @@ export function CheckInModal({
               <div className="rounded-xl border border-teal-200 bg-teal-50/60 px-4 py-3">
                 <p className="text-sm font-semibold text-teal-800 flex items-center gap-1.5">
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.6a1 1 0 0 1 .7.3l5.4 5.4a1 1 0 0 1 .3.7V19a2 2 0 0 1-2 2Z" /></svg>
-                  Pré-consulta enviada pelo tutor
+                  Pré-consulta enviada pelo responsável
                 </p>
                 {preconsults.map(pc => (
                   <div key={pc.id} className="mt-2 rounded-lg bg-white/70 border border-teal-100 px-3 py-2 text-sm text-teal-900">
@@ -417,7 +417,7 @@ export function CheckInModal({
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
                 <p className="text-sm font-semibold text-amber-800">Termo de privacidade atualizado</p>
                 <p className="text-xs text-amber-700 mt-0.5">
-                  O termo agora cobre o registro por voz e o uso de IA no atendimento. Ao confirmar o check-in, o tutor revisa e re-aceita o termo.
+                  O termo agora cobre o registro por voz e o uso de IA no atendimento. Ao confirmar o check-in, o responsável revisa e re-aceita o termo.
                 </p>
               </div>
             )}
@@ -456,7 +456,7 @@ export function CheckInModal({
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Profissional responsável {requireAttendingVet ? <span className="text-red-500">*</span> : <span className="text-slate-400 font-normal">(opcional)</span>}
                 </label>
-                <p className="text-[11px] text-slate-500 mb-2 -mt-0.5">Direciona o pet para a fila do profissional. Sem responsável, fica visível a todos.</p>
+                <p className="text-[11px] text-slate-500 mb-2 -mt-0.5">Direciona o animal para a fila do profissional. Sem profissional escolhido, fica visível a todos.</p>
                 <select
                   value={vetId}
                   onChange={e => setVetId(e.target.value)}
@@ -656,7 +656,7 @@ export function CheckInModal({
                   <svg className="h-5 w-5 text-blue-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                   </svg>
-                  <p className="text-sm font-semibold text-teal-700">Informações do Tutor</p>
+                  <p className="text-sm font-semibold text-teal-700">Informações do Responsável</p>
                 </div>
 
                 {addressRequired && (

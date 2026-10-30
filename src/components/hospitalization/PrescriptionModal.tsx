@@ -107,8 +107,8 @@ export default function PrescriptionModal({ data, card, onClose }: Props) {
     doc.setFontSize(8)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(80, 40, 160)
-    doc.text('ANIMAL (PET)', margin + 4, y)
-    doc.text('TUTOR (RESPONSÁVEL)', margin + halfW + 4, y)
+    doc.text('ANIMAL (ANIMAL)', margin + 4, y)
+    doc.text('RESPONSÁVEL (RESPONSÁVEL)', margin + halfW + 4, y)
     y += 4
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(40)
@@ -165,7 +165,7 @@ export default function PrescriptionModal({ data, card, onClose }: Props) {
     doc.setFontSize(10)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(25)
-    doc.text('ORIENTAÇÕES AO TUTOR', margin, y)
+    doc.text('ORIENTAÇÕES AO RESPONSÁVEL', margin, y)
     y += 5
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
@@ -327,7 +327,7 @@ export default function PrescriptionModal({ data, card, onClose }: Props) {
               value={text}
               onChange={e => setText(e.target.value)}
               className="w-full h-52 p-4 text-sm rounded-xl border border-slate-200 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 resize-none font-mono text-slate-700 leading-relaxed"
-              placeholder="Orientações ao tutor e condutas prescritas..."
+              placeholder="Orientações ao responsável e condutas prescritas..."
             />
           ) : (
             <div className="w-full min-h-52 p-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed font-mono">
@@ -370,7 +370,7 @@ export default function PrescriptionModal({ data, card, onClose }: Props) {
               </p>
             </div>
             <div>
-              <span className="text-[10px] font-bold text-indigo-500 uppercase block mb-1">Tutor</span>
+              <span className="text-[10px] font-bold text-indigo-500 uppercase block mb-1">Responsável</span>
               <p className="font-medium text-slate-800">{data.tutor.name}</p>
               {data.tutor.phone && <p className="text-slate-500">{data.tutor.phone}</p>}
             </div>

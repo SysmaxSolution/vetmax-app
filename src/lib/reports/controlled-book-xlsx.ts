@@ -60,7 +60,7 @@ function abaDoMedicamento(wb: ExcelJS.Workbook, book: ControlledBook, folha: Fol
   // Cabeçalho em dois níveis, como na planilha
   ws.mergeCells('A3:A4'); ws.mergeCells('B3:D3'); ws.mergeCells('E3:G3'); ws.mergeCells('H3:H4'); ws.mergeCells('I3:I4'); ws.mergeCells('J3:J4')
   cabecalho(ws, 3, ['DATA', 'H I S T Ó R I C O', '', '', 'MOVIMENTO', '', '', 'ESTOQUE', 'ASSINATURA DO RESP.\nTÉCNICO', 'OBSERVAÇÕES'])
-  cabecalho(ws, 4, ['', 'Pet-Responsável', 'Procedimento', 'N. OS', 'Entrada', 'Saída', 'Perdas', '', '', ''])
+  cabecalho(ws, 4, ['', 'Animal-Responsável', 'Procedimento', 'N. OS', 'Entrada', 'Saída', 'Perdas', '', '', ''])
   ws.getRow(3).height = 28
 
   // Saldo anterior
@@ -186,7 +186,7 @@ export async function gerarLivroControladosXlsx(book: ControlledBook): Promise<B
   geraisWs.mergeCells(2, 1, 2, 4 + gerais.medicamentos.length * 2)
   geraisWs.getCell('A2').value = 'Uma linha por atendimento (ou nota de entrada). As abas de cada medicamento mostram o mesmo movimento em forma de livro.'
   geraisWs.getCell('A2').font = { size: 9, color: { argb: 'FF4A5A58' } }
-  const cab = ['Data', 'Animal - Tutor', 'Procedimento', 'N. OS']
+  const cab = ['Data', 'Animal - Responsável', 'Procedimento', 'N. OS']
   for (const m of gerais.medicamentos) cab.push(`${m} - Entrada`, `${m} - Saída`)
   cabecalho(geraisWs, 4, cab)
   geraisWs.getColumn(1).width = 16; geraisWs.getColumn(2).width = 30; geraisWs.getColumn(3).width = 36; geraisWs.getColumn(4).width = 10

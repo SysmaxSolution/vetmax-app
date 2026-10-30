@@ -254,7 +254,7 @@ export default function GroomingCheckinModal({
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              placeholder="Ex: Pet agressivo, alergia a perfume..."
+              placeholder="Ex: Animal agressivo, alergia a perfume..."
               rows={2}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 resize-none"
             />

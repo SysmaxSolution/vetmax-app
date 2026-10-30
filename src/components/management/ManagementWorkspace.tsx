@@ -43,7 +43,7 @@ import type { SubscriptionOverview } from '@/lib/subscription/types'
 // Mapeamento dos keys de módulos para labels em PT-BR (espelha o catálogo).
 const MODULE_LABELS_PT: Record<string, string> = {
   reception:             'Recepção',
-  patients:              'Pacientes',
+  patients:              'Animais e Responsáveis',
   triage:                'Triagem',
   consultation:          'Consultório',
   exams:                 'Exames',

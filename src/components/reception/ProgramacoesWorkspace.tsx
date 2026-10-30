@@ -55,7 +55,7 @@ function ScheduleList({
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
                 <PawPrint className="h-3.5 w-3.5 text-slate-400" /> {it.patient_name}
-                <span className="text-xs font-normal text-slate-400">· {it.tutor_name ?? 'sem tutor'}</span>
+                <span className="text-xs font-normal text-slate-400">· {it.tutor_name ?? 'sem responsável'}</span>
                 {contacted && (
                   <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-px">
                     <CheckCircle2 className="h-3 w-3" />
@@ -94,7 +94,7 @@ function ScheduleList({
                 <button
                   onClick={() => onItemStatus([it.id], 'contacted')}
                   disabled={busy}
-                  title="Marcar tutor como contatado"
+                  title="Marcar responsável como contatado"
                   className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1 hover:bg-emerald-100 disabled:opacity-50"
                 >
                   Contatado
@@ -352,7 +352,7 @@ export default function ProgramacoesWorkspace({
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
                           <PawPrint className="h-3.5 w-3.5 text-slate-400" /> {it.patient_name}
-                          <span className="text-xs font-normal text-slate-400">· {it.tutor_name ?? 'sem tutor'}</span>
+                          <span className="text-xs font-normal text-slate-400">· {it.tutor_name ?? 'sem responsável'}</span>
                         </p>
                         <p className="text-xs text-slate-500 mt-0.5">
                           {it.vaccine_name} · era p/ {formatDate(it.next_due_date)}

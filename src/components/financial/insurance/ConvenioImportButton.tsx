@@ -9,8 +9,8 @@ import type { ColumnMapping, ConvenioField } from '@/lib/finance/convenio-csv'
 const FIELDS: { key: ConvenioField; label: string; required?: boolean }[] = [
   { key: 'externalId', label: 'ID do atendimento' },
   { key: 'serviceDate', label: 'Data' },
-  { key: 'tutorName', label: 'Tutor' },
-  { key: 'petName', label: 'Pet' },
+  { key: 'tutorName', label: 'Responsável' },
+  { key: 'petName', label: 'Animal' },
   { key: 'procedureName', label: 'Procedimento' },
   { key: 'repassValue', label: 'Valor de repasse', required: true },
   { key: 'coparticipationValue', label: 'Coparticipação' },

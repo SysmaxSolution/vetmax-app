@@ -22,7 +22,7 @@ interface Props {
 }
 
 const SWATCHES: Array<{ key: keyof PortalTheme; label: string; help: string }> = [
-  { key: 'primaryDarkColor', label: 'Primária escura', help: 'fundo do topo da página do tutor' },
+  { key: 'primaryDarkColor', label: 'Primária escura', help: 'fundo do topo da página do responsável' },
   { key: 'primaryColor',     label: 'Primária',        help: 'títulos de seção, links e ícones' },
   { key: 'accentColor',      label: 'Acento',          help: 'filetes, anéis e o botão de agendar' },
   { key: 'bgColor',          label: 'Fundo',           help: 'cor de fundo da página' },
@@ -102,8 +102,8 @@ export default function PortalThemeSettings({ onToast }: Props) {
           <Palette className="h-4 w-4 text-amber-600" />
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-slate-900">Identidade do Portal do Tutor</h3>
-          <p className="text-xs text-slate-500">As cores, a fonte e o endereço que o tutor vê ao acessar a sua clínica</p>
+          <h3 className="text-sm font-semibold text-slate-900">Identidade do Portal do Responsável</h3>
+          <p className="text-xs text-slate-500">As cores, a fonte e o endereço que o responsável vê ao acessar a sua clínica</p>
         </div>
       </div>
 
@@ -135,7 +135,7 @@ export default function PortalThemeSettings({ onToast }: Props) {
               )}
             </div>
             <p className="text-[11px] text-slate-400 mt-1">
-              É por aqui que o tutor entra na SUA clínica. Um tutor atendido em duas clínicas vê
+              É por aqui que o responsável entra na SUA clínica. Um responsável atendido em duas clínicas vê
               a identidade de cada uma no endereço correspondente. Deixe em branco e salve para gerar a partir do nome.
             </p>
           </div>
@@ -175,7 +175,7 @@ export default function PortalThemeSettings({ onToast }: Props) {
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1.5">Frase do topo</label>
               <input value={theme.tagline ?? ''} onChange={e => set('tagline', e.target.value || null)}
-                     placeholder="Portal do Tutor" maxLength={60}
+                     placeholder="Portal do Responsável" maxLength={60}
                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800" />
             </div>
             <div>
@@ -201,7 +201,7 @@ export default function PortalThemeSettings({ onToast }: Props) {
                   <p className="text-sm font-semibold text-[var(--pt-text)]" style={{ fontFamily: 'var(--pt-heading-font)' }}>
                     {clinicName ?? 'Sua clínica'}
                   </p>
-                  <p className="text-[9px] uppercase tracking-[0.18em] text-[var(--pt-muted)]">{theme.tagline || 'Portal do Tutor'}</p>
+                  <p className="text-[9px] uppercase tracking-[0.18em] text-[var(--pt-muted)]">{theme.tagline || 'Portal do Responsável'}</p>
                 </div>
               </div>
               <div className="relative px-6 py-8" style={{ background: 'linear-gradient(135deg, var(--pt-primary-dark), var(--pt-primary-mid) 55%, var(--pt-primary))' }}>
@@ -210,7 +210,7 @@ export default function PortalThemeSettings({ onToast }: Props) {
                   <img src={theme.coverImageUrl} alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover opacity-25" />
                 )}
                 <div className="relative">
-                  <p className="text-[9px] uppercase tracking-[0.24em] text-[var(--pt-accent)]">{theme.tagline || 'Portal do Tutor'}</p>
+                  <p className="text-[9px] uppercase tracking-[0.24em] text-[var(--pt-accent)]">{theme.tagline || 'Portal do Responsável'}</p>
                   <p className="mt-1 text-2xl text-[var(--pt-on-primary)]" style={{ fontFamily: 'var(--pt-heading-font)' }}>Olá, Melissa.</p>
                 </div>
               </div>

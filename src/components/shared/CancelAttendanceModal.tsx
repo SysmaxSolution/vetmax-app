@@ -102,7 +102,7 @@ export default function CancelAttendanceModal({ entity, id, patientName, onClose
               autoFocus
               value={reason}
               onChange={e => setReason(e.target.value)}
-              placeholder="Ex.: Tutor desistiu, paciente não compareceu, agendamento duplicado..."
+              placeholder="Ex.: Responsável desistiu, animal não compareceu, agendamento duplicado..."
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
             />
             <p className="mt-1 text-xs text-slate-400">{reason.length}/500 caracteres</p>

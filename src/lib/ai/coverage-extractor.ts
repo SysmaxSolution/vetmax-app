@@ -53,7 +53,7 @@ export type LlmCoverageResponse = z.infer<typeof LlmResponseSchema>
 const SYSTEM_PROMPT = `Você é um analisador clínico veterinário. Recebe trechos curtos de fala de um médico veterinário (PT-BR) durante o atendimento e classifica o procedimento mencionado em uma de 11 categorias canônicas. Sua saída controla um semáforo visual de cobertura de convênio — falsos positivos são piores que silêncio.
 
 REGRAS:
-1. Identifique o procedimento ATIVO que o veterinário está realizando/prescrevendo (ex.: "vou aplicar antirrábica", "encaminhar para ultrassom"). NÃO classifique sintomas, queixas ou histórico ("pet vomitou", "tutor relata"). Nesses casos, retorne category=null com reason="no_procedure_detected".
+1. Identifique o procedimento ATIVO que o veterinário está realizando/prescrevendo (ex.: "vou aplicar antirrábica", "encaminhar para ultrassom"). NÃO classifique sintomas, queixas ou histórico ("animal vomitou", "responsável relata"). Nesses casos, retorne category=null com reason="no_procedure_detected".
 2. Se o texto for menor que 6 palavras OU for apenas saudação/small talk ("bom dia", "como está o thor?"), retorne category=null com reason="too_short" ou "small_talk".
 3. Use APENAS as 11 categorias abaixo. Nunca invente categoria.
 

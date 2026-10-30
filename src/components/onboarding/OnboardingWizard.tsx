@@ -165,8 +165,8 @@ export default function OnboardingWizard({
                   ? 'Seu centro de estética está pronto para operar. Explore o módulo Banho e Tosa!'
                   : 'Sua clínica está pronta para operar. Explore todas as funcionalidades!'
                 : isAesthetics
-                  ? 'Sou seu Mentor de IA. Vamos preparar o seu centro de estética em 3 passos rápidos? Você tem acesso a Recepção, Pacientes, Caixa, Banho e Tosa e Gestão no seu plano Free.'
-                  : 'Sou seu Mentor de IA. Para que você veja a mágica acontecer, vamos configurar o básico da sua clínica em 3 passos rápidos? Você tem acesso a Recepção, Pacientes, Caixa, Consultório e Gestão no seu plano Free.'}
+                  ? 'Sou seu Mentor de IA. Vamos preparar o seu centro de estética em 3 passos rápidos? Você tem acesso a Recepção, Animais, Caixa, Banho e Tosa e Gestão no seu plano Free.'
+                  : 'Sou seu Mentor de IA. Para que você veja a mágica acontecer, vamos configurar o básico da sua clínica em 3 passos rápidos? Você tem acesso a Recepção, Animais, Caixa, Consultório e Gestão no seu plano Free.'}
             </p>
 
             {/* Steps */}
@@ -209,15 +209,15 @@ export default function OnboardingWizard({
               {/* Passo 2 — Primeiro Pet */}
               <StepCard
                 number={2}
-                title="Primeiro Paciente"
-                description="Cadastre o primeiro pet e tutor da clínica"
+                title="Primeiro Animal"
+                description="Cadastre o primeiro animal e responsável da clínica"
                 done={step2Done}
               >
                 <button
                   onClick={() => setShowPet(true)}
                   className="mt-3 flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-teal-700"
                 >
-                  🐾 Cadastrar Pet
+                  🐾 Cadastrar Animal
                 </button>
               </StepCard>
 
@@ -231,7 +231,7 @@ export default function OnboardingWizard({
                 <button
                   onClick={() => setShowAppt(true)}
                   disabled={!step2Done}
-                  title={!step2Done ? 'Cadastre um pet primeiro' : undefined}
+                  title={!step2Done ? 'Cadastre um animal primeiro' : undefined}
                   className="mt-3 flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   📅 Fazer Agendamento

@@ -509,9 +509,9 @@ export async function sendBillingDocumentWhatsApp(
     .select('id, doc_type, doc_number, total_amount, tutor_id, tutors:tutor_id ( name, phone ), patients:patient_id ( name )')
     .eq('id', id).eq('clinic_id', clinic_id).maybeSingle()
   if (!doc) return { error: 'Documento não encontrado.' }
-  if (!doc.tutor_id) return { error: 'Documento sem tutor vinculado — não é possível enviar.' }
+  if (!doc.tutor_id) return { error: 'Documento sem responsável vinculado — não é possível enviar.' }
   const tutor = (doc as any).tutors as { name?: string; phone?: string } | null
-  if (!tutor?.phone) return { error: 'Tutor sem telefone cadastrado.' }
+  if (!tutor?.phone) return { error: 'Responsável sem telefone cadastrado.' }
   const petName = ((doc as any).patients as { name?: string } | null)?.name ?? null
 
   const pdf = await getBillingDocumentSignedUrl(id)
@@ -931,13 +931,13 @@ export async function validateTutorForNfse(
   const ctx = await getCtx()
   if ('error' in ctx) return ctx
   const { admin, clinic_id } = ctx
-  if (!tutorId) return { valid: false, missing: ['Tutor'], tutor_name: null }
+  if (!tutorId) return { valid: false, missing: ['Responsável'], tutor_name: null }
 
   const { data: t } = await admin
     .from('tutors')
     .select('name, cpf, cep, street, address, address_number, city, state')
     .eq('id', tutorId).eq('clinic_id', clinic_id).maybeSingle()
-  if (!t) return { error: 'Tutor não encontrado.' }
+  if (!t) return { error: 'Responsável não encontrado.' }
 
   const missing: string[] = []
   if (!String(t.cpf ?? '').trim())   missing.push('CPF/CNPJ')

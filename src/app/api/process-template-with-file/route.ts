@@ -129,7 +129,7 @@ INSTRUCOES:
    - width_percent: largura da area de preenchimento em % (geralmente 15-40)
    - height_percent: altura da area em % (geralmente 2-4 para campos simples, 5-15 para textarea)
 3. As coordenadas devem indicar onde o VALOR sera preenchido, nao onde o label esta
-4. Inclua TODOS os campos: dados do paciente, tutor, vet, medicoes, resultados, observacoes
+4. Inclua TODOS os campos: dados do animal, responsável, vet, medicoes, resultados, observacoes
 5. NAO inclua: logos, assinaturas digitais, rodapes fixos, numeros de pagina
 
 FORMATO: APENAS um array JSON. Sem markdown. Sem explicacoes.

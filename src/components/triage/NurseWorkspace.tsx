@@ -80,7 +80,7 @@ export default function NurseWorkspace({ queue, history, clinicId }: NurseWorksp
         {/* Header */}
         <div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900">Triagem Veterinária</h1>
-          <p className="mt-0.5 text-sm text-slate-600">Coleta de sinais vitais e avaliação inicial do paciente</p>
+          <p className="mt-0.5 text-sm text-slate-600">Coleta de sinais vitais e avaliação inicial do animal</p>
         </div>
 
         {/* Aguardando na recepção — chamar para a triagem */}
@@ -152,7 +152,7 @@ export default function NurseWorkspace({ queue, history, clinicId }: NurseWorksp
                   className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-teal-700 transition-colors"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  Adicionar Paciente
+                  Adicionar Animal
                 </button>
               </div>
             </div>
@@ -336,7 +336,7 @@ export default function NurseWorkspace({ queue, history, clinicId }: NurseWorksp
               </p>
             )}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Tutor / Animal</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Responsável / Animal</label>
               {selectedPatient ? (
                 <div className="flex items-center justify-between rounded-lg border border-teal-200 bg-teal-50 px-3 py-2">
                   <span className="text-sm font-medium text-teal-900">{selectedPatient.name} — {selectedPatient.tutor.name}</span>
@@ -356,7 +356,7 @@ export default function NurseWorkspace({ queue, history, clinicId }: NurseWorksp
                       setPatientSearching(false)
                       if (!('error' in res)) setPatientResults(res.slice(0, 5))
                     }}
-                    placeholder="Buscar por tutor, CPF ou animal..."
+                    placeholder="Buscar por responsável, CPF ou animal..."
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
                   />
                   {patientResults.length > 0 && (

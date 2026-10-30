@@ -108,8 +108,8 @@ describe('MENTOR_CONTEXT_MAP — conteúdo por módulo', () => {
     expect(desc).toMatch(/pagament|caixa|financeir/)
   })
 
-  test('TC-MCM-014 → /dashboard/patients tem "cadastrar pet" em available_actions', () => {
-    expect(MENTOR_CONTEXT_MAP['/dashboard/patients'].available_actions).toContain('cadastrar pet')
+  test('TC-MCM-014 → /dashboard/patients tem "cadastrar animal" em available_actions', () => {
+    expect(MENTOR_CONTEXT_MAP['/dashboard/patients'].available_actions).toContain('cadastrar animal')
   })
 
   test('TC-MCM-015 → /dashboard/pharmacy tem StockList em key_components', () => {
@@ -171,7 +171,7 @@ describe('MENTOR_CONTEXT_MAP — getRouteContext & serializeRouteContext', () =>
 
   test('TC-MCM-022 → getRouteContext("/dashboard/patients/tutor/123") match por prefixo mais longo', () => {
     const ctx = getRouteContext('/dashboard/patients/tutor/abc-123')
-    expect(ctx?.module).toBe('Pacientes — Tutor')
+    expect(ctx?.module).toBe('Animais — Responsável')
   })
 
   test('TC-MCM-023 → getRouteContext("/dashboard/inexistente") → null', () => {

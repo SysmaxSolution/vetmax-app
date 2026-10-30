@@ -310,7 +310,7 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
             {creditBalance != null && creditBalance > 0.005 && (
               <div className="flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-800">
                 <span className="text-lg">💳</span>
-                <span>Este tutor possui <strong>{fmt(creditBalance)}</strong> de crédito/adiantamento disponível.</span>
+                <span>Este responsável possui <strong>{fmt(creditBalance)}</strong> de crédito/adiantamento disponível.</span>
               </div>
             )}
 

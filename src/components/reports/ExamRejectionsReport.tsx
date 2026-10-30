@@ -93,7 +93,7 @@ export default function ExamRejectionsReport() {
             <table className="w-full min-w-[900px] text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
-                  <Th>Data</Th><Th>OS</Th><Th>Pet</Th><Th>Cliente</Th><Th>Exame</Th>
+                  <Th>Data</Th><Th>OS</Th><Th>Animal</Th><Th>Cliente</Th><Th>Exame</Th>
                   <Th>Motivo</Th><Th>Situação</Th><Th className="text-right">Não cobrado</Th>
                 </tr>
               </thead>

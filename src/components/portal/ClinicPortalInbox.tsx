@@ -30,14 +30,14 @@ export default function ClinicPortalInbox() {
       <div className="border-r border-slate-100 md:col-span-1">
         <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2 text-slate-700"><Inbox className="h-4 w-4" /><span className="text-sm font-semibold">Conversas</span></div>
         {loading ? <div className="py-10 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-slate-300" /></div>
-          : threads.length === 0 ? <p className="p-6 text-center text-sm text-slate-400">Nenhuma mensagem de tutores.</p>
+          : threads.length === 0 ? <p className="p-6 text-center text-sm text-slate-400">Nenhuma mensagem de responsáveis.</p>
           : (
             <ul className="divide-y divide-slate-50 max-h-[26rem] overflow-y-auto">
               {threads.map(t => (
                 <li key={t.tutorUserId}>
                   <button onClick={() => open(t.tutorUserId)} className={`w-full text-left px-4 py-3 hover:bg-slate-50 ${active === t.tutorUserId ? 'bg-slate-50' : ''}`}>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-slate-800 truncate">{t.tutorName ?? 'Tutor'}</span>
+                      <span className="text-sm font-medium text-slate-800 truncate">{t.tutorName ?? 'Responsável'}</span>
                       {t.unread > 0 && <span className="flex-none rounded-full bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5">{t.unread}</span>}
                     </div>
                     <p className="text-xs text-slate-400 truncate">{t.lastBody}</p>
@@ -66,7 +66,7 @@ export default function ClinicPortalInbox() {
             </div>
             <div className="flex items-center gap-2 p-3 border-t border-slate-100">
               <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-                placeholder="Responder ao tutor…" className="flex-1 rounded-full border border-slate-200 px-4 py-2 text-sm focus:border-emerald-500 focus:outline-none" />
+                placeholder="Responder ao responsável…" className="flex-1 rounded-full border border-slate-200 px-4 py-2 text-sm focus:border-emerald-500 focus:outline-none" />
               <button onClick={send} disabled={busy || !text.trim()} className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </button>

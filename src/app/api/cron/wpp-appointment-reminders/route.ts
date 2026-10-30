@@ -73,8 +73,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const pet   = consultation.pet as any
 
-      const tutorName = tutor?.name ?? 'Tutor'
-      const petName   = pet?.name   ?? 'seu pet'
+      const tutorName = tutor?.name ?? 'Responsável'
+      const petName   = pet?.name   ?? 'seu animal'
       const phone     = tutor?.phone
 
       if (!phone) {

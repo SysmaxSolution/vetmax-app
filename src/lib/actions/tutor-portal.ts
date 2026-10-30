@@ -38,7 +38,7 @@ export async function inviteTutorToPortal(
   const { data: tutor } = await admin
     .from('tutors').select('id, clinic_id, name, cpf, phone')
     .eq('id', tutorId).eq('clinic_id', profile.clinic_id).maybeSingle()
-  if (!tutor) return { error: 'Tutor não encontrado.' }
+  if (!tutor) return { error: 'Responsável não encontrado.' }
 
   const cpf = normalizeCpf(tutor.cpf)
   const phone = normalizePhone(tutor.phone)
@@ -57,7 +57,7 @@ export async function inviteTutorToPortal(
     const { data, error } = await admin.from('tutor_users')
       .insert({ cpf: cpf || null, phone: phone || null, full_name: tutor.name ?? null })
       .select('id').single()
-    if (error || !data) return { error: 'Erro ao criar identidade do tutor.' }
+    if (error || !data) return { error: 'Erro ao criar identidade do responsável.' }
     tutorUserId = data.id as string
   }
 
@@ -122,9 +122,9 @@ export async function regenerateTutorAccessCode(tutorId: string): Promise<{ code
 
   const admin = createAdminClient()
   const { data: tutor } = await admin.from('tutors').select('id, clinic_id, cpf, name, phone').eq('id', tutorId).eq('clinic_id', profile.clinic_id).maybeSingle()
-  if (!tutor) return { error: 'Tutor não encontrado.' }
+  if (!tutor) return { error: 'Responsável não encontrado.' }
   const cpf = normalizeCpf(tutor.cpf)
-  if (!cpf) return { error: 'Tutor sem CPF — o login por código exige CPF.' }
+  if (!cpf) return { error: 'Responsável sem CPF — o login por código exige CPF.' }
   // Garante identidade do tutor no portal (cria se ainda não existe).
   let { data: tu } = await admin.from('tutor_users').select('id').eq('cpf', cpf).limit(1).maybeSingle()
   if (!tu) {
@@ -133,7 +133,7 @@ export async function regenerateTutorAccessCode(tutorId: string): Promise<{ code
       .select('id').single()
     tu = created as any
   }
-  if (!tu) return { error: 'Não foi possível criar o acesso do tutor.' }
+  if (!tu) return { error: 'Não foi possível criar o acesso do responsável.' }
   const { data: existingLink } = await admin.from('tutor_user_links').select('id').eq('tutor_user_id', (tu as any).id).eq('tutor_id', tutorId).maybeSingle()
   if (!existingLink) {
     await admin.from('tutor_user_links').insert({ tutor_user_id: (tu as any).id, tutor_id: tutorId, clinic_id: tutor.clinic_id, linked_via: 'reception_invite' })
@@ -221,15 +221,15 @@ export async function addHouseholdMember(tutorId: string, memberCpf: string): Pr
   const admin = createAdminClient()
   const { data: tutor } = await admin.from('tutors').select('cpf').eq('id', tutorId).eq('clinic_id', profile.clinic_id).maybeSingle()
   const cpf = normalizeCpf((tutor as any)?.cpf)
-  if (!cpf) return { error: 'O tutor principal precisa ter CPF e acesso ao portal.' }
+  if (!cpf) return { error: 'O responsável principal precisa ter CPF e acesso ao portal.' }
   const { data: tu } = await admin.from('tutor_users').select('id').eq('cpf', cpf).limit(1).maybeSingle()
-  if (!(tu as any)?.id) return { error: 'Gere primeiro o acesso do tutor principal.' }
+  if (!(tu as any)?.id) return { error: 'Gere primeiro o acesso do responsável principal.' }
 
   const memberCpfN = normalizeCpf(memberCpf)
   if (memberCpfN.length !== 11) return { error: 'CPF do familiar inválido.' }
   const { data: member } = await admin.from('tutors').select('id, name').eq('clinic_id', profile.clinic_id).eq('cpf', memberCpfN).limit(1).maybeSingle()
-  if (!member) return { error: 'Nenhum tutor com esse CPF nesta clínica.' }
-  if ((member as any).id === tutorId) return { error: 'Esse é o próprio tutor.' }
+  if (!member) return { error: 'Nenhum responsável com esse CPF nesta clínica.' }
+  if ((member as any).id === tutorId) return { error: 'Esse é o próprio responsável.' }
 
   const { data: existing } = await admin.from('tutor_user_links').select('id').eq('tutor_user_id', (tu as any).id).eq('tutor_id', (member as any).id).maybeSingle()
   if (!existing) {
@@ -251,7 +251,7 @@ export async function removeHouseholdMember(tutorId: string, memberTutorId: stri
   const admin = createAdminClient()
   const { data: tutor } = await admin.from('tutors').select('cpf').eq('id', tutorId).eq('clinic_id', profile.clinic_id).maybeSingle()
   const cpf = normalizeCpf((tutor as any)?.cpf)
-  if (!cpf) return { error: 'Tutor sem CPF.' }
+  if (!cpf) return { error: 'Responsável sem CPF.' }
   const { data: tu } = await admin.from('tutor_users').select('id').eq('cpf', cpf).limit(1).maybeSingle()
   if (!(tu as any)?.id) return { error: 'Login não encontrado.' }
   await admin.from('tutor_user_links').delete().eq('tutor_user_id', (tu as any).id).eq('tutor_id', memberTutorId).eq('clinic_id', profile.clinic_id)
@@ -408,7 +408,7 @@ export async function loginTutorWithCode(
   // Sem isso, a sessão nascia válida e o tutor entrava numa clínica que não
   // disponibilizou o Portal (achado F-1).
   if (!(await hasPortalAccess(admin, (tu as any).id))) {
-    return { error: 'A Área do Tutor não está disponível para o seu cadastro. Fale com a recepção da clínica.' }
+    return { error: 'A Área do Responsável não está disponível para o seu cadastro. Fale com a recepção da clínica.' }
   }
 
   await admin.from('tutor_users').update({ code_fail_count: 0, code_locked_until: null }).eq('id', (tu as any).id)
@@ -437,7 +437,7 @@ export async function createTutorSessionFromToken(
   // Portal, recusa sem queimar o link (ele volta a valer quando a clínica ligar
   // a rotina, dentro do prazo do token).
   if (!(await hasPortalAccess(admin, tok.tutor_user_id as string))) {
-    return { error: 'A Área do Tutor não está disponível para esta clínica.' }
+    return { error: 'A Área do Responsável não está disponível para esta clínica.' }
   }
 
   // consome (uso único)

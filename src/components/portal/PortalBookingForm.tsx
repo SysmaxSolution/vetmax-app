@@ -79,7 +79,7 @@ export default function PortalBookingForm({ petId, petName, mode, vets, suggeste
         </p>
         <button onClick={() => router.push(`/portal/pet/${petId}`)}
                 className="mt-5 px-4 py-2 text-sm font-semibold text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50">
-          Voltar ao pet
+          Voltar ao animal
         </button>
       </div>
     )

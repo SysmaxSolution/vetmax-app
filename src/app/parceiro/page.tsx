@@ -34,7 +34,7 @@ export default async function PartnerHome() {
           <h1 className="text-xl text-[var(--pt-text)]" style={serif}>Portal do Veterinário indisponível</h1>
           <p className="mt-3 text-sm text-[var(--pt-muted)] leading-relaxed">
             A clínica de referência ainda não disponibilizou este portal. Fale com ela para
-            receber as imagens e os laudos dos pets que você encaminhou.
+            receber as imagens e os laudos dos animais que você encaminhou.
           </p>
           <form action="/parceiro/sair" method="post" className="mt-6">
             <button type="submit" className="text-xs font-medium text-[var(--pt-muted)] hover:text-[var(--pt-primary-dark)] rounded-full border border-[var(--pt-border)] px-4 py-2 transition hover:border-[var(--pt-accent-ring)]">
@@ -58,10 +58,10 @@ export default async function PartnerHome() {
                style={{ background: 'linear-gradient(135deg, var(--pt-primary-dark), var(--pt-primary-mid) 55%, var(--pt-primary))' }}>
         <div className="absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 20% 20%, white 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
         <div className="relative w-full px-5 sm:px-8 lg:px-12 py-12 sm:py-16">
-          <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--pt-accent)]">Pets encaminhados</p>
+          <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--pt-accent)]">Animais encaminhados</p>
           <h1 className="mt-3 text-3xl sm:text-4xl text-white leading-[1.05]" style={serif}>{ctx.name}</h1>
           <p className="mt-3 max-w-xl text-[15px] text-white/70">
-            {ctx.kind === 'admin' ? 'Todos os pets encaminhados pela sua clínica.' : 'Os pets que você encaminhou.'} Acompanhe imagens e laudos assim que ficam prontos.
+            {ctx.kind === 'admin' ? 'Todos os animais encaminhados pela sua clínica.' : 'Os animais que você encaminhou.'} Acompanhe imagens e laudos assim que ficam prontos.
           </p>
         </div>
       </section>
@@ -74,14 +74,14 @@ export default async function PartnerHome() {
 
       <section className="w-full px-5 sm:px-8 lg:px-12 py-10">
         <div className="flex items-baseline justify-between mb-6">
-          <h2 className="text-xl text-[var(--pt-text)]" style={serif}>Pacientes</h2>
+          <h2 className="text-xl text-[var(--pt-text)]" style={serif}>Animais</h2>
           <span className="text-xs text-[var(--pt-muted-soft)]">{pets.length} {pets.length === 1 ? 'pet' : 'pets'}</span>
         </div>
 
         {pets.length === 0 ? (
           <div className="bg-white rounded-2xl border border-[var(--pt-border)] p-16 text-center">
             <PawPrint className="h-12 w-12 text-[var(--pt-border)] mx-auto mb-3" />
-            <p className="text-sm text-[var(--pt-muted-soft)]">Nenhum pet encaminhado encontrado ainda.</p>
+            <p className="text-sm text-[var(--pt-muted-soft)]">Nenhum animal encaminhado encontrado ainda.</p>
           </div>
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

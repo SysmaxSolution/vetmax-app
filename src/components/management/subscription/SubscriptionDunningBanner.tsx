@@ -65,7 +65,7 @@ export default function SubscriptionDunningBanner({
     case 'grace':
       if (clinicalOpen) {
         tone = 'amber'; Icon = ShieldAlert
-        title = 'Acesso preservado por segurança do paciente'
+        title = 'Acesso preservado por segurança do animal'
         message = 'Há atendimentos/internações em andamento, então mantivemos seu acesso. Regularize o pagamento para evitar a suspensão dos módulos assim que os registros forem encerrados.'
       } else {
         tone = 'amber'; Icon = AlertTriangle; cta = 'PAGAR AGORA via PIX'
@@ -85,7 +85,7 @@ export default function SubscriptionDunningBanner({
       if (clinicalOpen) {
         tone = 'red'; Icon = ShieldAlert
         title = 'Acesso de leitura preservado'
-        message = 'Há atendimentos em andamento; o acesso de leitura ao prontuário foi preservado por segurança do paciente. Regularize o pagamento para reativar os módulos.'
+        message = 'Há atendimentos em andamento; o acesso de leitura ao prontuário foi preservado por segurança do animal. Regularize o pagamento para reativar os módulos.'
       } else {
         tone = 'red'; Icon = ShieldAlert
         title = 'Módulos do plano suspensos'

@@ -54,7 +54,7 @@ export function LiveRegistrationModal({ extractedData, onSave, onClose }: Props)
             </svg>
           </div>
           <div className="flex-1">
-            <h2 className="text-base font-semibold text-slate-900">NOVAS INFORMAÇÕES FORAM ENCONTRADAS! DESEJA ATUALIZAR O CADASTRO DO PET/TUTOR COM ESSES DADOS?</h2>
+            <h2 className="text-base font-semibold text-slate-900">NOVAS INFORMAÇÕES FORAM ENCONTRADAS! DESEJA ATUALIZAR O CADASTRO DO ANIMAL/RESPONSÁVEL COM ESSES DADOS?</h2>
           </div>
           <button
             onClick={onClose}

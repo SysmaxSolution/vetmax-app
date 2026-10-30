@@ -6,7 +6,7 @@
 // `PortalShell` com a marca certa — se a moldura ficasse aqui, o portal da
 // clínica A apareceria com o cabeçalho genérico por cima.
 
-export const metadata = { title: 'Área do Tutor | SysVetMax' }
+export const metadata = { title: 'Área do Responsável | SysVetMax' }
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>

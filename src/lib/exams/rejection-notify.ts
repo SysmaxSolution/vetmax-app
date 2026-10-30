@@ -31,7 +31,7 @@ export interface NotifyOutcome {
 
 function emailHtml(i: NotifyInput, canDecide: boolean, link?: string | null): string {
   const rows: Array<[string, string]> = [
-    ['Pet', i.petName],
+    ['Animal', i.petName],
     ['Exame', i.examName],
     ['Motivo', i.reason],
   ]
@@ -111,7 +111,7 @@ export async function notifyExamRejection(
         const res = await sendTutorPortalWhatsApp(r.id, msg)
         if (res.ok) { out.sent.push({ kind: r.kind, channel: 'whatsapp', name: r.name }); reached = true }
       } catch { /* best-effort */ }
-      if (!reached) out.failed.push({ kind: r.kind, name: r.name, why: 'Tutor sem WhatsApp/portal ativo.' })
+      if (!reached) out.failed.push({ kind: r.kind, name: r.name, why: 'Responsável sem WhatsApp/portal ativo.' })
       continue
     }
 

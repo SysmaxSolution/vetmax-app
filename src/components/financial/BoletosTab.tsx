@@ -213,7 +213,7 @@ function Table({ rows, extraHeader = [] }: { rows: { key: string; cells: React.R
     <div className="overflow-x-auto rounded-xl border border-slate-200">
       <table className="w-full text-sm">
         <thead className="bg-slate-50 text-xs text-slate-500">
-          <tr><th className="text-left px-3 py-2">Descrição</th><th className="text-left px-3 py-2">Tutor</th><th className="text-right px-3 py-2">Valor</th><th className="text-left px-3 py-2">Vencimento</th>{extraHeader.map(h => <th key={h} className="text-left px-3 py-2">{h}</th>)}<th className="px-3 py-2 text-right">Ação</th></tr>
+          <tr><th className="text-left px-3 py-2">Descrição</th><th className="text-left px-3 py-2">Responsável</th><th className="text-right px-3 py-2">Valor</th><th className="text-left px-3 py-2">Vencimento</th>{extraHeader.map(h => <th key={h} className="text-left px-3 py-2">{h}</th>)}<th className="px-3 py-2 text-right">Ação</th></tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.map(r => (

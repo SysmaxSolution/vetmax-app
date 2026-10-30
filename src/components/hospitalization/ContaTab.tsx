@@ -120,7 +120,7 @@ export default function ContaTab({ hospitalizationId, consultationId, status, on
   }
 
   async function handleDevolverAoMV() {
-    if (!confirm('Devolver o pet para a fila do médico-veterinário? A internação é encerrada e a consulta volta como revisão pós-internação.')) return
+    if (!confirm('Devolver o animal para a fila do médico-veterinário? A internação é encerrada e a consulta volta como revisão pós-internação.')) return
     setBusy(true); setError(null)
     const res = await sendToVetReview(hospitalizationId, consultationId)
     setBusy(false)
@@ -142,7 +142,7 @@ export default function ContaTab({ hospitalizationId, consultationId, status, on
     setBusy(false)
     if ('error' in res) { setError(res.error); return }
     setCirurgiaAberta(false); setProcedimento(''); setServicoId(''); setAsa('')
-    setAviso('Pet encaminhado ao centro cirúrgico. Ao fim da cirurgia ele volta para esta internação, com os custos da cirurgia nesta conta.')
+    setAviso('Animal encaminhado ao centro cirúrgico. Ao fim da cirurgia ele volta para esta internação, com os custos da cirurgia nesta conta.')
     await reload()
   }
 
@@ -184,7 +184,7 @@ export default function ContaTab({ hospitalizationId, consultationId, status, on
           </div>
         )}
         <p className="mt-2 text-[11px] text-slate-500">
-          O tutor pode pagar por etapas: envie ao caixa o que já foi lançado, continue lançando, e no fim só o que faltar vai ao caixa.
+          O responsável pode pagar por etapas: envie ao caixa o que já foi lançado, continue lançando, e no fim só o que faltar vai ao caixa.
         </p>
       </div>
 
@@ -244,7 +244,7 @@ export default function ContaTab({ hospitalizationId, consultationId, status, on
               <Syringe className="h-4 w-4" /> Centro Cirúrgico
             </button>
             <button onClick={handleDevolverAoMV} disabled={busy}
-              title="Encerra a internação e devolve o pet para a fila do MV (revisão pós-internação)"
+              title="Encerra a internação e devolve o animal para a fila do MV (revisão pós-internação)"
               className="flex items-center gap-2 rounded-xl border border-violet-300 bg-white hover:bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-700 disabled:opacity-50">
               <Undo2 className="h-4 w-4" /> Devolver ao médico
             </button>
@@ -252,7 +252,7 @@ export default function ContaTab({ hospitalizationId, consultationId, status, on
 
           {cirurgiaAberta && (
             <div className="rounded-xl border border-red-200 bg-red-50/40 p-3 space-y-2">
-              <p className="text-xs text-slate-600">O pet vai para o Preparo do centro cirúrgico e, ao fim da cirurgia, volta para esta internação — os custos da cirurgia entram nesta conta.</p>
+              <p className="text-xs text-slate-600">O animal vai para o Preparo do centro cirúrgico e, ao fim da cirurgia, volta para esta internação — os custos da cirurgia entram nesta conta.</p>
               <div className="grid sm:grid-cols-2 gap-2">
                 <div>
                   <label className="text-[10px] font-bold text-slate-500 uppercase">Serviço do catálogo</label>
@@ -299,7 +299,7 @@ export default function ContaTab({ hospitalizationId, consultationId, status, on
         <h3 className="text-sm font-bold text-slate-900">Alta</h3>
         {!isReadyForDischarge ? (
           <>
-            <p className="text-xs text-slate-500">A <strong>Alta Médica</strong> cessa diárias e aprazamento de medicações. O paciente permanece no Kanban até a Alta Administrativa.</p>
+            <p className="text-xs text-slate-500">A <strong>Alta Médica</strong> cessa diárias e aprazamento de medicações. O animal permanece no Kanban até a Alta Administrativa.</p>
             <button onClick={handleMedicalDischarge} disabled={busy || encerrada}
               data-testid="btn-alta-medica"
               className="flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">

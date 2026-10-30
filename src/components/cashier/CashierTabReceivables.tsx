@@ -737,7 +737,7 @@ export default function CashierTabReceivables({
     if (!activeHospEntry) return
     const res = await receiveCashierEntry(activeHospEntry.id, method)
     if ('error' in res) throw new Error(res.error)
-    const petName = activeHospEntry.patient_name ?? 'Paciente'
+    const petName = activeHospEntry.patient_name ?? 'Animal'
     const amount  = activeHospEntry.amount
     setPendingHospEntries(prev => prev.filter(e => e.id !== activeHospEntry.id))
     setActiveHospEntry(null)
@@ -847,10 +847,10 @@ export default function CashierTabReceivables({
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100">
                 <AlertTriangle className="h-5 w-5 text-amber-600" />
               </div>
-              <h3 className="text-base font-bold text-slate-900">Tutores diferentes selecionados</h3>
+              <h3 className="text-base font-bold text-slate-900">Responsáveis diferentes selecionados</h3>
             </div>
             <p className="text-sm text-slate-600">
-              Tutores diferentes selecionados, deseja realizar o recebimento agrupado mesmo assim?
+              Responsáveis diferentes selecionados, deseja realizar o recebimento agrupado mesmo assim?
               No financeiro, cada fatura continua lançada separadamente.
             </p>
             <div className="flex gap-2 pt-1">

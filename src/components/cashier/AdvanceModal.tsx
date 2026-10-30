@@ -63,14 +63,14 @@ export default function AdvanceModal({ onClose, onSuccess, onToast }: Props) {
   }, [query, tutor])
 
   async function pickTutor(t: { id: string; name: string | null }) {
-    setTutor({ id: t.id, name: t.name ?? 'Tutor' })
+    setTutor({ id: t.id, name: t.name ?? 'Responsável' })
     setResults([])
     const b = await getTutorCreditBalance(t.id)
     if (!('error' in b)) setBalance(b.total)
   }
 
   async function handleSubmit() {
-    if (!tutor) { onToast('Selecione o tutor.', 'error'); return }
+    if (!tutor) { onToast('Selecione o responsável.', 'error'); return }
     const val = Number(amount.replace(',', '.'))
     if (!Number.isFinite(val) || val <= 0) { onToast('Informe um valor válido.', 'error'); return }
     setSaving(true)
@@ -96,7 +96,7 @@ export default function AdvanceModal({ onClose, onSuccess, onToast }: Props) {
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-100"><Wallet className="h-5 w-5 text-teal-700" /></div>
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Lançar Adiantamento</h2>
-              <p className="text-xs text-slate-500">Crédito do tutor para uso futuro — entra no caixa agora</p>
+              <p className="text-xs text-slate-500">Crédito do responsável para uso futuro — entra no caixa agora</p>
             </div>
           </div>
           <button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100"><X className="h-5 w-5" /></button>
@@ -106,7 +106,7 @@ export default function AdvanceModal({ onClose, onSuccess, onToast }: Props) {
           {/* Tutor */}
           {!tutor ? (
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Tutor</label>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Responsável</label>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar por nome ou CPF…"

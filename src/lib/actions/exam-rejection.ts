@@ -643,7 +643,7 @@ async function notifyRejection(
 
     const outcome = await notifyExamRejection({
       clinicId: ctx.clinicId, clinicName: ctx.clinicName,
-      petName: pat?.name ?? 'o pet', examName: info.examName,
+      petName: pat?.name ?? 'o animal', examName: info.examName,
       reason: info.reason, note: info.note,
       partnerLink: `${origin}/parceiro`,
     }, recipients)

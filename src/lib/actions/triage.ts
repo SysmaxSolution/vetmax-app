@@ -485,7 +485,7 @@ Retorne um JSON com exatamente 2 chaves:
    - crt: SOMENTE um de: "2s", "3s", "4s"
    - chief_complaint: queixa principal em PT-BR (texto livre)
 
-2. "vaccines_applied": array de vacinas mencionadas como aplicadas ou informadas pelo tutor. Detecte frases como "V10 em dia", "tutor informa que vacinou contra raiva", "aplicamos antirrábica", "vacina polivalente". Cada item:
+2. "vaccines_applied": array de vacinas mencionadas como aplicadas ou informadas pelo tutor. Detecte frases como "V10 em dia", "responsável informa que vacinou contra raiva", "aplicamos antirrábica", "vacina polivalente". Cada item:
    {"vaccine_name": "nome", "next_due_date": "YYYY-MM-DD ou null", "notes": "observação ou null"}
    Calcule next_due_date baseado em HOJE (${today}) se mencionado "próxima em X meses/semanas". Se não houver vacinas, retorne [].
 

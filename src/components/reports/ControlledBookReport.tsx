@@ -239,7 +239,7 @@ function ItemBook({ item, from }: { item: ControlledItemBook; from: string }) {
                 <th className="text-left px-4 py-2" rowSpan={2}>Observações</th>
               </tr>
               <tr>
-                <th className="text-left px-2 py-1">Pet-Responsável</th>
+                <th className="text-left px-2 py-1">Animal-Responsável</th>
                 <th className="text-left px-2 py-1">Procedimento</th>
                 <th className="text-left px-2 py-1">Nº OS</th>
                 <th className="text-right px-2 py-1">Entrada</th>

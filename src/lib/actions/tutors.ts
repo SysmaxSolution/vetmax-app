@@ -171,7 +171,7 @@ export async function getTutorWithPatients(tutorId: string): Promise<
     .eq('clinic_id', profile.clinic_id)
     .single()
 
-  if (tErr || !tutor) return { error: 'Tutor não encontrado.' }
+  if (tErr || !tutor) return { error: 'Responsável não encontrado.' }
 
   const { data: patients } = await admin
     .from('patients')
@@ -204,7 +204,7 @@ export async function registerTutorAndPet(
 
   const clinicId = profile.clinic_id
 
-  if (!patientData.name.trim()) return { error: 'Nome do Pet é obrigatório.' }
+  if (!patientData.name.trim()) return { error: 'Nome do Animal é obrigatório.' }
 
   // 1. Salvar Tutor
   //    Com CPF → upsert (encontra existente ou cria novo)
@@ -234,7 +234,7 @@ export async function registerTutorAndPet(
       .upsert(tutorRow, { onConflict: 'clinic_id,cpf' })
       .select('id')
       .single()
-    if (tutorErr || !data) return { error: 'Erro ao salvar Tutor: ' + ((tutorErr ? mensagemErro(tutorErr, 'lib/actions/tutors.ts') : '')) }
+    if (tutorErr || !data) return { error: 'Erro ao salvar Responsável: ' + ((tutorErr ? mensagemErro(tutorErr, 'lib/actions/tutors.ts') : '')) }
     tutor = data
   } else {
     const { data, error: tutorErr } = await admin
@@ -242,11 +242,11 @@ export async function registerTutorAndPet(
       .insert(tutorRow)
       .select('id')
       .single()
-    if (tutorErr || !data) return { error: 'Erro ao salvar Tutor: ' + ((tutorErr ? mensagemErro(tutorErr, 'lib/actions/tutors.ts') : '')) }
+    if (tutorErr || !data) return { error: 'Erro ao salvar Responsável: ' + ((tutorErr ? mensagemErro(tutorErr, 'lib/actions/tutors.ts') : '')) }
     tutor = data
   }
 
-  if (!tutor) return { error: 'Erro ao salvar Tutor.' }
+  if (!tutor) return { error: 'Erro ao salvar Responsável.' }
 
   // 2. Inserir Pet vinculado ao Tutor
   const { data: patient, error: patErr } = await admin
@@ -272,7 +272,7 @@ export async function registerTutorAndPet(
     .select('id')
     .single()
 
-  if (patErr || !patient) return { error: 'Erro ao salvar Pet: ' + ((patErr ? mensagemErro(patErr, 'lib/actions/tutors.ts') : '')) }
+  if (patErr || !patient) return { error: 'Erro ao salvar Animal: ' + ((patErr ? mensagemErro(patErr, 'lib/actions/tutors.ts') : '')) }
 
   return { tutorId: tutor.id, patientId: patient.id }
 }
@@ -295,7 +295,7 @@ export async function addPatientToTutor(
 
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica vinculada.' }
 
-  if (!patientData.name.trim()) return { error: 'Nome do Pet é obrigatório.' }
+  if (!patientData.name.trim()) return { error: 'Nome do Animal é obrigatório.' }
 
   const { data: patient, error } = await admin
     .from('patients')
@@ -320,7 +320,7 @@ export async function addPatientToTutor(
     .select('id')
     .single()
 
-  if (error || !patient) return { error: 'Erro ao adicionar Pet: ' + ((error ? mensagemErro(error, 'lib/actions/tutors.ts') : '')) }
+  if (error || !patient) return { error: 'Erro ao adicionar Animal: ' + ((error ? mensagemErro(error, 'lib/actions/tutors.ts') : '')) }
   return { id: patient.id }
 }
 
@@ -378,7 +378,7 @@ export async function getTutorConsentStatus(
     .eq('clinic_id', profile.clinic_id)
     .single()
 
-  if (error || !data) return { error: 'Tutor não encontrado.' }
+  if (error || !data) return { error: 'Responsável não encontrado.' }
 
   return {
     stale: isConsentStale(data.consent_given, data.consent_version),

@@ -41,7 +41,7 @@ export default function TutorSummaryPrint(props: Props) {
       className="inline-flex items-center gap-1.5 text-xs font-semibold text-sky-700 hover:text-sky-900 px-3 py-1.5 rounded-lg border border-sky-200 hover:bg-sky-50"
     >
       <Printer className="h-3.5 w-3.5" />
-      Resumo para o tutor
+      Resumo para o responsável
     </button>
   )
 }
@@ -91,8 +91,8 @@ function buildHtml(props: Omit<Props, 'consultationId'>): string {
   <div class="muted">Resumo Financeiro do Atendimento</div>
 
   <div class="card">
-    <div><strong>Pet:</strong> ${escapeHtml(patientName)}</div>
-    <div><strong>Tutor:</strong> ${escapeHtml(tutorName)}</div>
+    <div><strong>Animal:</strong> ${escapeHtml(patientName)}</div>
+    <div><strong>Responsável:</strong> ${escapeHtml(tutorName)}</div>
     <div><strong>Atendimento:</strong> ${fmtBR(serviceDate)}</div>
     <div><strong>Convênio:</strong> ${escapeHtml(preview.provider_name ?? '—')} ${escapeHtml(preview.plan_type ?? '')}</div>
   </div>

@@ -51,7 +51,7 @@ const CATEGORIES: CategoryDef[] = [
   // portal — tudo junto. Cada assunto agora tem a sua categoria; Acesso é só
   // o que o nome diz.
   { key: 'atendimento',  label: 'Atendimento', icon: <ClipboardList className="h-4 w-4" />, description: 'Check-in, campos obrigatórios e fluxo' },
-  { key: 'portal',       label: 'Portal do Tutor', icon: <Globe    className="h-4 w-4" />, description: 'Agendamento online e identidade'     },
+  { key: 'portal',       label: 'Portal do Responsável', icon: <Globe    className="h-4 w-4" />, description: 'Agendamento online e identidade'     },
   { key: 'ia',           label: 'Inteligência Artificial', icon: <Sparkles className="h-4 w-4" />, description: 'Transcrição e assistente'   },
   { key: 'acesso',       label: 'Acesso',      icon: <Shield       className="h-4 w-4" />, description: 'Módulos ativos da clínica'           },
   { key: 'whatsapp',     label: 'WhatsApp',    icon: <MessageCircle className="h-4 w-4" />, description: 'Evolution API e notificações'        },
@@ -169,7 +169,7 @@ export default function SettingsWorkspace({
               icon={<ScanLine className="h-4 w-4 text-teal-600" />}
               title="Módulo de Imagem (raio-X, ultrassom, DICOM)?"
               subtitle="Estudos de imagem, visualizador DICOM, laudo e link para o MV solicitante"
-              whenOn="O menu mostra “Imagem”: a equipe cadastra estudos, sobe arquivos DICOM, anexa laudo e libera para o tutor e para o Médico Veterinário solicitante."
+              whenOn="O menu mostra “Imagem”: a equipe cadastra estudos, sobe arquivos DICOM, anexa laudo e libera para o responsável e para o Médico Veterinário solicitante."
               whenOff="Quando desativado, o item “Imagem” some do menu, a rota redireciona para o painel e as ações de imagem são recusadas. Exige também o módulo Exames."
               successMessage="Módulo de Imagem configurado!"
             />
@@ -200,7 +200,7 @@ export default function SettingsWorkspace({
               title="Medicação e insumo aplicados na consulta entram na conta sozinhos?"
               subtitle="O que o Médico Veterinário aplica no animal vira item da conta da OS"
               whenOn="Cada medicação ou insumo aplicado no consultório é lançado na conta da OS com o preço da tabela, na hora. Use quando a consulta é cobrada separada do que foi aplicado."
-              whenOff="Padrão. O insumo aplicado sai do estoque e vai ao Livro de Controlados, mas NÃO entra na conta — use se a medicação já está embutida no preço da consulta, senão o tutor pagaria duas vezes."
+              whenOff="Padrão. O insumo aplicado sai do estoque e vai ao Livro de Controlados, mas NÃO entra na conta — use se a medicação já está embutida no preço da consulta, senão o responsável pagaria duas vezes."
               successMessage="Cobrança do insumo aplicado configurada!"
             />
             <VaccineRecallSettings initialConfig={initialClinicConfig} onToast={onToast} />
@@ -223,7 +223,7 @@ export default function SettingsWorkspace({
               flag="estorna_exame_faturado_na_recusa"
               icon={<Syringe className="h-4 w-4 text-teal-600" />}
               title="Rejeitar exame já faturado estorna automaticamente?"
-              subtitle="Caminho do dinheiro — a fatura do tutor/cliente é ajustada sozinha"
+              subtitle="Caminho do dinheiro — a fatura do responsável/cliente é ajustada sozinha"
               warning="Isto mexe em documento financeiro já emitido. Toda rejeição e todo estorno ficam registrados na trilha de auditoria com o autor. Fatura já PAGA/baixada nunca é alterada — o sistema recusa e pede o estorno manual."
               whenOn="Ao rejeitar uma linha já faturada, o sistema estorna/ajusta o valor na fatura em aberto automaticamente e registra a trilha."
               whenOff="Padrão. Rejeitar uma linha já faturada é recusado, com orientação para estornar manualmente no Financeiro."
@@ -249,7 +249,7 @@ export default function SettingsWorkspace({
 
         {activeCategory === 'portal' && (
           <div className="space-y-6">
-            <SectionHeader icon={<Globe className="h-5 w-5 text-slate-600" />} title="Portal do Tutor" description="Portal do tutor e do parceiro, agendamento online e identidade visual" />
+            <SectionHeader icon={<Globe className="h-5 w-5 text-slate-600" />} title="Portal do Responsável" description="Portal do responsável e do parceiro, agendamento online e identidade visual" />
             <ClinicSettingsTab
               initialConfig={initialClinicConfig}
               initialChecklist={initialChecklist}
@@ -490,7 +490,7 @@ function AttendingVetSettings({ initialConfig, onToast }: {
       <div className="px-6 py-4 flex items-center justify-between gap-4">
         <p className="text-xs text-slate-500">
           {required
-            ? 'A recepção precisa selecionar o profissional responsável para concluir o check-in. O pet vai para a fila desse profissional.'
+            ? 'A recepção precisa selecionar o profissional responsável para concluir o check-in. O animal vai para a fila desse profissional.'
             : 'Opcional: o atendimento pode seguir aos departamentos sem responsável definido (visível a todos os profissionais).'}
         </p>
         <button
@@ -533,7 +533,7 @@ function AdvanceSettings({ initialConfig, onToast }: {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-slate-900">Utiliza adiantamento?</h3>
-            <p className="text-xs text-slate-500">Permite lançar adiantamento (crédito do tutor) no Caixa</p>
+            <p className="text-xs text-slate-500">Permite lançar adiantamento (crédito do responsável) no Caixa</p>
           </div>
         </div>
         <button
@@ -548,7 +548,7 @@ function AdvanceSettings({ initialConfig, onToast }: {
         <p className="text-xs text-slate-500">
           {uses
             ? 'O Caixa mostra o botão "Adiantamento": o cliente deixa um valor que vira crédito para usar em consultas/procedimentos futuros.'
-            : 'Quando ativado, aparece o botão de adiantamento no Caixa e o crédito do tutor no recebimento.'}
+            : 'Quando ativado, aparece o botão de adiantamento no Caixa e o crédito do responsável no recebimento.'}
         </p>
         <button
           onClick={handleSave}
@@ -837,14 +837,14 @@ function RegistrationSettings({ initialConfig, onToast }: {
           <Shield className="h-4 w-4 text-teal-600" />
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-slate-900">Validações no Cadastro de Pacientes</h3>
-          <p className="text-xs text-slate-500">Controles automáticos no módulo Pacientes ao cadastrar tutores</p>
+          <h3 className="text-sm font-semibold text-slate-900">Validações no Cadastro de Animais</h3>
+          <p className="text-xs text-slate-500">Controles automáticos no módulo Animais ao cadastrar responsáveis</p>
         </div>
       </div>
       <div className="px-6 py-5 space-y-3">
         <div className="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-3">
           <div>
-            <p className="text-sm font-medium text-slate-800">Verificar CPF / CNPJ do tutor</p>
+            <p className="text-sm font-medium text-slate-800">Verificar CPF / CNPJ do responsável</p>
             <p className="text-xs text-slate-500 mt-0.5">Valida o dígito verificador e consulta dados públicos de CNPJ via Receita Federal</p>
           </div>
           <button onClick={() => setVerifyCpf(v => !v)} className={`transition-colors ${verifyCpf ? 'text-teal-600' : 'text-slate-300'}`}>
@@ -854,7 +854,7 @@ function RegistrationSettings({ initialConfig, onToast }: {
         <div className="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-3">
           <div>
             <p className="text-sm font-medium text-slate-800">Verificar CEP</p>
-            <p className="text-xs text-slate-500 mt-0.5">Preenche endereço automaticamente via ViaCEP ao digitar o CEP do tutor</p>
+            <p className="text-xs text-slate-500 mt-0.5">Preenche endereço automaticamente via ViaCEP ao digitar o CEP do responsável</p>
           </div>
           <button onClick={() => setVerifyCep(v => !v)} className={`transition-colors ${verifyCep ? 'text-teal-600' : 'text-slate-300'}`}>
             {verifyCep ? <ToggleRight className="h-7 w-7" /> : <ToggleLeft className="h-7 w-7" />}

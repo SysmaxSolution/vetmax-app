@@ -9,7 +9,7 @@ export default function PortalShareButton({ url, label = 'Compartilhar' }: { url
   function share() {
     const nav = typeof navigator !== 'undefined' ? navigator : null
     if (nav && (nav as any).share) {
-      (nav as any).share({ title: 'Exame do meu pet', url }).catch(() => {})
+      (nav as any).share({ title: 'Exame do meu animal', url }).catch(() => {})
       return
     }
     nav?.clipboard?.writeText(url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) }).catch(() => {})

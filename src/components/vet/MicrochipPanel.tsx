@@ -235,7 +235,7 @@ export default function MicrochipPanel({ consultation, insuranceCard }: Props) {
               <button
                 type="submit"
                 disabled={pending || serviceInfo.status !== 'ok' || !!success}
-                title="Encerra o atendimento e lança no caixa. Use quando o pet só veio para microchipar."
+                title="Encerra o atendimento e lança no caixa. Use quando o animal só veio para microchipar."
                 className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 py-3 text-sm font-bold text-white disabled:opacity-50 transition-colors shadow-sm"
               >
                 {pending
@@ -273,7 +273,7 @@ export default function MicrochipPanel({ consultation, insuranceCard }: Props) {
       {history.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="border-b border-slate-100 px-5 py-3 bg-slate-50/60">
-            <h3 className="text-sm font-semibold text-slate-800">Histórico de microchips deste pet</h3>
+            <h3 className="text-sm font-semibold text-slate-800">Histórico de microchips deste animal</h3>
           </div>
           <ul className="divide-y divide-slate-100">
             {history.map(h => (

@@ -213,8 +213,8 @@ async function _notifyTutor(
   const apiKey = process.env.EVOLUTION_API_KEY
   if (!apiUrl || !apiKey) return
 
-  const tutorName = (tutor.name ?? 'Tutor').split(' ')[0]
-  const petName   = (req.pet_name_free as string | null) ?? 'seu pet'
+  const tutorName = (tutor.name ?? 'Responsável').split(' ')[0]
+  const petName   = (req.pet_name_free as string | null) ?? 'seu animal'
 
   let msg = ''
   if (outcome === 'approved' && ctx.appointmentDatetime) {

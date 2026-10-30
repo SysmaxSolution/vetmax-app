@@ -24,7 +24,7 @@ interface Props {
   whenOn: string
   /** Texto exibido quando está DESLIGADA (explica o que ligar faz). */
   whenOff: string
-  /** Aviso destacado (ex.: "ligar isto envia WhatsApp aos tutores"). */
+  /** Aviso destacado (ex.: "ligar isto envia WhatsApp aos responsáveis"). */
   warning?: string
   /** Campos extras renderizados abaixo do texto (ex.: horário do recall). */
   extra?: (args: { enabled: boolean; patch: Partial<FlowConfig>; setPatch: (p: Partial<FlowConfig>) => void }) => React.ReactNode

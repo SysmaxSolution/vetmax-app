@@ -74,7 +74,7 @@ export async function createImagingStudy(
 ): Promise<{ id: string } | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error as string }
-  if (!input.patientId) return { error: 'Paciente obrigatório.' }
+  if (!input.patientId) return { error: 'Animal obrigatório.' }
 
   const admin = createAdminClient()
 
@@ -256,7 +256,7 @@ async function studyEmailMeta(
   ])
   return {
     clinicName: (clinic as any)?.name ?? 'Centro de Diagnóstico',
-    petName: (pet as any)?.name ?? 'Paciente',
+    petName: (pet as any)?.name ?? 'Animal',
   }
 }
 
@@ -321,7 +321,7 @@ export async function attachLaudoToStudy(
       await ensureShareLink(admin, ctx.clinicId, studyId, 'tutor', null, ctx.userId)
       try {
         const { data: pet } = await admin.from('patients').select('tutor_id, name').eq('id', study.patient_id).maybeSingle()
-        if ((pet as any)?.tutor_id) await notifyTutorResultReleased((pet as any).tutor_id, (pet as any).name ?? 'seu pet')
+        if ((pet as any)?.tutor_id) await notifyTutorResultReleased((pet as any).tutor_id, (pet as any).name ?? 'seu animal')
       } catch { /* best-effort */ }
     }
   }
@@ -347,7 +347,7 @@ export async function releaseStudyToTutor(
   // Avisa o tutor por WhatsApp (best-effort)
   try {
     const { data: pet } = await admin.from('patients').select('tutor_id, name').eq('id', study.patient_id).maybeSingle()
-    if ((pet as any)?.tutor_id) await notifyTutorResultReleased((pet as any).tutor_id, (pet as any).name ?? 'seu pet')
+    if ((pet as any)?.tutor_id) await notifyTutorResultReleased((pet as any).tutor_id, (pet as any).name ?? 'seu animal')
   } catch { /* best-effort */ }
 
   revalidatePath('/dashboard/exams')
@@ -454,7 +454,7 @@ export async function getStudyByToken(
   }
 
   return {
-    petName: (pet as any)?.name ?? 'Paciente',
+    petName: (pet as any)?.name ?? 'Animal',
     clinicName: (clinic as any)?.name ?? 'Centro de Diagnóstico',
     clinicPhone: (clinic as any)?.phone ?? null,
     modality: study.modality, title: study.title,
@@ -542,7 +542,7 @@ export async function listLaudoCandidates(
 ): Promise<{ id: string; name: string; created_at: string }[] | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error as string }
-  if (!patientId) return { error: 'Paciente obrigatório.' }
+  if (!patientId) return { error: 'Animal obrigatório.' }
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('patient_documents')

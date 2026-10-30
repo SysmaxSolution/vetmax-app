@@ -33,7 +33,7 @@ async function getCtx(): Promise<Ctx> {
 }
 
 const SOURCE_LABEL: Record<WeightSource, string> = {
-  manual:          'cadastro do pet',
+  manual:          'cadastro do animal',
   reception:       'recepção',
   triage:          'triagem',
   vet:             'consultório',
@@ -72,7 +72,7 @@ export async function updatePatientWeight(input: {
     .eq('id', input.patient_id)
     .eq('clinic_id', clinic_id)
     .maybeSingle()
-  if (!current) return { error: 'Pet não encontrado.' }
+  if (!current) return { error: 'Animal não encontrado.' }
 
   const previous = current.last_known_weight === null
     ? null

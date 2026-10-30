@@ -277,7 +277,7 @@ async function _buildPdfClassic(
     doc.setFont('helvetica', 'normal'); doc.text(val, x + doc.getTextWidth(lbl), yp)
   }
   inl(L, y, 'Pet: ', patient.name); inl(C2, y, 'Tutor: ', tutor.name); nl(6)
-  inl(L, y, 'Especie: ', patient.species + (patient.breed ? ` — ${patient.breed}` : '')); inl(C2, y, 'CPF Tutor: ', tutor.cpf || '—'); nl(7)
+  inl(L, y, 'Especie: ', patient.species + (patient.breed ? ` — ${patient.breed}` : '')); inl(C2, y, 'CPF Responsável: ', tutor.cpf || '—'); nl(7)
 
   doc.setDrawColor(209, 213, 219); doc.setLineWidth(0.2); doc.line(L, y, R, y); nl(8)
 
@@ -302,7 +302,7 @@ async function _buildPdfClassic(
   doc.line(S1 - 28, y, S1 + 28, y); doc.line(S2 - 28, y, S2 + 28, y); nl(5)
   doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(55, 65, 81)
   doc.text('Medico Veterinario Responsavel', S1, y, { align: 'center' })
-  doc.text('Tutor / Responsavel', S2, y, { align: 'center' }); nl(4)
+  doc.text('Responsável / Responsavel', S2, y, { align: 'center' }); nl(4)
   doc.setFont('helvetica', 'normal'); doc.setTextColor(107, 114, 128)
   doc.text('CRMV: _____________________', S1, y, { align: 'center' })
   doc.text(`CPF: ${tutor.cpf || ''}`, S2, y, { align: 'center' })

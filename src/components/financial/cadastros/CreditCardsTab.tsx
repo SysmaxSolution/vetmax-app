@@ -229,7 +229,7 @@ function CardModal({
 
           {/* Juros próprios da clínica (opcional) */}
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <label className={`${labelClass} mb-2`}>Juros que a clínica cobra do tutor (opcional)</label>
+            <label className={`${labelClass} mb-2`}>Juros que a clínica cobra do responsável (opcional)</label>
             <div className="grid grid-cols-1 sm:grid-cols-[170px_1fr] gap-2">
               <select
                 value={interestMode}

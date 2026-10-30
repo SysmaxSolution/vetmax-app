@@ -377,7 +377,7 @@ export default function ClinicalActionsSection({
             />
             <span>
               Não baixar do estoque
-              <span className="text-slate-400"> — medicação trazida pelo tutor ou já debitada em outro setor</span>
+              <span className="text-slate-400"> — medicação trazida pelo responsável ou já debitada em outro setor</span>
             </span>
           </label>
 

@@ -124,7 +124,7 @@ export default function BillingWorkspace({
             <Lbl text="De"><input type="date" value={filters.dateFrom} onChange={e => patch({ dateFrom: e.target.value })} className={inputCls} /></Lbl>
             <Lbl text="Até"><input type="date" value={filters.dateTo} onChange={e => patch({ dateTo: e.target.value })} className={inputCls} /></Lbl>
           </div>
-          <Lbl text="Tutor ou Pet">
+          <Lbl text="Responsável ou Animal">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
               <input value={filters.tutorOrPet ?? ''} onChange={e => patch({ tutorOrPet: e.target.value })} onKeyDown={e => e.key === 'Enter' && applyFilters()} placeholder="Nome..." className={`${inputCls} pl-8`} />
@@ -172,7 +172,7 @@ export default function BillingWorkspace({
                     <th className="text-left px-4 py-3 font-semibold">Emissão</th>
                     <th className="text-left px-4 py-3 font-semibold">Faturamento</th>
                     <th className="text-left px-4 py-3 font-semibold">Doc. anterior</th>
-                    <th className="text-left px-4 py-3 font-semibold">Tutor / Pet</th>
+                    <th className="text-left px-4 py-3 font-semibold">Responsável / Animal</th>
                     <th className="text-right px-4 py-3 font-semibold">Valor</th>
                     <th className="text-center px-4 py-3 font-semibold">Faturado?</th>
                   </tr>

@@ -242,7 +242,7 @@ export default function PharmacyCatalogQuickAdd({ suggestion, onClose, onSaved }
             <input
               value={supplier}
               onChange={e => setSupplier(e.target.value)}
-              placeholder="Ex: Distribuidora Pet Brasil"
+              placeholder="Ex: Distribuidora Animal Brasil"
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
             />
           </div>

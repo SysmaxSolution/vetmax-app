@@ -42,7 +42,7 @@ export const SYSTEM_TEMPLATES: DocumentTemplate[] = [
       },
       {
         field_name:  'observacoes',
-        label:       'Observações para o Tutor',
+        label:       'Observações para o Responsável',
         type:        'textarea',
         description: 'Precauções, interações ou cuidados especiais',
         required:    false,

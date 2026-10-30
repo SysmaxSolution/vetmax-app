@@ -58,7 +58,7 @@ export default function GroomingScheduleWorkspace({ clinicId }: Props) {
     e.preventDefault()
     if (!selectedTime) { setError('Selecione um horário.'); return }
     if (!petName.trim()) { setError('Informe o nome do animal.'); return }
-    if (!tutorName.trim()) { setError('Informe o nome do tutor.'); return }
+    if (!tutorName.trim()) { setError('Informe o nome do responsável.'); return }
 
     // Validate slot before saving
     setSaving(true)
@@ -200,7 +200,7 @@ export default function GroomingScheduleWorkspace({ clinicId }: Props) {
             </div>
 
             <div>
-              <label htmlFor="schedule-tutor" className="block text-xs font-semibold text-slate-600 mb-1">Nome do Tutor *</label>
+              <label htmlFor="schedule-tutor" className="block text-xs font-semibold text-slate-600 mb-1">Nome do Responsável *</label>
               <input
                 id="schedule-tutor"
                 type="text"
@@ -212,7 +212,7 @@ export default function GroomingScheduleWorkspace({ clinicId }: Props) {
             </div>
 
             <div>
-              <label htmlFor="schedule-phone" className="block text-xs font-semibold text-slate-600 mb-1">Telefone do Tutor</label>
+              <label htmlFor="schedule-phone" className="block text-xs font-semibold text-slate-600 mb-1">Telefone do Responsável</label>
               <input
                 id="schedule-phone"
                 type="tel"

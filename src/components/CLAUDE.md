@@ -21,7 +21,7 @@ sem mouse. Ao adicionar campo em formulario de fluxo, defina a ordem de tab.
 
 ## Terminologia na interface
 
-Pet/Animal (nunca "Paciente"), Tutor (nunca "Dono"), Medico Veterinario ou MV
+Animal (nunca "Pet" nem "Paciente"), Responsavel (nunca "Tutor" nem "Dono"), Medico Veterinario ou MV
 (nunca so "Medico"), Auxiliar Veterinario. Isto e exigencia de nomenclatura
 tecnica do CFMV, nao preferencia de estilo.
 

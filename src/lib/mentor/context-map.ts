@@ -16,7 +16,7 @@ export interface RouteContext {
 export const MENTOR_CONTEXT_MAP: Record<string, RouteContext> = {
   '/dashboard/reception': {
     module: 'Recepção',
-    description: 'Gerenciar chegada de pets, check-in e fila de espera',
+    description: 'Gerenciar chegada de animais, check-in e fila de espera',
     key_components: ['SearchBar', 'QueueCard', 'CheckInModal', 'AppointmentCard', 'KanbanToggle'],
     available_actions: ['check-in', 'agendar', 'chamar triagem', 'novo cadastro', 'agendar banho e tosa'],
     mentor_steps: [
@@ -33,7 +33,7 @@ export const MENTOR_CONTEXT_MAP: Record<string, RouteContext> = {
 
   '/dashboard/triage': {
     module: 'Triagem',
-    description: 'Coletar sinais vitais e encaminhar pets ao consultório',
+    description: 'Coletar sinais vitais e encaminhar animais ao consultório',
     key_components: ['TriageQueue', 'TriageForm', 'VoiceInput', 'VitalsCard'],
     available_actions: ['registrar peso', 'registrar temperatura', 'gravar por voz', 'encaminhar consultório'],
     mentor_steps: [
@@ -46,7 +46,7 @@ export const MENTOR_CONTEXT_MAP: Record<string, RouteContext> = {
 
   '/dashboard/vet': {
     module: 'Consultório',
-    description: 'Realizar consulta clínica, preencher prontuário SOAP e definir destino do pet',
+    description: 'Realizar consulta clínica, preencher prontuário SOAP e definir destino do animal',
     key_components: ['VetQueue', 'SOAPEditor', 'VoiceRecorder', 'ConsultationCard'],
     available_actions: ['gravar anamnese', 'preencher SOAP', 'solicitar exame', 'internar', 'dar alta'],
     mentor_steps: [
@@ -137,10 +137,10 @@ export const MENTOR_CONTEXT_MAP: Record<string, RouteContext> = {
   },
 
   '/dashboard/patients': {
-    module: 'Pacientes',
-    description: 'Diretório completo de pets — busca, histórico e cadastro',
+    module: 'Animais e Responsáveis',
+    description: 'Diretório completo de animais — busca, histórico e cadastro',
     key_components: ['PatientSearch', 'PetCard', 'PetTimelineModal', 'NewPetModal'],
-    available_actions: ['cadastrar pet', 'editar cadastro', 'ver histórico', 'buscar por CPF'],
+    available_actions: ['cadastrar animal', 'editar cadastro', 'ver histórico', 'buscar por CPF'],
     mentor_steps: [
       'btn-novo-paciente',
       'pet-name-input',
@@ -155,10 +155,10 @@ export const MENTOR_CONTEXT_MAP: Record<string, RouteContext> = {
   },
 
   '/dashboard/patients/tutor': {
-    module: 'Pacientes — Tutor',
-    description: 'Perfil completo do tutor com todos os pets vinculados',
+    module: 'Animais — Responsável',
+    description: 'Perfil completo do responsável com todos os animais vinculados',
     key_components: ['TutorProfile', 'PetList'],
-    available_actions: ['editar tutor', 'ver pet'],
+    available_actions: ['editar responsável', 'ver animal'],
     mentor_steps: [],
   },
 
@@ -174,7 +174,7 @@ export const MENTOR_CONTEXT_MAP: Record<string, RouteContext> = {
     module: 'WhatsApp',
     description: 'Canal de WhatsApp integrado — conversas, notificações e vinculação de contatos',
     key_components: ['ConversationList', 'ChatPanel', 'QRCodeDisplay'],
-    available_actions: ['responder mensagem', 'vincular tutor', 'conectar via QR'],
+    available_actions: ['responder mensagem', 'vincular responsável', 'conectar via QR'],
     mentor_steps: [],
   },
 

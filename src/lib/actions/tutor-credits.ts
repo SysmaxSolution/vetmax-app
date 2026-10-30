@@ -331,7 +331,7 @@ export async function applyTutorCreditToInvoice(input: {
   const balance = Math.round(Math.max(0, total - paid) * 100) / 100
   if (balance <= 0.005) return { error: 'Esta fatura já está quitada.' }
   const tutorId = (inv as { tutor_id?: string }).tutor_id
-  if (!tutorId) return { error: 'Fatura sem tutor vinculado.' }
+  if (!tutorId) return { error: 'Fatura sem responsável vinculado.' }
 
   // 2) Empresa faturante (âncora da OS) + nº da OS (para o histórico no adiantamento)
   let billingCompany: string | null = null
@@ -355,7 +355,7 @@ export async function applyTutorCreditToInvoice(input: {
     byCompany.set(r.company_id, (byCompany.get(r.company_id) ?? 0) + v)
   }
   totalCredit = Math.round(totalCredit * 100) / 100
-  if (totalCredit <= 0.005) return { error: 'Tutor sem saldo de crédito.' }
+  if (totalCredit <= 0.005) return { error: 'Responsável sem saldo de crédito.' }
 
   // 4) Valor a aplicar (limitado por saldo do crédito e saldo da fatura)
   const amount = Math.min(

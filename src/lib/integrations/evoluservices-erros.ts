@@ -108,15 +108,15 @@ const DICIONARIO: Record<string, Omit<ErroTraduzido, 'codigo'>> = {
 
   // ─── dados do cliente ────────────────────────────────────────────────────
   NAME_CLIENT_INVALID: {
-    mensagem: 'O nome do tutor tem caracteres que a operadora não aceita.',
+    mensagem: 'O nome do responsável tem caracteres que a operadora não aceita.',
     gravidade: 'operacional', pode_repetir: false,
   },
   DOCUMENT_INVALID: {
-    mensagem: 'O CPF/CNPJ do tutor está em formato inválido — envie só os números.',
+    mensagem: 'O CPF/CNPJ do responsável está em formato inválido — envie só os números.',
     gravidade: 'operacional', pode_repetir: false,
   },
   CLIENT_PHONE_INVALID: {
-    mensagem: 'O telefone do tutor está em formato inválido.',
+    mensagem: 'O telefone do responsável está em formato inválido.',
     gravidade: 'operacional', pode_repetir: false,
   },
 
@@ -261,7 +261,7 @@ export function lerSituacao(
   }
   if (t === 'DISAPPROVED' || t === 'ABORTED' || t === 'ABORTED_BY_MERCHANT') {
     return { situacao: 'recusada', rotulo: 'Recusado',
-      orientacao: 'O cartão não autorizou. O tutor pode tentar outro cartão pelo mesmo link.' }
+      orientacao: 'O cartão não autorizou. O responsável pode tentar outro cartão pelo mesmo link.' }
   }
   if (t === 'CANCELLED' || t === 'CANCELED' || o === 'CANCELLED' || o === 'CANCELED') {
     return { situacao: 'cancelada', rotulo: 'Cancelado',

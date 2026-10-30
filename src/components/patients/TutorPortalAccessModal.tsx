@@ -59,7 +59,7 @@ export default function TutorPortalAccessModal({ tutorId, tutorName, onClose }: 
     setHasCode(true); setFull(r.code); setMasked(null)
   }
   async function clearAccess() {
-    if (!confirm('Excluir o acesso do tutor? O código atual deixa de funcionar e a sessão é encerrada.')) return
+    if (!confirm('Excluir o acesso do responsável? O código atual deixa de funcionar e a sessão é encerrada.')) return
     setBusy('clear')
     const r = await clearTutorAccess(tutorId)
     setBusy(null)
@@ -86,12 +86,12 @@ export default function TutorPortalAccessModal({ tutorId, tutorName, onClose }: 
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <div className="flex items-center gap-2"><Smartphone className="h-5 w-5 text-teal-600" /><h2 className="text-base font-semibold text-slate-900">Acesso ao Portal do Tutor</h2></div>
+          <div className="flex items-center gap-2"><Smartphone className="h-5 w-5 text-teal-600" /><h2 className="text-base font-semibold text-slate-900">Acesso ao Portal do Responsável</h2></div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
         </div>
 
         <div className="p-6 space-y-4">
-          <p className="text-sm text-slate-500">{tutorName ? <>Acesso de <strong className="text-slate-700">{tutorName}</strong></> : 'Acesso do tutor'} — login com <strong>CPF + código</strong>.</p>
+          <p className="text-sm text-slate-500">{tutorName ? <>Acesso de <strong className="text-slate-700">{tutorName}</strong></> : 'Acesso do responsável'} — login com <strong>CPF + código</strong>.</p>
           {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
 
           {loading ? (
@@ -118,10 +118,10 @@ export default function TutorPortalAccessModal({ tutorId, tutorName, onClose }: 
                   <button onClick={genNew} disabled={!!busy} className="text-sm font-semibold text-white bg-amber-600 rounded-lg px-3 py-1.5 hover:bg-amber-700 disabled:opacity-50 flex items-center gap-1.5">
                     {busy === 'gen' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}Gerar código
                   </button>
-                  <p className="text-[10px] text-amber-600 mt-1">Requer CPF cadastrado no tutor.</p>
+                  <p className="text-[10px] text-amber-600 mt-1">Requer CPF cadastrado no responsável.</p>
                 </div>
               )}
-              <p className="text-[10px] text-amber-600 mt-1.5">O tutor entra em <strong>Área do Tutor</strong> com o CPF + este código, sempre que quiser.</p>
+              <p className="text-[10px] text-amber-600 mt-1.5">O responsável entra em <strong>Área do Responsável</strong> com o CPF + este código, sempre que quiser.</p>
             </div>
           )}
 
@@ -146,12 +146,12 @@ export default function TutorPortalAccessModal({ tutorId, tutorName, onClose }: 
           {/* Família — outros tutores/pets sob o mesmo login */}
           <div className="border-t border-slate-100 pt-4">
             <p className="text-xs font-semibold text-slate-700 flex items-center gap-1.5 mb-1"><Users className="h-3.5 w-3.5 text-slate-400" />Família (mesmo login)</p>
-            <p className="text-[11px] text-slate-400 mb-2">Vincule outro tutor por CPF para que os pets dele apareçam nesta mesma conta.</p>
+            <p className="text-[11px] text-slate-400 mb-2">Vincule outro responsável por CPF para que os animais dele apareçam nesta mesma conta.</p>
             {members.length > 0 && (
               <div className="space-y-1.5 mb-2">
                 {members.map(m => (
                   <div key={m.tutorId} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm">
-                    <span className="text-slate-700 truncate">{m.name ?? 'Tutor'}<span className="text-slate-400 text-xs"> · {m.pets} pet(s)</span></span>
+                    <span className="text-slate-700 truncate">{m.name ?? 'Responsável'}<span className="text-slate-400 text-xs"> · {m.pets} pet(s)</span></span>
                     <button onClick={() => removeMember(m.tutorId)} disabled={busy === 'rm:' + m.tutorId} className="text-slate-300 hover:text-rose-500">{busy === 'rm:' + m.tutorId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}</button>
                   </div>
                 ))}

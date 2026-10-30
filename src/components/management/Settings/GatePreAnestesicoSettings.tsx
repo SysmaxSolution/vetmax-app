@@ -19,9 +19,9 @@ import type { ExigenciaPreAnestesica } from '@/lib/surgery/gate-preanestesico'
 const EXIGENCIAS: ExigenciaPreAnestesica[] = ['jejum', 'exames_preop', 'consentimento', 'asa']
 
 const EXPLICACAO: Record<ExigenciaPreAnestesica, string> = {
-  jejum:         'O jejum foi confirmado com o tutor e registrado na ficha.',
-  exames_preop:  'Alguém conferiu os exames pré-operatórios daquele pet.',
-  consentimento: 'O termo de consentimento está assinado pelo tutor.',
+  jejum:         'O jejum foi confirmado com o responsável e registrado na ficha.',
+  exames_preop:  'Alguém conferiu os exames pré-operatórios daquele animal.',
+  consentimento: 'O termo de consentimento está assinado pelo responsável.',
   asa:           'O risco anestésico (ASA I a V) foi classificado.',
 }
 

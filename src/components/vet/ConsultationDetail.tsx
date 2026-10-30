@@ -940,14 +940,14 @@ export default function ConsultationDetail({
 
         {/* Dados do paciente */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '4px 32px', marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid #d1d5db', fontSize: 13 }}>
-          <div><strong>Pet: </strong>{patient.name}</div>
-          <div><strong>Tutor: </strong>{tutor.name}</div>
+          <div><strong>Animal: </strong>{patient.name}</div>
+          <div><strong>Responsável: </strong>{tutor.name}</div>
           <div>
             <strong>Espécie: </strong>
             {SPECIES_LABELS[patient.species] ?? patient.species}
             {patient.breed ? ` — ${patient.breed}` : ''}
           </div>
-          <div><strong>CPF Tutor: </strong>{tutor.cpf}</div>
+          <div><strong>CPF Responsável: </strong>{tutor.cpf}</div>
         </div>
 
         {/* Campos do documento */}
@@ -977,7 +977,7 @@ export default function ConsultationDetail({
           </div>
           <div style={{ flex: 1, textAlign: 'center' }}>
             <hr style={{ borderColor: '#000', marginBottom: 8, width: 256, margin: '0 auto 8px' }} />
-            <p style={{ fontSize: 11, fontWeight: 600, color: '#374151' }}>Tutor / Responsável</p>
+            <p style={{ fontSize: 11, fontWeight: 600, color: '#374151' }}>Responsável / Responsável</p>
             <p style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>CPF: {tutor.cpf}</p>
           </div>
         </div>
@@ -1214,7 +1214,7 @@ export default function ConsultationDetail({
                   }
                   <div>
                     <p className="text-sm font-medium text-slate-700">
-                      Enviar documentos por WhatsApp ao Tutor?
+                      Enviar documentos por WhatsApp ao Responsável?
                     </p>
                     <p className="text-xs text-slate-400 mt-0.5">
                       {savedDocTitles.length} documento(s) gerado(s) nesta consulta
@@ -1364,7 +1364,7 @@ export default function ConsultationDetail({
               className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
             >
               <FileText className="h-3.5 w-3.5" />
-              Feed do Pet
+              Feed do Animal
             </button>
           </div>
 
@@ -1439,7 +1439,7 @@ export default function ConsultationDetail({
           {/* Tutor */}
           <div className="border-t border-slate-100 px-6 py-4 flex items-center justify-between">
             <div>
-              <p className="text-xs text-slate-500">Tutor</p>
+              <p className="text-xs text-slate-500">Responsável</p>
               <p className="text-sm font-medium text-slate-800">{tutor.name}</p>
             </div>
             <div className="text-right">
@@ -1555,7 +1555,7 @@ export default function ConsultationDetail({
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-amber-900">Consentimento de voz/IA não confirmado</p>
                   <p className="text-xs text-amber-700 mt-0.5">
-                    O tutor ainda não aceitou o termo vigente que cobre o registro por voz e o uso de IA. Você pode atender normalmente — a recepção solicita o re-aceite no próximo check-in.
+                    O responsável ainda não aceitou o termo vigente que cobre o registro por voz e o uso de IA. Você pode atender normalmente — a recepção solicita o re-aceite no próximo check-in.
                   </p>
                 </div>
               </div>
@@ -2428,7 +2428,7 @@ export default function ConsultationDetail({
               {outcomeTab === 'exames' && (
                 <div className="space-y-4">
                   <p className="text-sm text-slate-600">
-                    Encaminhar o pet para exames complementares. A consulta ficará aguardando o resultado.
+                    Encaminhar o animal para exames complementares. A consulta ficará aguardando o resultado.
                   </p>
                   <button
                     type="button"
@@ -2453,7 +2453,7 @@ export default function ConsultationDetail({
               {outcomeTab === 'internacao' && (
                 <div className="space-y-4">
                   <p className="text-sm text-slate-600">
-                    Internar o pet para monitoramento contínuo. O animal será alocado no Kanban de Internação.
+                    Internar o animal para monitoramento contínuo. O animal será alocado no Kanban de Internação.
                   </p>
                   <button
                     type="button"
@@ -2474,7 +2474,7 @@ export default function ConsultationDetail({
                     <p className="font-bold mb-0.5">Procedimento Irreversível — CFMV Resolução 1.138/2016, Art. 14</p>
                     <p>
                       O registro de eutanásia é permanente e auditável. Exige CRMV válido do médico responsável
-                      e consentimento documentado do tutor.
+                      e consentimento documentado do responsável.
                     </p>
                   </div>
                   <button

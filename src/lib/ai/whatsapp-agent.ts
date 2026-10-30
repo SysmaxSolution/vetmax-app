@@ -64,13 +64,13 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'book_appointment',
-    description: 'Agenda uma consulta veterinária para o tutor. Use após confirmar data, horário, nome do pet e motivo com o tutor.',
+    description: 'Agenda uma consulta veterinária para o responsável. Use após confirmar data, horário, nome do animal e motivo com o responsável.',
     input_schema: {
       type: 'object' as const,
       properties: {
         date:        { type: 'string', description: 'Data da consulta no formato YYYY-MM-DD' },
         time:        { type: 'string', description: 'Horário no formato HH:MM (ex: 09:00)' },
-        pet_name:    { type: 'string', description: 'Nome do pet/animal' },
+        pet_name:    { type: 'string', description: 'Nome do animal/animal' },
         pet_species: { type: 'string', description: 'Espécie: dog, cat, bird, exotic, rabbit, rodent, reptile ou fish' },
         reason:      { type: 'string', description: 'Motivo: consultation, follow_up, vaccination, exam, surgery' },
         notes:       { type: 'string', description: 'Observações adicionais (opcional)' },
@@ -80,7 +80,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'request_human_handoff',
-    description: 'Transfere a conversa para um atendente humano. Use quando: frustração do tutor, pergunta fora do escopo ou pedido explícito. Para urgências médicas com veterinário em cirurgia, use escalate_urgency_to_reception.',
+    description: 'Transfere a conversa para um atendente humano. Use quando: frustração do responsável, pergunta fora do escopo ou pedido explícito. Para urgências médicas com veterinário em cirurgia, use escalate_urgency_to_reception.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -95,17 +95,17 @@ const TOOLS: Anthropic.Tool[] = [
 const CONFIRMATION_TOOLS: Anthropic.Tool[] = [
   {
     name: 'confirm_appointment',
-    description: 'Confirma o agendamento pendente. Use quando o tutor disser que vai comparecer (CONFIRMAR, "tá certo", "vou sim", "ok", "confirmo", etc).',
+    description: 'Confirma o agendamento pendente. Use quando o responsável disser que vai comparecer (CONFIRMAR, "tá certo", "vou sim", "ok", "confirmo", etc).',
     input_schema: { type: 'object' as const, properties: {}, required: [] },
   },
   {
     name: 'cancel_appointment',
-    description: 'Cancela o agendamento pendente. Use quando o tutor disser CANCELAR, "não vou", "desmarcar", etc. O cancelamento é definitivo.',
+    description: 'Cancela o agendamento pendente. Use quando o responsável disser CANCELAR, "não vou", "desmarcar", etc. O cancelamento é definitivo.',
     input_schema: { type: 'object' as const, properties: {}, required: [] },
   },
   {
     name: 'reschedule_appointment',
-    description: 'Remarca o agendamento pendente para uma nova data e horário. Antes de chamar, use get_availability para confirmar que o slot escolhido está livre. O tutor deve ter escolhido um horário entre as opções oferecidas.',
+    description: 'Remarca o agendamento pendente para uma nova data e horário. Antes de chamar, use get_availability para confirmar que o slot escolhido está livre. O responsável deve ter escolhido um horário entre as opções oferecidas.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -120,11 +120,11 @@ const CONFIRMATION_TOOLS: Anthropic.Tool[] = [
 // Tool M9 — agendamento com validação pela recepção (ativo quando can_book=false)
 const REQUEST_BOOKING_TOOL: Anthropic.Tool = {
   name: 'request_appointment_booking',
-  description: 'Registra uma SOLICITAÇÃO de agendamento que será validada pela recepção antes de criar o horário definitivo. Use quando o tutor quiser agendar uma consulta. Colete nome do pet, data e hora de preferência antes de chamar.',
+  description: 'Registra uma SOLICITAÇÃO de agendamento que será validada pela recepção antes de criar o horário definitivo. Use quando o responsável quiser agendar uma consulta. Colete nome do animal, data e hora de preferência antes de chamar.',
   input_schema: {
     type: 'object' as const,
     properties: {
-      pet_name:       { type: 'string', description: 'Nome do pet/animal' },
+      pet_name:       { type: 'string', description: 'Nome do animal/animal' },
       preferred_date: { type: 'string', description: 'Data preferida no formato YYYY-MM-DD' },
       preferred_time: { type: 'string', description: 'Horário preferido no formato HH:MM' },
       alt_date:       { type: 'string', description: 'Data alternativa (opcional) no formato YYYY-MM-DD' },
@@ -148,7 +148,7 @@ const SURGERY_TOOL: Anthropic.Tool = {
       },
       message_snippet: {
         type: 'string',
-        description: 'Resumo em 1 frase do motivo para a recepção. Ex: "Pet com convulsões há 10 min".',
+        description: 'Resumo em 1 frase do motivo para a recepção. Ex: "Animal com convulsões há 10 min".',
       },
     },
     required: ['urgency_level', 'message_snippet'],
@@ -307,7 +307,7 @@ async function execBookAppointment(params: {
       .from('tutors')
       .insert({
         clinic_id: clinicId,
-        name:      tutorName ?? 'Tutor WhatsApp',
+        name:      tutorName ?? 'Responsável WhatsApp',
         cpf:       `WPP-${tutorPhone}`,
         phone:     tutorPhone,
       })
@@ -386,7 +386,7 @@ async function execRequestAppointmentBooking(params: {
     .eq('phone', params.tutorPhone)
     .maybeSingle()
 
-  if (!tutor) return 'Tutor não encontrado. Peça ao tutor para entrar em contato pelo telefone da clínica para agendar.'
+  if (!tutor) return 'Responsável não encontrado. Peça ao responsável para entrar em contato pelo telefone da clínica para agendar.'
 
   // Tenta achar pet pelo nome + tutor
   const { data: pet } = await admin
@@ -432,7 +432,7 @@ async function execConfirmAppointment(appointmentId: string): Promise<string> {
     })
     .eq('id', appointmentId)
   if (error) return `Erro ao confirmar: ${error.message}`
-  return 'Agendamento marcado como confirmado. Pode responder ao tutor agradecendo a confirmação.'
+  return 'Agendamento marcado como confirmado. Pode responder ao responsável agradecendo a confirmação.'
 }
 
 async function execCancelAppointment(appointmentId: string): Promise<string> {
@@ -447,7 +447,7 @@ async function execCancelAppointment(appointmentId: string): Promise<string> {
     })
     .eq('id', appointmentId)
   if (error) return `Erro ao cancelar: ${error.message}`
-  return 'Agendamento cancelado. Pode responder ao tutor confirmando o cancelamento e oferecendo ajuda para reagendar quando quiser.'
+  return 'Agendamento cancelado. Pode responder ao responsável confirmando o cancelamento e oferecendo ajuda para reagendar quando quiser.'
 }
 
 async function execRescheduleAppointment(params: {
@@ -549,15 +549,15 @@ Responda apenas sobre: serviços veterinários, preços, horários e agendamento
 Para emergências ou pedidos fora do escopo, transfira para um atendente humano.`
 
   const surgeryContext = vetInfo.isInSurgery
-    ? `\n⚠️ MODO FOCO CLÍNICO ATIVO: O médico veterinário está em cirurgia neste momento.\n- Se a mensagem indicar urgência médica real (convulsão, dificuldade respiratória, trauma grave, envenenamento, desmaio, sangramento intenso): chame 'escalate_urgency_to_reception' e oriente o tutor a ir à recepção imediatamente.\n- Para casos não urgentes: responda normalmente e informe que o MV está em cirurgia, mas a recepção pode ajudar.`
+    ? `\n⚠️ MODO FOCO CLÍNICO ATIVO: O médico veterinário está em cirurgia neste momento.\n- Se a mensagem indicar urgência médica real (convulsão, dificuldade respiratória, trauma grave, envenenamento, desmaio, sangramento intenso): chame 'escalate_urgency_to_reception' e oriente o responsável a ir à recepção imediatamente.\n- Para casos não urgentes: responda normalmente e informe que o MV está em cirurgia, mas a recepção pode ajudar.`
     : ''
 
   const priceRestriction = !canInformPrices
-    ? 'RESTRIÇÃO: Não informe valores, preços ou tabelas de preços ao tutor, mesmo que perguntado. Quando solicitado preço de qualquer serviço, responda que as informações de valores devem ser consultadas diretamente com a clínica pelo telefone.'
+    ? 'RESTRIÇÃO: Não informe valores, preços ou tabelas de preços ao responsável, mesmo que perguntado. Quando solicitado preço de qualquer serviço, responda que as informações de valores devem ser consultadas diretamente com a clínica pelo telefone.'
     : ''
 
   const bookingRestriction = !canBook
-    ? 'MODO AGENDAMENTO PENDENTE: Você NÃO cria agendamentos diretamente. Quando o tutor quiser agendar, use get_availability para mostrar horários disponíveis, colete o nome do pet e hora preferida, depois chame request_appointment_booking. Informe ao tutor que a equipe irá confirmar em breve.'
+    ? 'MODO AGENDAMENTO PENDENTE: Você NÃO cria agendamentos diretamente. Quando o responsável quiser agendar, use get_availability para mostrar horários disponíveis, colete o nome do animal e hora preferida, depois chame request_appointment_booking. Informe ao responsável que a equipe irá confirmar em breve.'
     : ''
 
   // Contexto de confirmação de agendamento — ativado quando a conversa tem um

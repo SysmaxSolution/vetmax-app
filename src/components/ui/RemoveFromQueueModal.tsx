@@ -69,7 +69,7 @@ export function RemoveFromQueueModal({
             <textarea
               value={reason}
               onChange={e => { setReason(e.target.value); setError('') }}
-              placeholder="Ex: Pet retirado pelo tutor antes do atendimento..."
+              placeholder="Ex: Animal retirado pelo responsável antes do atendimento..."
               rows={3}
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
             />

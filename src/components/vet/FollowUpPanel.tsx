@@ -151,7 +151,7 @@ export default function FollowUpPanel({ consultation }: Props) {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button type="button" onClick={() => submit('alta')} disabled={pending || !!success}
-              title="Encerra o acompanhamento. NÃO lança no caixa — fica só no histórico do pet."
+              title="Encerra o acompanhamento. NÃO lança no caixa — fica só no histórico do animal."
               className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 py-3 text-sm font-bold text-white disabled:opacity-50 transition-colors shadow-sm">
               {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />} Dar alta (sem caixa)
             </button>

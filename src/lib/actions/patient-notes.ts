@@ -193,9 +193,9 @@ export async function recordPatientDeath(
     .eq('id', input.patient_id)
     .eq('clinic_id', clinic_id)
     .single()
-  if (!patient) return { error: 'Pet não encontrado.' }
+  if (!patient) return { error: 'Animal não encontrado.' }
   if (patient.deceased_at) {
-    return { error: 'Este pet já tem óbito registrado.' }
+    return { error: 'Este animal já tem óbito registrado.' }
   }
 
   // Conteúdo principal da nota
@@ -388,7 +388,7 @@ export async function revertPatientDeath(
     })
     .eq('id', note.patient_id)
     .eq('clinic_id', clinic_id)
-  if (patErr) return { error: 'Nota removida, mas falha ao reativar o pet: ' + mensagemErro(patErr, 'lib/actions/patient-notes.ts') }
+  if (patErr) return { error: 'Nota removida, mas falha ao reativar o animal: ' + mensagemErro(patErr, 'lib/actions/patient-notes.ts') }
 
   revalidatePath(`/dashboard/patients/${note.patient_id}`)
   revalidatePath('/dashboard/patients')

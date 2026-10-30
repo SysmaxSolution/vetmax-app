@@ -240,7 +240,7 @@ function CompositeTagSection({
                   <input
                     className="w-full rounded border border-slate-300 px-1.5 py-0.5 text-xs"
                     value={p.prefix ?? ''}
-                    placeholder='ex: "Tutor: "'
+                    placeholder='ex: "Responsável: "'
                     onChange={e => updatePart(i, { prefix: e.target.value })}
                   />
                 </label>
@@ -572,7 +572,7 @@ function DynamicTagSection({ element, onPatch }: { element: DynamicTagElement; o
           <input
             className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
             value={element.prefix ?? ''}
-            placeholder='ex: "Tutor: "'
+            placeholder='ex: "Responsável: "'
             onChange={e => onPatch({ prefix: e.target.value } as Partial<CanvasElement>)}
           />
         </label>

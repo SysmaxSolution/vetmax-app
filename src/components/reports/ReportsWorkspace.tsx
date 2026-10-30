@@ -133,7 +133,7 @@ export default function ReportsWorkspace({ initialEnabled, usesExamRejection = f
     },
     {
       key:         'pet_frequency',
-      label:       'Periodicidade por Pet',
+      label:       'Periodicidade por Animal',
       icon:        PawPrint,
       description: 'Frequência de visitas por animal, com filtros por espécie e raça.',
       component:   <PetFrequencyReport />,
@@ -219,7 +219,7 @@ export default function ReportsWorkspace({ initialEnabled, usesExamRejection = f
       key:         'client_statement',
       label:       'Extrato do Cliente',
       icon:        FileText,
-      description: 'Pago × em aberto de um tutor, clinica parceira ou protetor no periodo, com o operador que deu baixa, quebra por empresa faturante e PDF para entregar ou enviar.',
+      description: 'Pago × em aberto de um responsável, clinica parceira ou protetor no periodo, com o operador que deu baixa, quebra por empresa faturante e PDF para entregar ou enviar.',
       component:   <ClientStatementReport />,
     },
     {

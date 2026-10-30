@@ -49,7 +49,7 @@ interface ModuleDef {
 
 const MODULES: ModuleDef[] = [
   { key: 'reception',            label: 'Recepção',                   desc: 'Check-in, fila e agenda',                                                   icon: <ClipboardList  className="h-5 w-5" />, color: 'text-blue-600 bg-blue-50'      },
-  { key: 'patients',             label: 'Pacientes',                  desc: 'Cadastro de tutores e pets',                                                icon: <PawPrint       className="h-5 w-5" />, color: 'text-cyan-600 bg-cyan-50'      },
+  { key: 'patients',             label: 'Animais e Responsáveis',                  desc: 'Cadastro de responsáveis e animais',                                                icon: <PawPrint       className="h-5 w-5" />, color: 'text-cyan-600 bg-cyan-50'      },
   { key: 'cashier',              label: 'Caixa',                      desc: 'Abertura, fechamento e lançamentos de caixa',                               icon: <Banknote       className="h-5 w-5" />, color: 'text-green-600 bg-green-50'    },
   { key: 'triage',               label: 'Triagem',                    desc: 'Sinais vitais e avaliação inicial',                                         icon: <Stethoscope    className="h-5 w-5" />, color: 'text-amber-600 bg-amber-50'    },
   { key: 'consultation',         label: 'Consultório',                desc: 'Prontuário e conduta médica',                                               icon: <Syringe        className="h-5 w-5" />, color: 'text-indigo-600 bg-indigo-50'  },
@@ -64,7 +64,7 @@ const MODULES: ModuleDef[] = [
   { key: 'sales',                label: 'Vendas (PDV)',               desc: 'Ponto de venda, carrinho e recibos',                                       icon: <ShoppingCart   className="h-5 w-5" />, color: 'text-emerald-600 bg-emerald-50' },
   { key: 'financial',            label: 'Financeiro',                 desc: 'Contas a pagar e receber, extrato e conciliação bancária',                  icon: <DollarSign     className="h-5 w-5" />, color: 'text-teal-600 bg-teal-50'      },
   { key: 'billing',              label: 'Faturamento',                desc: 'Orçamentos de serviços e NFS-e (documentos comerciais)',                    icon: <FileText       className="h-5 w-5" />, color: 'text-green-600 bg-green-50'    },
-  { key: 'petlove_reconciliation', label: 'Conciliação de Convênios',  desc: 'Importação de remessas de convênios, conciliação de repasses e cadastro de pets em massa', icon: <PawPrint       className="h-5 w-5" />, color: 'text-purple-600 bg-purple-50'  },
+  { key: 'petlove_reconciliation', label: 'Conciliação de Convênios',  desc: 'Importação de remessas de convênios, conciliação de repasses e cadastro de animais em massa', icon: <PawPrint       className="h-5 w-5" />, color: 'text-purple-600 bg-purple-50'  },
   { key: 'reports',              label: 'Relatórios',                 desc: 'DRE, Curva ABC, produtividade e relatórios operacionais',                   icon: <FileBarChart2  className="h-5 w-5" />, color: 'text-violet-600 bg-violet-50'  },
   { key: 'whatsapp',             label: 'WhatsApp',                   desc: 'Notificações e mensagens via WhatsApp',                                     icon: <MessageCircle  className="h-5 w-5" />, color: 'text-green-600 bg-green-50'    },
   { key: 'whatsapp_intelligent', label: 'WhatsApp Inteligente (Bot)', desc: 'Bot IA responde, agenda consultas e faz campanhas de reativação',          icon: <Bot            className="h-5 w-5" />, color: 'text-emerald-600 bg-emerald-50' },

@@ -176,7 +176,7 @@ export default function CustomPricesEditor({ patientId, providerId, providerName
         <header className="px-5 py-3 border-b border-purple-200">
           <h3 className="text-xs font-black text-purple-900 uppercase tracking-wider flex items-center gap-2">
             <PawPrint className="h-4 w-4" />
-            Preços do Convênio fixados neste pet
+            Preços do Convênio fixados neste animal
           </h3>
         </header>
         <div className="px-5 py-6 flex flex-col items-center gap-3 text-center">
@@ -186,7 +186,7 @@ export default function CustomPricesEditor({ patientId, providerId, providerName
           <div>
             <p className="text-sm font-bold text-purple-900">Disponível no Plano Pro</p>
             <p className="text-xs text-purple-600 mt-1 max-w-sm">
-              Vincule serviços a convênios, trave preços por pet e tenha split coparticipação/repasse automático no checkout.
+              Vincule serviços a convênios, trave preços por animal e tenha split coparticipação/repasse automático no checkout.
             </p>
           </div>
           <button
@@ -206,7 +206,7 @@ export default function CustomPricesEditor({ patientId, providerId, providerName
       <header className="px-5 py-3 border-b border-purple-200 flex items-center justify-between gap-2">
         <h3 className="text-xs font-black text-purple-900 uppercase tracking-wider flex items-center gap-2">
           <PawPrint className="h-4 w-4" />
-          Preços do Convênio fixados neste pet
+          Preços do Convênio fixados neste animal
         </h3>
         <button
           type="button"

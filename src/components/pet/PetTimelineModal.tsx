@@ -209,12 +209,12 @@ export default function PetTimelineModal({
       {/* Dados do paciente */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 12 }}>
-          <p style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', margin: '0 0 4px' }}>Animal (Paciente)</p>
+          <p style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', margin: '0 0 4px' }}>Animal (Animal)</p>
           <p style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>{sp.emoji} {petName}</p>
           <p style={{ fontSize: 12, color: '#475569', margin: '2px 0 0' }}>{sp.label}</p>
         </div>
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 12 }}>
-          <p style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', margin: '0 0 4px' }}>Tutor (Responsável)</p>
+          <p style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', margin: '0 0 4px' }}>Responsável (Responsável)</p>
           <p style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>{tutorName}</p>
           {tutorCpf && (
             <p style={{ fontSize: 12, color: '#475569', margin: '2px 0 0' }}>
@@ -259,7 +259,7 @@ export default function PetTimelineModal({
         </div>
         <div style={{ textAlign: 'center', minWidth: 180 }}>
           <div style={{ borderTop: '1px solid #000', paddingTop: 8 }}>
-            <p style={{ fontSize: 12, margin: 0 }}>Tutor / Responsável</p>
+            <p style={{ fontSize: 12, margin: 0 }}>Responsável / Responsável</p>
           </div>
         </div>
       </div>

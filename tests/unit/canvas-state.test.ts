@@ -167,7 +167,7 @@ describe('dynamic-tags', () => {
   })
 
   it('findTag retorna definição por id', () => {
-    expect(findTag('pet.name')?.label).toBe('Nome do Pet')
+    expect(findTag('pet.name')?.label).toBe('Nome do Animal')
     expect(findTag('inexistente.xyz')).toBeUndefined()
   })
 

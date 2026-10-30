@@ -76,7 +76,7 @@ export default async function GlosasDashboard({ remittanceId }: Props) {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-slate-900 truncate">{g.description}</p>
               <p className="text-xs text-slate-600 mt-0.5">
-                {g.patient_name ?? 'pet ?'}
+                {g.patient_name ?? 'animal ?'}
                 {g.tutor_name && ` · ${g.tutor_name}`}
                 {` · ${g.reason_label}`}
               </p>

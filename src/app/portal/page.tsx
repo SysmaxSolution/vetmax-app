@@ -52,10 +52,10 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
         <div className="px-5 sm:px-8 lg:px-12 py-16 flex justify-center">
           <div className="max-w-md w-full bg-[var(--pt-surface)] rounded-2xl border border-[var(--pt-border)] p-10 text-center">
             <ShieldCheck className="h-10 w-10 text-[var(--pt-accent)] mx-auto mb-4" />
-            <h1 className="text-xl text-[var(--pt-text)]" style={heading}>Área do Tutor indisponível</h1>
+            <h1 className="text-xl text-[var(--pt-text)]" style={heading}>Área do Responsável indisponível</h1>
             <p className="mt-3 text-sm text-[var(--pt-muted)] leading-relaxed">
-              A clínica em que você tem cadastro ainda não disponibilizou a Área do Tutor.
-              Fale com a recepção para receber as informações do seu pet.
+              A clínica em que você tem cadastro ainda não disponibilizou a Área do Responsável.
+              Fale com a recepção para receber as informações do seu animal.
             </p>
             <form action="/portal/sair" method="post" className="mt-6">
               <button type="submit" className="text-xs font-medium text-[var(--pt-muted)] hover:text-[var(--pt-primary-dark)] rounded-full border border-[var(--pt-border)] px-4 py-2 transition hover:border-[var(--pt-accent-ring)]">
@@ -76,7 +76,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
         <div className="px-5 sm:px-8 lg:px-12 py-16 flex justify-center">
           <div className="max-w-md w-full bg-[var(--pt-surface)] rounded-2xl border border-[var(--pt-border)] p-10 text-center">
             <PawPrint className="h-10 w-10 text-[var(--pt-border)] mx-auto mb-4" />
-            <h1 className="text-xl text-[var(--pt-text)]" style={heading}>Nenhum pet vinculado</h1>
+            <h1 className="text-xl text-[var(--pt-text)]" style={heading}>Nenhum animal vinculado</h1>
             <p className="mt-3 text-sm text-[var(--pt-muted)] leading-relaxed">
               Seu acesso ainda não está ligado a nenhum cadastro. Fale com a recepção da clínica.
             </p>
@@ -99,12 +99,12 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   return (
     <PortalShell brand={NEUTRAL_PORTAL_BRAND} tutorName={ctx.fullName} showLogout>
       <section className="w-full px-5 sm:px-8 lg:px-12 py-12 sm:py-16">
-        <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--pt-primary)]">Área do Tutor</p>
+        <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--pt-primary)]">Área do Responsável</p>
         <h1 className="mt-2 text-2xl sm:text-3xl text-[var(--pt-text)]" style={heading}>
           {first ? <>Olá, {first}.</> : 'Bem-vindo.'}
         </h1>
         <p className="mt-3 max-w-xl text-sm text-[var(--pt-muted)] leading-relaxed">
-          Você tem cadastro em mais de uma clínica. Escolha de qual delas quer ver os pets —
+          Você tem cadastro em mais de uma clínica. Escolha de qual delas quer ver os animais —
           cada clínica tem a sua própria área, com o seu histórico.
         </p>
 
@@ -124,7 +124,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
                   </span>
                   <div className="min-w-0">
                     <p className="text-lg text-[var(--pt-text)] truncate" style={heading}>{b.clinicName ?? 'Clínica'}</p>
-                    <p className="text-xs text-[var(--pt-muted-soft)]">{b.theme.tagline ?? 'Portal do Tutor'}</p>
+                    <p className="text-xs text-[var(--pt-muted-soft)]">{b.theme.tagline ?? 'Portal do Responsável'}</p>
                   </div>
                 </div>
                 <div className="mt-5 pt-4 border-t border-[var(--pt-border-soft)] flex items-center justify-between">

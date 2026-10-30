@@ -260,7 +260,7 @@ function KanbanColumn({ col, cards }: { col: (typeof COLUMNS)[number]; cards: Ka
         {cards.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 text-slate-400 text-xs gap-1">
             <Icon className="w-6 h-6 opacity-30" />
-            <span>Nenhum pet</span>
+            <span>Nenhum animal</span>
           </div>
         ) : (
           cards.map(card => <PetCard key={card.consultationId} card={card} />)

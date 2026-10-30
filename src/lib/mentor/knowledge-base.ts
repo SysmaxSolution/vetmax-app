@@ -23,7 +23,7 @@ export const VETMAX_KNOWLEDGE_BASE = `# VETMAX_KNOWLEDGE_BASE
 
 | Correct Term | AVOID | Notes |
 |---|---|---|
-| **Pet** / **Animal** | "Paciente" | UI term per CFMV regulation |
+| **Pet** / **Animal** | "Animal" | UI term per CFMV regulation |
 | **Tutor** | "Dono", "Proprietário" | Legal term — CFMV compliant |
 | **Médico Veterinário** / **MV** | "Médico" alone | Professional title |
 | **Auxiliar Veterinário** | "Técnico" | Staff role |
@@ -79,17 +79,17 @@ PARALELO (não bloqueante):
 ---
 
 ## CONSULTATION STATUS LIFECYCLE
-<!-- AI-CONTEXT: Use this table to answer "onde está o pet" or "qual status da consulta" questions. -->
+<!-- AI-CONTEXT: Use this table to answer "onde está o animal" or "qual status da consulta" questions. -->
 
 | Status | Módulo Responsável | Significado |
 |---|---|---|
-| \`scheduled_future\` | Recepção | Agendamento futuro — pet ainda não chegou |
-| \`reception\` | Recepção | Pet com check-in feito, aguardando triagem |
+| \`scheduled_future\` | Recepção | Agendamento futuro — animal ainda não chegou |
+| \`reception\` | Recepção | Animal com check-in feito, aguardando triagem |
 | \`triage\` | Triagem | Em triagem — sinais vitais sendo coletados |
 | \`in_progress\` | Consultório | Consulta em andamento com o MV |
 | \`waiting_exam\` | Exames | Aguardando resultado de exame |
 | \`medication\` | Consultório/Farmácia | Em processo de medicação |
-| \`hospitalized\` | Internação | Pet internado no hospital |
+| \`hospitalized\` | Internação | Animal internado no hospital |
 | \`revisao_pos_internacao\` | Consultório | Revisão pós-internação com MV |
 | \`completed\` | Caixa/Alta | Atendimento finalizado — aguardando pagamento ou pago |
 
@@ -101,7 +101,7 @@ PARALELO (não bloqueante):
 | \`received\` (recebido) | Grooming | Animal chegou à clínica |
 | \`bathing\` (em banho) | Grooming | Banho em andamento |
 | \`grooming\` (em tosa) | Grooming | Tosa em andamento |
-| \`waiting_pickup\` (aguardando) | Grooming | Pronto — aguardando retirada pelo tutor |
+| \`waiting_pickup\` (aguardando) | Grooming | Pronto — aguardando retirada pelo responsável |
 | \`delivered\` (entregue) | Grooming/Caixa | Entregue e pagamento registrado |
 
 ---
@@ -110,11 +110,11 @@ PARALELO (não bloqueante):
 <!-- AI-CONTEXT: Entry point for all patient visits. Manages queue, check-in, and scheduling. -->
 
 ### Objective
-Registrar a chegada do animal, criar ou localizar o cadastro do tutor e do pet, efetuar check-in, agendar consultas futuras e encaminhar para triagem.
+Registrar a chegada do animal, criar ou localizar o cadastro do responsável e do animal, efetuar check-in, agendar consultas futuras e encaminhar para triagem.
 
 ### Happy Path — Check-in (animal já chegou)
 1. **Buscar tutor** — Digitar CPF, nome do tutor, ou nome do pet na "Busca Inteligente" (debounce 300ms).
-2. **Selecionar pet** — O sistema lista os pets vinculados ao tutor encontrado.
+2. **Selecionar animal** — O sistema lista os animais vinculados ao responsável encontrado.
 3. **Check-in** — Clicar "Check-in" → modal abre → confirmar animal e motivo da consulta.
 4. **Fila de espera** — Animal aparece na fila em tempo real (Supabase Realtime).
 5. **Chamar para triagem** — Quando triagem disponível, clicar "Chamar Triagem →" no card do animal.
@@ -122,11 +122,11 @@ Registrar a chegada do animal, criar ou localizar o cadastro do tutor e do pet, 
 
 ### Happy Path — Agendar Consulta Futura (animal não está presente)
 1. **Buscar tutor** — Digitar CPF, nome do tutor, ou nome do pet na "Busca Inteligente".
-2. **Selecionar pet** — Escolher o pet desejado nos resultados.
+2. **Selecionar animal** — Escolher o animal desejado nos resultados.
 3. **Clicar "Agendar"** (não "Check-in") — Modal de agendamento abre.
 4. **Definir data e horário** — Selecionar no calendário a data e hora da consulta.
 5. **Confirmar** — Sistema cria consulta com status \`scheduled_future\`.
-6. **Agendamento visível** — Aparece no calendário da recepção e no módulo de Pacientes.
+6. **Agendamento visível** — Aparece no calendário da recepção e no módulo de Animais.
 
 ### Happy Path — Agendar Banho e Tosa
 1. **Buscar tutor** e selecionar pet na "Busca Inteligente".
@@ -156,7 +156,7 @@ Registrar a chegada do animal, criar ou localizar o cadastro do tutor e do pet, 
 - **CPF = preenchimento automático**: Digite apenas o CPF no campo de busca para auto-preencher todos os dados do tutor.
 - **Tecla Alt+N**: Abre "Novo Cadastro" instantaneamente sem usar o mouse.
 - **Realtime**: A fila atualiza automaticamente — não é necessário recarregar a página.
-- **Check-in pelo nome do pet**: Não precisa saber o CPF do tutor — o sistema encontra pelo nome do animal.
+- **Check-in pelo nome do animal**: Não precisa saber o CPF do responsável — o sistema encontra pelo nome do animal.
 - **Diferença Check-in × Agendar**: "Check-in" = animal chegou agora. "Agendar" = reservar horário futuro sem presença imediata.
 
 ---
@@ -186,7 +186,7 @@ Coletar sinais vitais (peso, temperatura, queixa principal), avaliar urgência e
 | **Aba "Fila de Espera"** | Mostra animais aguardando triagem | Leitura \`consultations\` (status=\`triage\`) |
 | **Aba "Histórico de Hoje"** | Triagens concluídas no dia | Leitura \`triage_records\` finalizados |
 | **Card do animal (clique)** | Abre formulário detalhado de triagem | Navega para \`/dashboard/triage/[id]\` |
-| **"+ Adicionar Paciente"** | Adiciona animal manualmente à fila (sem check-in prévio) | Cria \`triage_records\` direto |
+| **"+ Adicionar Animal"** | Adiciona animal manualmente à fila (sem check-in prévio) | Cria \`triage_records\` direto |
 | **Microfone (voz)** | Reconhecimento de voz pt-BR para sinais vitais | Transcreve e preenche campos via IA |
 | **"Encaminhar para Consultório"** | Finaliza triagem e envia para MV | Atualiza status → \`in_progress\` |
 | **"Editar Triagem"** | Corrige dados de triagem já concluída | Navega \`/dashboard/triage/[id]?edit=true\` |
@@ -198,7 +198,7 @@ Coletar sinais vitais (peso, temperatura, queixa principal), avaliar urgência e
 ### UX Tips — Tricks for Speed
 - **Use o microfone**: Fale "Peso cinco vírgula três quilos, temperatura trinta e oito vírgula dois" — a IA preenche automaticamente.
 - **Urgência visual**: Animais em estado crítico aparecem com badge vermelho 🚨 para priorização.
-- **Sem check-in?** Use "Adicionar Paciente" para casos de emergência que chegam sem check-in na recepção.
+- **Sem check-in?** Use "Adicionar Animal" para casos de emergência que chegam sem check-in na recepção.
 
 ---
 
@@ -346,7 +346,7 @@ Gerenciar sessões de banho e tosa em fluxo Kanban, desde agendamento até entre
 3. **Receber animal** — Confirmar chegada → mover para 📋 Recebido.
 4. **Em banho** — Arrastar para 🛁 Em Banho.
 5. **Em tosa** — Arrastar para ✂️ Em Tosa (se houver serviço de tosa).
-6. **Aguardando** — Mover para ⏳ Aguardando Retirada → sistema sugere notificação WhatsApp ao tutor.
+6. **Aguardando** — Mover para ⏳ Aguardando Retirada → sistema sugere notificação WhatsApp ao responsável.
 7. **Entrega** — Mover para ✅ Entregue → modal de pagamento → \`cashier_entries\` criado automaticamente.
 
 ### Kanban Columns
@@ -375,7 +375,7 @@ Gerenciar sessões de banho e tosa em fluxo Kanban, desde agendamento até entre
 
 ### UX Tips — Tricks for Speed
 - **Pagamento automático**: Ao arrastar para "Entregue", o pagamento já é registrado no Caixa — sem etapa extra.
-- **WhatsApp integrado**: Notificação ao tutor sobre prontidão do animal é sugerida automaticamente.
+- **WhatsApp integrado**: Notificação ao responsável sobre prontidão do animal é sugerida automaticamente.
 - **Agenda visual**: Use o \`/dashboard/grooming/schedule\` para visão de calendário de agendamentos futuros.
 
 ---
@@ -436,7 +436,7 @@ Centralizar o controle financeiro: registrar pagamentos de consultas e serviços
 ### Inter-Module Relationships
 - **Alimentado por:**
   - **Consultório** → consultas finalizadas geram \`invoices\`
-  - **Grooming** → entrega do pet registra pagamento automaticamente
+  - **Grooming** → entrega do animal registra pagamento automaticamente
   - **Internação** → dias de internação geram cobrança
 - **Não alimenta** outros módulos (terminal do fluxo financeiro).
 
@@ -557,44 +557,44 @@ Controlar o estoque de medicamentos, registrar entradas (reposição) e saídas 
 <!-- AI-CONTEXT: Master directory of all pets in the clinic. Search, edit registrations, view history. -->
 
 ### Objective
-Diretório completo de pets cadastrados na clínica. Permite busca, edição de cadastro, visualização de histórico de consultas/exames/internações e adição de novos pets.
+Diretório completo de animais cadastrados na clínica. Permite busca, edição de cadastro, visualização de histórico de consultas/exames/internações e adição de novos animais.
 
-### Happy Path — Ver Histórico de um Pet
-1. **Buscar** — Digitar nome do pet, tutor, CPF ou raça no campo de busca.
-2. **Card do pet** — Mostra espécie 🐶🐱🦎, raça, sexo, idade calculada, status de castração, tutor.
+### Happy Path — Ver Histórico de um Animal
+1. **Buscar** — Digitar nome do animal, responsável, CPF ou raça no campo de busca.
+2. **Card do animal** — Mostra espécie 🐶🐱🦎, raça, sexo, idade calculada, status de castração, responsável.
 3. **"Ver Histórico"** — Abre \`PetTimelineModal\` com todos os atendimentos em ordem cronológica.
 
 ### UI Dictionary — Buttons & Actions
 | Button / Action | Function | System Impact |
 |---|---|---|
 | **Campo de busca** (debounce 150ms) | Localiza pets por nome, tutor, CPF, raça | Consulta \`patients\` + \`tutors\` |
-| **"+ Novo Pet"** | Cadastra novo pet vinculado a tutor existente | Cria em \`patients\`, vincula a \`tutors\` |
+| **"+ Novo Animal"** | Cadastra novo pet vinculado a tutor existente | Cria em \`patients\`, vincula a \`tutors\` |
 | **"Editar Cadastro"** | Abre modal de edição do pet | Atualiza \`patients\` |
 | **"Ver Histórico"** | Timeline completa do pet | Leitura \`consultations\` + \`exams\` + \`hospitalizations\` + \`grooming_sessions\` |
 
-### Pet Registration Fields
+### Animal Registration Fields
 \`name\` | \`species\` (dog/cat/other) | \`breed\` | \`gender\` | \`birth_date\` | \`photo_url\` | \`allergies\` | \`chronic_diseases\` | \`behavior_tags\` | \`neutered\` | \`microchip_id\`
 
-### Campos Clínicos do Pet — Detalhamento (aba "Paciente")
+### Campos Clínicos do Pet — Detalhamento (aba "Animal")
 
 | Campo | Localização no Modal | Importância Clínica |
 |---|---|---|
-| **Alergias** (\`allergies\`) | Aba Paciente → seção "Dados Clínicos" | CRÍTICO — ícone de alerta vermelho (AlertTriangle). Previne reações anafiláticas. Deve ser consultado antes de qualquer prescrição. Exemplos: "Amoxicilina, látex, picada de abelha". |
-| **Doenças Crônicas** (\`chronic_diseases\`) | Aba Paciente → seção "Dados Clínicos" | IMPORTANTE — ícone de alerta laranja. Informa condições pré-existentes que afetam protocolos de anestesia e medicação. Exemplos: "Diabetes mellitus, Leishmaniose, Hipotireoidismo". |
-| **Microchip ID** (\`microchip_id\`) | Aba Paciente → seção "Dados Clínicos" | Identificação oficial ISO 11784/11785 (padrão 15 dígitos). Obrigatório para animais de companhia em muitos municípios. Permite rastreamento e prova de propriedade. |
+| **Alergias** (\`allergies\`) | Aba Animal → seção "Dados Clínicos" | CRÍTICO — ícone de alerta vermelho (AlertTriangle). Previne reações anafiláticas. Deve ser consultado antes de qualquer prescrição. Exemplos: "Amoxicilina, látex, picada de abelha". |
+| **Doenças Crônicas** (\`chronic_diseases\`) | Aba Animal → seção "Dados Clínicos" | IMPORTANTE — ícone de alerta laranja. Informa condições pré-existentes que afetam protocolos de anestesia e medicação. Exemplos: "Diabetes mellitus, Leishmaniose, Hipotireoidismo". |
+| **Microchip ID** (\`microchip_id\`) | Aba Animal → seção "Dados Clínicos" | Identificação oficial ISO 11784/11785 (padrão 15 dígitos). Obrigatório para animais de companhia em muitos municípios. Permite rastreamento e prova de propriedade. |
 
-### Como Cadastrar um Pet com Microchip
+### Como Cadastrar um Animal com Microchip
 1. Abra o módulo **Pacientes** → clique em **"Novo Cadastro"** (ou Alt+N).
-2. Na aba **Paciente**, preencha Nome, Espécie e Raça.
+2. Na aba **Animal**, preencha Nome, Espécie e Raça.
 3. Role a tela até a seção **"Dados Clínicos"** (abaixo das Tags de Comportamento).
 4. Informe as **Alergias** do animal no campo em destaque vermelho.
 5. Informe **Doenças Crônicas** no campo em destaque laranja.
 6. Digite o código do **Microchip ID** (15 dígitos padrão ISO).
-7. Preencha a aba **Recepção** com os dados do tutor.
+7. Preencha a aba **Recepção** com os dados do responsável.
 8. Clique em **"Criar Cadastro"** para salvar.
 
 ### UX Tips — Tricks for Speed
-- **Busca por CPF do tutor**: Digitar o CPF localiza todos os pets vinculados àquele tutor.
+- **Busca por CPF do responsável**: Digitar o CPF localiza todos os animais vinculados àquele responsável.
 - **Histórico acessível em múltiplos pontos**: A timeline do pet pode ser aberta da Recepção ("Feed"), do módulo Pacientes ("Ver Histórico"), e de outros pontos do sistema.
 - **Comportamento**: Tags de comportamento (ex: "agressivo", "ansioso") aparecem em destaque no card do pet.
 - **Alergias visíveis na triagem**: O campo de alergias será exibido em destaque vermelho na ficha de triagem para alertar o auxiliar antes de qualquer procedimento.
@@ -605,7 +605,7 @@ Diretório completo de pets cadastrados na clínica. Permite busca, edição de 
 <!-- AI-CONTEXT: Integrated WhatsApp channel. Manages conversations, sends notifications, and links contacts to tutors. -->
 
 ### Objective
-Canal de WhatsApp integrado à clínica via Evolution API v2.x. Exibe conversas ativas, permite envio de mensagens e vincula contatos a tutores cadastrados.
+Canal de WhatsApp integrado à clínica via Evolution API v2.x. Exibe conversas ativas, permite envio de mensagens e vincula contatos a responsáveis cadastrados.
 
 ### Connection States
 | State | Description |
@@ -624,7 +624,7 @@ Canal de WhatsApp integrado à clínica via Evolution API v2.x. Exibe conversas 
 1. **Lista de conversas** (painel esquerdo) — conversas ordenadas por última mensagem.
 2. **Selecionar conversa** — painel de chat abre à direita (ou ocupa toda a tela em mobile).
 3. **Campo de mensagem** → digitar → Enter ou botão enviar.
-4. **Vinculação** (opcional) — Se contato não está vinculado a tutor, botão "Vincular Tutor" aparece no topo do chat.
+4. **Vinculação** (opcional) — Se contato não está vinculado a tutor, botão "Vincular Responsável" aparece no topo do chat.
 
 ### Mobile UX — Toggle de Visualização
 Em telas < 1024px, o módulo WhatsApp exibe **um painel por vez** (lista OU chat):
@@ -636,7 +636,7 @@ Em telas < 1024px, o módulo WhatsApp exibe **um painel por vez** (lista OU chat
 | Button / Action | Function | System Impact |
 |---|---|---|
 | **"← Conversas"** (mobile) | Retorna à lista de conversas | Alterna \`mobileView: 'chat'\` → \`'list'\` |
-| **"Vincular Tutor"** | Associa contato a tutor cadastrado | Atualiza mapping no banco |
+| **"Vincular Responsável"** | Associa contato a tutor cadastrado | Atualiza mapping no banco |
 | **Campo de mensagem** | Digitar e enviar mensagem | POST via Evolution API v2.x |
 | **QR Code** | Escanear para conectar canal | Estado salvo via webhook \`QRCODE_UPDATED\` |
 
@@ -683,7 +683,7 @@ Assistente de onboarding e ajuda contextual em tempo real. Localiza animais no s
 | \`internacao\` | Internação | \`/dashboard/hospitalization\` | Lista internados, dar alta hospitalar |
 | \`grooming\` | Banho & Tosa | \`/dashboard/grooming\` | Fila kanban, registro por voz |
 | \`alta\` | Alta | \`/dashboard/reception\` | Quadro kanban, coluna de alta |
-| \`cadastro-pet\` | Cadastro de Pet | \`/dashboard/patients\` | Formulário de cadastro de novo pet |
+| \`cadastro-animal\` | Cadastro de Animal | \`/dashboard/patients\` | Formulário de cadastro de novo animal |
 
 ### Intent Keywords → Tour Mapping
 | Keywords | Tour Activated |
@@ -696,7 +696,7 @@ Assistente de onboarding e ajuda contextual em tempo real. Localiza animais no s
 | exame, laboratório, laudo, resultado | \`exames\` |
 | internação, internar, hospitalizar, UTI, UTA, U.T.A | \`internacao\` |
 | banho, tosa, grooming, tosador | \`grooming\` |
-| cadastro, novo pet, registrar animal | \`cadastro-pet\` |
+| cadastro, novo pet, registrar animal | \`cadastro-animal\` |
 
 ---
 
@@ -836,18 +836,18 @@ A: Em telas menores que 1024px, toque na conversa desejada na lista para abrir o
 A: Não. Em telas pequenas o botão se reposiciona para \`bottom-4 right-4\` (mais próximo da borda). O popover de opções ocupa quase toda a largura da tela para facilitar o toque.
 
 **Q: Onde fica o tour de Cadastro de Pet?**
-A: O Mentor possui um tour \`cadastro-pet\` que guia o cadastro em \`/dashboard/patients\`. Para acioná-lo, pergunte ao Mentor: "Como cadastro um novo pet?" ou "Registrar animal".
+A: O Mentor possui um tour \`cadastro-animal\` que guia o cadastro em \`/dashboard/patients\`. Para acioná-lo, pergunte ao Mentor: "Como cadastro um novo animal?" ou "Registrar animal".
 TOUR_ID:cadastro-pet
 
 **Q: Como cadastro um novo pet?**
-A: Acesse o módulo **Pacientes** e clique em "+ Novo Pet". Preencha nome, espécie, raça, data de nascimento, alergias e doenças crônicas. Vincule a um tutor existente. O Mentor pode guiar cada campo com o tour de cadastro.
+A: Acesse o módulo **Pacientes** e clique em "+ Novo Animal". Preencha nome, espécie, raça, data de nascimento, alergias e doenças crônicas. Vincule a um tutor existente. O Mentor pode guiar cada campo com o tour de cadastro.
 TOUR_ID:cadastro-pet
 
 **Q: O que acontece após a triagem?**
 A: Após concluir a triagem (salvar peso, temperatura e demais dados), o pet é automaticamente encaminhado para a fila do Consultório (status muda para \`in_progress\`). O MV verá o animal em sua fila em tempo real.
 
 **Q: Como faço para o pet ir direto para a triagem sem check-in?**
-A: Na Triagem, use o botão **"+ Adicionar Paciente"** para incluir um animal diretamente na fila de triagem, sem precisar passar pela recepção. Útil para emergências.
+A: Na Triagem, use o botão **"+ Adicionar Animal"** para incluir um animal diretamente na fila de triagem, sem precisar passar pela recepção. Útil para emergências.
 
 **Q: Como internar um animal?**
 A: No Consultório, após avaliar o pet, clique em **"Encaminhar Internação"**. Isso cria um registro em \`hospitalizations\` e move o animal para o Kanban de Internação, iniciando na coluna "Observação".
@@ -860,7 +860,7 @@ A: No Kanban de Internação, arraste o card do animal para a coluna **"Pronto p
 A: O WhatsApp envia notificações **sugeridas** (não automáticas) em momentos-chave: ao chamar o pet para triagem, ao mudar de status na internação, quando o pet está pronto no Grooming, e na alta hospitalar. O sistema sugere a mensagem pré-formatada — a recepcionista confirma antes de enviar.
 
 **Q: Por que o WhatsApp não está enviando mensagens?**
-A: Verifique: 1) Se o estado é \`open\` no módulo WhatsApp (ícone verde no menu). 2) Se o número está corretamente vinculado ao tutor. 3) Se o servidor da Evolution API está rodando. Se o estado for \`close\`, escaneie o QR code novamente.
+A: Verifique: 1) Se o estado é \`open\` no módulo WhatsApp (ícone verde no menu). 2) Se o número está corretamente vinculado ao responsável. 3) Se o servidor da Evolution API está rodando. Se o estado for \`close\`, escaneie o QR code novamente.
 
 **Q: Qual a diferença entre "Alta" e "Alta Hospitalar"?**
 A: **Alta** (módulo Consultório) = encerramento de uma consulta clínica comum — o pet vai para casa após a consulta. **Alta Hospitalar** (módulo Internação) = encerramento de um período de internação — o pet estava hospitalizado. Ambas geram cobrança no Caixa.
@@ -890,7 +890,7 @@ A: Sim, o fluxo clínico (recepção, triagem, consultório) funciona independen
 
 ### O que é
 Conciliação de Convênios é a rotina que **importa a planilha mensal da Petlove** (arquivo .xlsx que a Petlove envia para a clínica) e faz automaticamente:
-- Cadastra pets e tutores novos que aparecem na planilha mas não estão no sistema
+- Cadastra animais e responsáveis novos que aparecem na planilha mas não estão no sistema
 - Lança os títulos no Contas a Receber (1 título por procedimento, vinculado ao tutor e ao pet correto)
 - Identifica e ajusta divergências de valor (drift) centavo a centavo
 - Cria os procedimentos no estoque automaticamente (com valor zero — preço real fica por pet)
@@ -911,7 +911,7 @@ URL direta: \`/dashboard/financial/insurance-reconciliation\`
 ### Fluxo de uso passo a passo
 1. **Importar a planilha**: arraste o arquivo .xlsx da Petlove na área roxa. Em ~2 segundos, a remessa entra no histórico.
 2. **Revisar**: clique no botão **"Revisar →"** ao lado da remessa importada.
-3. **Conferir os totais**: o painel "Pets na remessa" mostra quantos já cadastrados, quantos a cadastrar e total distinto.
+3. **Conferir os totais**: o painel "Animais na remessa" mostra quantos já cadastrados, quantos a cadastrar e total distinto.
 4. **(Opcional) Mapear procedimentos**: se aparecer banner roxo "Mapeamento Necessário", clique e vincule cada procedimento ao estoque (ou deixe em branco para auto-criar como serviço novo com valor zero).
 5. **Aprovar Conciliação**: clique no botão verde sticky no rodapé (ou ⌘+Enter). O pipeline autônomo executa tudo:
    - Roda matching de chips e nomes
@@ -928,7 +928,7 @@ URL direta: \`/dashboard/financial/insurance-reconciliation\`
 - **Títulos individuais**: Financeiro › Contas a Receber. Descrição inclui pet + tutor, ex: "Petlove · Vacina V10 · Snow (Armando) · 02/03/2026".
 - **Movimentações no Extrato**: Financeiro › Extrato. Selecione a conta bancária padrão e o período.
 - **Pets criados**: Pacientes. Pets criados via importação têm banner amarelo "Cadastro rápido via Petlove" alertando sobre campos faltantes (sexo, data de nascimento, peso). CPF e telefone do tutor recebem placeholder.
-- **Preços fixados por pet**: clique no pet (Editar) → aba **Convênio** (escudo). Mostra bloco roxo "Preços do Convênio fixados neste pet" com cada procedimento e valor.
+- **Preços fixados por pet**: clique no pet (Editar) → aba **Convênio** (escudo). Mostra bloco roxo "Preços do Convênio fixados neste animal" com cada procedimento e valor.
 - **Histórico do pet**:
   - No modal Editar → aba Convênio → bloco "Histórico do Convênio"
   - No Feed do pet (botão verde "Histórico") → cards roxos com 🐾
@@ -946,7 +946,7 @@ Botão lixeira ao lado de "Revisar →" abre modal de confirmação. Para remess
 Aparece no cabeçalho "Resumo Contas Médicas" da planilha. Vira um título avulso com source='petlove_indicacao' e category='Convênios · Petlove', sem vínculo a pet/tutor específico.
 
 ### Limitações conhecidas
-- A planilha não traz sexo, data de nascimento, peso e alergias do pet → cadastros rápidos precisam ser completados na próxima visita
+- A planilha não traz sexo, data de nascimento, peso e alergias do animal → cadastros rápidos precisam ser completados na próxima visita
 - O tutor entra sem CPF real (placeholder PL-...) e sem telefone — banner amarelo no perfil avisa
 - Drift de valor acima de 15% é classificado como "Divergência" mas o sistema realiza o ajuste mesmo assim no valor da planilha
 

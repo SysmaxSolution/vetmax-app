@@ -1195,7 +1195,7 @@ function MergeTagsModal({
                       <input
                         className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
                         value={p.prefix}
-                        placeholder='ex: "Tutor: "'
+                        placeholder='ex: "Responsável: "'
                         onChange={e => update(i, { prefix: e.target.value })}
                       />
                     </label>

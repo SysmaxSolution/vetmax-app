@@ -243,7 +243,7 @@ function MemorialCard({ event }: { event: TimelineEvent }) {
 function WeightUpdateCard({ event }: { event: TimelineEvent }) {
   const d = event.weight_update!
   const sourceLabels: Record<string, string> = {
-    manual:              'Cadastro do pet',
+    manual:              'Cadastro do animal',
     reception:           'Recepção',
     triage:              'Triagem',
     vet:                 'Consultório',
@@ -697,7 +697,7 @@ function WhatsAppNotificationCard({ event }: { event: TimelineEvent }) {
   return (
     <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-green-600">📱 Mensagem enviada ao Tutor</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-green-600">📱 Mensagem enviada ao Responsável</p>
         <span className="rounded-full bg-green-200 px-2.5 py-0.5 text-xs font-medium text-green-800">
           {triggerLabel}
         </span>

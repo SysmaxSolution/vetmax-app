@@ -171,7 +171,7 @@ export default function ClientStatementReport() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
               value={query} onChange={e => setQuery(e.target.value)}
-              placeholder="Buscar tutor, clínica parceira ou protetor por nome / CPF / CNPJ…"
+              placeholder="Buscar responsável, clínica parceira ou protetor por nome / CPF / CNPJ…"
               className="w-full rounded-lg border border-slate-200 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
           </div>
           <div className="max-h-52 overflow-y-auto divide-y divide-slate-100">
@@ -185,7 +185,7 @@ export default function ClientStatementReport() {
                   {c.document && <span className="text-xs text-slate-400 font-mono">{c.document}</span>}
                   <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase ${
                     c.kind === 'tutor' ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                    {c.kind === 'tutor' ? 'Tutor' : 'Parceira'}
+                    {c.kind === 'tutor' ? 'Responsável' : 'Parceira'}
                   </span>
                 </span>
               </button>
@@ -242,7 +242,7 @@ export default function ClientStatementReport() {
               <div>
                 <p className="text-base font-bold text-slate-800">{data.client.name}</p>
                 <p className="text-xs text-slate-500">
-                  {data.client.kind === 'tutor' ? 'Tutor' : 'Clínica parceira / protetor'}
+                  {data.client.kind === 'tutor' ? 'Responsável' : 'Clínica parceira / protetor'}
                   {data.client.document ? ` · ${data.client.document}` : ''}
                   {data.client.phone ? ` · ${data.client.phone}` : ''}
                 </p>
@@ -302,7 +302,7 @@ export default function ClientStatementReport() {
                     <th className="text-left px-4 py-2.5">Pago em</th>
                     <th className="text-left px-2 py-2.5">Documento</th>
                     <th className="text-left px-2 py-2.5">Descrição</th>
-                    <th className="text-left px-2 py-2.5">Pet</th>
+                    <th className="text-left px-2 py-2.5">Animal</th>
                     <th className="text-left px-2 py-2.5">Empresa</th>
                     <th className="text-left px-2 py-2.5">Forma</th>
                     <th className="text-left px-2 py-2.5">Baixa por</th>
@@ -359,7 +359,7 @@ export default function ClientStatementReport() {
                     <th className="text-left px-4 py-2.5">Vencimento</th>
                     <th className="text-left px-2 py-2.5">Documento</th>
                     <th className="text-left px-2 py-2.5">Descrição</th>
-                    <th className="text-left px-2 py-2.5">Pet</th>
+                    <th className="text-left px-2 py-2.5">Animal</th>
                     <th className="text-left px-2 py-2.5">Empresa</th>
                     <th className="text-center px-2 py-2.5">Atraso</th>
                     <th className="text-right px-4 py-2.5">Valor</th>

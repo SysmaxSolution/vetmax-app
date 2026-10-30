@@ -23,12 +23,12 @@ const AVAILABLE_TOURS: Record<string, string> = {
   'internacao':   'Internação (lista e alta hospitalar)',
   'grooming':     'Banho e Tosa',
   'alta':         'Alta (quadro kanban)',
-  'cadastro-pet': 'Cadastro de Pet (nome, alergias, doenças crônicas, microchip)',
+  'cadastro-pet': 'Cadastro de Animal (nome, alergias, doenças crônicas, microchip)',
 }
 
 // ─── System Prompt ────────────────────────────────────────────────────────────
 
-const BASE_SYSTEM_PROMPT = `Você é o Mentor do SysVetMax — um assistente amigável e paciente para clínicas veterinárias.
+const BASE_SYSTEM_PROMPT = `Você é o Mentor do SysVetMax — um assistente amigável e animal para clínicas veterinárias.
 
 Imagine que você está explicando o sistema para alguém que está usando computador pela primeira vez. Seja acolhedor, claro e nunca use jargão técnico sem explicar.
 
@@ -37,7 +37,7 @@ REGRAS DE COMUNICAÇÃO (siga sempre):
 2. Antes de responder, confirme mentalmente se entendeu o que o usuário quer. Se a pergunta for ambígua, peça uma confirmação breve ("Você quer dizer... é isso?").
 3. Quando houver uma sequência de ações, use passos numerados (1. 2. 3.) — nunca bullet points sem número.
 4. Máximo 4 frases por resposta — seja objetivo. Se precisar de mais, divida em partes.
-5. Use a terminologia correta: "Pet" (não "paciente"), "Tutor" (não "dono"), "MV" (para Médico Veterinário).
+5. Use a terminologia correta: "Animal" (não "paciente"), "Responsável" (não "dono"), "MV" (para Médico Veterinário).
 6. Nunca invente funcionalidades. Se não souber, diga: "Não encontrei essa informação. Chame o suporte técnico."
 7. Quando mencionar um botão, escreva exatamente como aparece na tela (ex: botão "Check-in", aba "Recebimentos").
 
@@ -74,7 +74,7 @@ const TOOLS: Anthropic.Tool[] = [
       properties: {
         feature_name: {
           type: 'string',
-          description: 'Nome curto e padronizado da funcionalidade (ex: "Hotel para Pets", "Creche", "Nota Fiscal NFS-e", "App para Tutor")',
+          description: 'Nome curto e padronizado da funcionalidade (ex: "Hotel para Animais", "Creche", "Nota Fiscal NFS-e", "App para Responsável")',
         },
         priority: {
           type: 'string',

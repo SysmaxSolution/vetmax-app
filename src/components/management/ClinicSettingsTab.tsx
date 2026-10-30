@@ -189,7 +189,7 @@ export default function ClinicSettingsTab({
               value={newCheckItem}
               onChange={e => setNewCheckItem(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCheckItem() } }}
-              placeholder="Ex: Documento de identidade do tutor verificado"
+              placeholder="Ex: Documento de identidade do responsável verificado"
               className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             />
             <button

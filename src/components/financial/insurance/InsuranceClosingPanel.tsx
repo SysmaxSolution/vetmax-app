@@ -76,7 +76,7 @@ export default function InsuranceClosingPanel() {
       <section className="rounded-xl border border-slate-200 bg-white p-6">
         <p className="text-sm text-slate-500">
           Nenhum convênio ativo cadastrado. Cadastre em Gestão › Convênios, com o ciclo de
-          fechamento e a regra do valor que o tutor paga.
+          fechamento e a regra do valor que o responsável paga.
         </p>
       </section>
     )
@@ -150,7 +150,7 @@ export default function InsuranceClosingPanel() {
           <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-100 border-b border-slate-100">
             <Tile rotulo="OS no período" valor={String(dados.totais.os)} />
             <Tile rotulo="Valor total" valor={reais(dados.totais.total)} />
-            <Tile rotulo="Pago pelo tutor" valor={reais(dados.totais.copay)} />
+            <Tile rotulo="Pago pelo responsável" valor={reais(dados.totais.copay)} />
             <Tile rotulo="Devido pelo convênio" valor={reais(dados.totais.repass)} destaque />
           </div>
 
@@ -201,10 +201,10 @@ export default function InsuranceClosingPanel() {
                   <tr className="text-left text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-100">
                     <th className="px-6 py-2 font-semibold">Data</th>
                     <th className="px-3 py-2 font-semibold">OS</th>
-                    <th className="px-3 py-2 font-semibold">Pet / Tutor</th>
+                    <th className="px-3 py-2 font-semibold">Animal / Responsável</th>
                     <th className="px-3 py-2 font-semibold text-right">Itens</th>
                     <th className="px-3 py-2 font-semibold text-right">Total</th>
-                    <th className="px-3 py-2 font-semibold text-right">Tutor</th>
+                    <th className="px-3 py-2 font-semibold text-right">Responsável</th>
                     <th className="px-6 py-2 font-semibold text-right">Convênio deve</th>
                   </tr>
                 </thead>

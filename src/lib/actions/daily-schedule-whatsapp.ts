@@ -151,7 +151,7 @@ export async function sendDailyScheduleToVets(): Promise<DailyScheduleResult | {
 
     for (const appt of (schedule.appointments ?? [])) {
       const time      = fmtTime(appt.appointment_datetime as string)
-      const petName   = (appt.patient as any)?.name ?? 'Pet'
+      const petName   = (appt.patient as any)?.name ?? 'Animal'
       const tutorName = (appt.tutor as any)?.name ?? ''
       const label     = REASON_LABELS[(appt.reason as string)] ?? appt.reason
       lines.push(`• *${time}* — ${petName} (${label})${tutorName ? ` · Tutor: ${tutorName}` : ''}`)
@@ -159,7 +159,7 @@ export async function sendDailyScheduleToVets(): Promise<DailyScheduleResult | {
 
     for (const gs of (schedule.groomings ?? [])) {
       const time      = gs.scheduled_at ? fmtTime(gs.scheduled_at as string) : '—'
-      const petName   = (gs.patient as any)?.name ?? 'Pet'
+      const petName   = (gs.patient as any)?.name ?? 'Animal'
       const tutorName = (gs.tutor as any)?.name ?? ''
       const services  = ((gs.services_requested as string[]) ?? []).join(', ')
       lines.push(`• *${time}* — ✂️ ${petName} (${services})${tutorName ? ` · Tutor: ${tutorName}` : ''}`)

@@ -50,7 +50,7 @@ export default function TutorSearch({ selected, onSelect, disabled = false }: Tu
           onClick={() => onSelect(null)}
           disabled={disabled}
           className="text-teal-500 hover:text-teal-700 transition-colors disabled:opacity-40"
-          aria-label="Remover tutor"
+          aria-label="Remover responsável"
         >
           <X className="h-4 w-4" />
         </button>
@@ -65,7 +65,7 @@ export default function TutorSearch({ selected, onSelect, disabled = false }: Tu
       </div>
       <input
         type="text"
-        placeholder="Buscar tutor (opcional)..."
+        placeholder="Buscar responsável (opcional)..."
         value={query}
         disabled={disabled}
         onChange={handleChange}

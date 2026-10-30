@@ -10,7 +10,7 @@ import { PRODUCT_CATEGORIES, SERVICE_CATEGORIES, type StockCategory } from '@/li
 // ─── Templates ────────────────────────────────────────────────────────────────
 
 const PRODUCT_TEMPLATE = `nome,categoria,quantidade,unidade,preco,estoque_minimo,marca,fornecedor,lote,validade,controlado
-Amoxicilina 250mg,medication,100,comprimido,5.50,20,Duprat,Distribuidora Pet,LOT2024A,2025-12-31,nao
+Amoxicilina 250mg,medication,100,comprimido,5.50,20,Duprat,Distribuidora Animal,LOT2024A,2025-12-31,nao
 Ketamina 10%,controlled_medication,10,frasco,45.00,3,Vetnil,,LOT2024B,2025-06-30,sim
 Luva Descartável M,clinic_product,500,un,0.35,100,Supermax,MedPro,,,,
 Coleira Antipulgas P,petshop,30,un,28.90,5,Seresto,PetBrasil,,,,

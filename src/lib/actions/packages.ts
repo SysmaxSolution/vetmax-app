@@ -286,7 +286,7 @@ export async function getPetActivePackages(
     .eq('clinic_id', ctx.clinic_id)
     .eq('status', 'active')
 
-  if (error) return { error: 'Erro ao buscar pacotes do pet: ' + mensagemErro(error, 'lib/actions/packages.ts') }
+  if (error) return { error: 'Erro ao buscar pacotes do animal: ' + mensagemErro(error, 'lib/actions/packages.ts') }
 
   const result = (data ?? []) as unknown as PatientActivePackage[]
   return result.map(pap => {

@@ -163,7 +163,7 @@ export default function CheckoutInsurancePreviewClient(props: Props) {
         <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-white border border-sky-100">
           <div className="flex items-center gap-2 text-xs text-sky-800 min-w-0">
             <Wallet className="h-3.5 w-3.5 text-sky-600 flex-shrink-0" />
-            <span className="truncate">Cobrar do tutor AGORA</span>
+            <span className="truncate">Cobrar do responsável AGORA</span>
           </div>
           <span className="text-sm font-bold text-sky-900 font-mono tabular-nums flex-shrink-0">{BRL(totals.charge_now)}</span>
         </div>
@@ -188,7 +188,7 @@ export default function CheckoutInsurancePreviewClient(props: Props) {
             <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200">
               <div className="flex items-center gap-2 text-xs text-emerald-800 min-w-0">
                 <TrendingDown className="h-3.5 w-3.5 text-emerald-600 flex-shrink-0" />
-                <span className="truncate">Tutor economizou</span>
+                <span className="truncate">Responsável economizou</span>
               </div>
               <span className="text-sm font-bold text-emerald-900 font-mono tabular-nums flex-shrink-0">{BRL(totals.tutor_saved)}</span>
             </div>
@@ -249,7 +249,7 @@ export default function CheckoutInsurancePreviewClient(props: Props) {
             {applied ? (
               <><strong>Cobertura aplicada</strong> — caixa cobra apenas {BRL(totals.charge_now)} do tutor. Saldo {BRL(totals.receivable)} fica como A Receber Petlove.</>
             ) : (
-              <>Tutor tem cobertura Petlove — escolha como cobrar:</>
+              <>Responsável tem cobertura Petlove — escolha como cobrar:</>
             )}
           </p>
           <div className="flex items-center justify-end gap-2 flex-wrap">
@@ -271,7 +271,7 @@ export default function CheckoutInsurancePreviewClient(props: Props) {
                     props.onApplyInsurance?.(null)
                   }}
                   className="text-[11px] font-semibold text-slate-700 hover:text-slate-900 px-3 py-1 rounded border border-slate-300 hover:bg-slate-100"
-                  title="Tutor optou por pagar particular — cobertura ignorada nesta transação."
+                  title="Responsável optou por pagar particular — cobertura ignorada nesta transação."
                 >
                   Cobrar particular cheio · {BRL(totals.grand_total)}
                 </button>

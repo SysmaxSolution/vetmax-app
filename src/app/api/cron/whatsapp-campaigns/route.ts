@@ -257,7 +257,7 @@ async function queryNoVisit(
       tutorId:   t.id,
       tutorName: t.name,
       phone:     t.phone,
-      petName:   (t.patients as { name: string }[])?.[0]?.name ?? 'seu pet',
+      petName:   (t.patients as { name: string }[])?.[0]?.name ?? 'seu animal',
       context:   `não visita a clínica há mais de ${days} dias`,
     }))
 }
@@ -289,7 +289,7 @@ async function queryVaccineDue(
     if (!tutor?.id || !tutor?.phone || seen.has(tutor.id)) continue
     seen.add(tutor.id)
 
-    const petName = patient?.name ?? 'seu pet'
+    const petName = patient?.name ?? 'seu animal'
     results.push({
       tutorId:    tutor.id,
       tutorName:  tutor.name,
@@ -331,7 +331,7 @@ async function queryPendingReturn(
       tutorId:   tutor.id,
       tutorName: tutor.name,
       phone:     tutor.phone,
-      petName:   patient?.name ?? 'seu pet',
+      petName:   patient?.name ?? 'seu animal',
       context:   'tem um retorno pendente que ainda não foi realizado',
     })
   }
@@ -370,7 +370,7 @@ async function queryGroomingDue(
       tutorId:   t.id,
       tutorName: t.name,
       phone:     t.phone,
-      petName:   (t.patients as { name: string }[])?.[0]?.name ?? 'seu pet',
+      petName:   (t.patients as { name: string }[])?.[0]?.name ?? 'seu animal',
       context:   `não faz banho e tosa há mais de ${days} dias`,
     }))
 }
@@ -409,7 +409,7 @@ async function queryAppointmentConfirmation(
       tutorId:       tutor.id,
       tutorName:     tutor.name,
       phone:         tutor.phone,
-      petName:       patient?.name ?? 'seu pet',
+      petName:       patient?.name ?? 'seu animal',
       context:       'confirmação de agendamento',
       appointmentId: a.id,
       appointmentAt: a.appointment_datetime as string,

@@ -30,7 +30,7 @@ export default function PortalLoginForm() {
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-[var(--pt-border)] p-8">
-      <h1 className="text-2xl text-[var(--pt-text)] text-center" style={serif}>Área do Tutor</h1>
+      <h1 className="text-2xl text-[var(--pt-text)] text-center" style={serif}>Área do Responsável</h1>
       <p className="text-sm text-[var(--pt-muted)] mt-1.5 text-center">Entre com seu CPF e o código fornecido pela clínica.</p>
 
       <form onSubmit={submit} className="mt-6 space-y-3">

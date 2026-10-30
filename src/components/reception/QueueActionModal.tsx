@@ -84,7 +84,7 @@ export default function QueueActionModal({ mode, consultationId, patientName, tu
                 autoFocus
                 value={reason}
                 onChange={e => setReason(e.target.value)}
-                placeholder="Ex.: tutor desistiu, pet passou bem em casa, agendamento duplicado..."
+                placeholder="Ex.: responsável desistiu, animal passou bem em casa, agendamento duplicado..."
                 rows={3}
                 maxLength={500}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
