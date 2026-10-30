@@ -25,7 +25,7 @@ const r4 = (v: number) => Number(v.toFixed(4))
 
 /** Campos fiscais editáveis por item, na ordem em que aparecem na tela. */
 const CAMPOS_FISCAIS: Array<{ key: keyof AjusteDeItem; label: string; tipo: 'texto' | 'numero'; dica?: string }> = [
-  { key: 'cfop',         label: 'CFOP',        tipo: 'texto',  dica: 'Natureza da operação (ex.: 5102 venda, 6102 interestadual)' },
+  { key: 'cfop',         label: 'CFOP',        tipo: 'texto',  dica: 'CFOP do fornecedor. A entrada é lançada com o correspondente (5102 → 1102, 6102 → 2102).' },
   { key: 'cst',          label: 'CST/CSOSN',   tipo: 'texto',  dica: 'Situação tributária do ICMS' },
   { key: 'tax_icms',     label: 'ICMS %',      tipo: 'numero' },
   { key: 'icms_base',    label: 'Base ICMS',   tipo: 'numero' },

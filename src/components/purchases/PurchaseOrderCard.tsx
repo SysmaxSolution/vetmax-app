@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { ChevronDown, ChevronUp, CheckCircle2, XCircle, Clock, Package, Link2, Loader2, Unlink } from 'lucide-react'
 import type { PurchaseOrder, PurchaseOrderItem } from '@/types/purchases'
+import { ROTULO_NATUREZA } from '@/lib/fiscal/cfop'
 import {
   cancelPurchaseOrder,
   getPurchaseOrder,
@@ -98,6 +99,18 @@ export function PurchaseOrderCard({ order, onStatusChange }: Props) {
                 {order.total_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
               </p>
             )}
+            {order.cfop_natureza && order.cfop_natureza !== 'compra' && (
+              <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+                {ROTULO_NATUREZA[order.cfop_natureza as keyof typeof ROTULO_NATUREZA] ?? order.cfop_natureza}
+                {order.lanca_financeiro === false ? ' · sem financeiro' : ''}
+                {order.movimenta_estoque === false ? ' · sem estoque' : ''}
+              </p>
+            )}
+            {order.nota_origem_id && (
+              <p className="mt-1 text-[11px] text-slate-500">
+                Esta remessa abate a nota de faturamento lançada antes.
+              </p>
+            )}
             {msg && <p className="mt-1 text-xs text-red-600">{msg}</p>}
           </div>
 
@@ -159,7 +172,15 @@ export function PurchaseOrderCard({ order, onStatusChange }: Props) {
                           {item.quantity} {item.unit} × {item.unit_price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                           {item.ncm ? ` · NCM ${item.ncm}` : ''}
                           {item.ean ? ` · EAN ${item.ean}` : ''}
+                          {item.cfop ? ` · CFOP ${item.cfop}${item.cfop_entrada && item.cfop_entrada !== item.cfop ? ` → ${item.cfop_entrada}` : ''}` : ''}
                         </p>
+                        {item.quantidade_pendente != null && (
+                          <p className={`text-xs font-semibold ${Number(item.quantidade_pendente) > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                            {Number(item.quantidade_pendente) > 0
+                              ? `Faltam ${item.quantidade_pendente} ${item.unit ?? ''} a entregar`
+                              : 'Entregue por completo'}
+                          </p>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {item.is_matched ? (

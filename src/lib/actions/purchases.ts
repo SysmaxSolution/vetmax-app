@@ -8,6 +8,7 @@ import type { ParsedNFe } from '@/lib/utils/nfe-parser'
 import type { AjustesDaEntrada } from '@/types/entrada-mercadoria'
 
 import { mensagemErro } from '@/lib/errors'
+import { cfopDeEntrada, naturezaDaNota, EFEITO_DA_NATUREZA } from '@/lib/fiscal/cfop'
 import type { PurchaseOrder, PurchaseOrderItem, NCMData, PublicProduct, ManualPurchaseItem, ManualPurchasePayload, PurchaseInstallmentInput, StockMatchSuggestion } from '@/types/purchases'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -132,10 +133,37 @@ export async function importNFeXML(
     if (repetida) return { error: mensagemDeNotaRepetida(repetida) }
   }
 
+  // ── O que esta nota faz aqui dentro, pelo CFOP ─────────────────────────────
+  // O fornecedor emite com CFOP de saída (5102); a entrada é lançada com o de
+  // entrada (1102). E a natureza decide o resto: bonificação não gera contas a
+  // pagar, faturamento de entrega futura não mexe no estoque, remessa de
+  // entrega futura não repete o financeiro.
+  const natureza = naturezaDaNota(parsed.items.map(i => i.cfop))
+  const efeito   = EFEITO_DA_NATUREZA[natureza]
+
+  // Entrega futura: a remessa procura o faturamento que veio antes, pela nota
+  // referenciada no próprio XML.
+  const chaveRef = (parsed.chaves_referenciadas ?? [])[0] ?? null
+  let notaOrigemId: string | null = null
+  if (chaveRef && natureza === 'entrega_futura_remessa') {
+    const { data: origem } = await admin
+      .from('purchase_orders')
+      .select('id')
+      .eq('clinic_id', ctx.clinic_id)
+      .eq('nfe_key', chaveRef)
+      .maybeSingle()
+    notaOrigemId = (origem as { id?: string } | null)?.id ?? null
+  }
+
   // Criar purchase_order
   const { data: order, error: orderErr } = await admin
     .from('purchase_orders')
     .insert({
+      cfop_natureza:        natureza,
+      lanca_financeiro:     efeito.financeiro,
+      movimenta_estoque:    efeito.estoque,
+      nfe_key_referenciada: chaveRef,
+      nota_origem_id:       notaOrigemId,
       clinic_id:   ctx.clinic_id,
       supplier_id,
       nfe_key:     parsed.nfe_key   || null,
@@ -193,6 +221,7 @@ export async function importNFeXML(
       ncm:          item.ncm  || null,
       ean:          item.ean  || null,
       cfop:         item.cfop || null,
+      cfop_entrada: cfopDeEntrada(item.cfop),
       quantity:     item.quantity,
       unit:         item.unit || null,
       unit_price:   item.unit_price,
@@ -213,8 +242,63 @@ export async function importNFeXML(
     })
   }
 
+  await ligarEntregaFutura(admin, order.id, natureza, notaOrigemId)
+
   revalidatePath('/dashboard/purchases')
   return getOrderWithItems(order.id, ctx.clinic_id)
+}
+
+/** Nome comparável: sem acento, sem pontuação, sem espaço duplicado. */
+function chaveDeNome(s: string): string {
+  return (s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+/**
+ * Amarra as duas pontas da venda para entrega futura.
+ *
+ * No faturamento, cada linha nasce com o saldo inteiro pendente de entrega.
+ * Na remessa, cada linha procura a linha correspondente do faturamento (pelo
+ * código de barras, senão pelo nome) e abate o que chegou — é isso que deixa
+ * o operador conferir depois quanto o fornecedor ainda deve.
+ */
+async function ligarEntregaFutura(
+  admin: ReturnType<typeof createAdminClient>,
+  orderId: string,
+  natureza: string,
+  notaOrigemId: string | null,
+): Promise<void> {
+  if (natureza === 'entrega_futura_faturamento') {
+    const { data: itens } = await admin
+      .from('purchase_order_items').select('id, quantity').eq('purchase_order_id', orderId)
+    for (const it of (itens ?? []) as { id: string; quantity: number }[]) {
+      await admin.from('purchase_order_items')
+        .update({ quantidade_pendente: it.quantity }).eq('id', it.id)
+    }
+    return
+  }
+
+  if (natureza !== 'entrega_futura_remessa' || !notaOrigemId) return
+
+  const { data: daRemessa } = await admin
+    .from('purchase_order_items').select('id, description, ean, quantity')
+    .eq('purchase_order_id', orderId)
+  const { data: daOrigem } = await admin
+    .from('purchase_order_items').select('id, description, ean, quantity, quantidade_pendente')
+    .eq('purchase_order_id', notaOrigemId)
+
+  const origem = (daOrigem ?? []) as { id: string; description: string; ean: string | null; quantity: number; quantidade_pendente: number | null }[]
+  const pendente = new Map(origem.map(o => [o.id, Number(o.quantidade_pendente ?? o.quantity)]))
+
+  for (const item of (daRemessa ?? []) as { id: string; description: string; ean: string | null; quantity: number }[]) {
+    const par = origem.find(o => item.ean && o.ean && o.ean === item.ean)
+      ?? origem.find(o => chaveDeNome(o.description) === chaveDeNome(item.description))
+    if (!par) continue
+    const falta = Math.max(0, (pendente.get(par.id) ?? 0) - Number(item.quantity))
+    pendente.set(par.id, falta)
+    await admin.from('purchase_order_items').update({ item_origem_id: par.id }).eq('id', item.id)
+    await admin.from('purchase_order_items').update({ quantidade_pendente: falta }).eq('id', par.id)
+  }
 }
 
 /** Frase para quem tentou importar uma nota que já está no sistema. */
@@ -355,6 +439,7 @@ export async function listPurchaseOrders(filters?: {
     .select(`
       id, clinic_id, supplier_id, nfe_key, nfe_number, nfe_series,
       issue_date, total_value, status, notes, created_at, updated_at, duplicatas,
+      cfop_natureza, lanca_financeiro, movimenta_estoque, nota_origem_id, nfe_key_referenciada,
       supplier:suppliers(id, name, document)
     `)
     .eq('clinic_id', ctx.clinic_id)
@@ -382,6 +467,8 @@ export async function getPurchaseOrder(
 
 export async function confirmPurchaseReceipt(
   orderId: string,
+  /** Decisão do operador na tela de conferência — fica registrada na nota. */
+  decisao?: { lancaFinanceiro?: boolean },
 ): Promise<{ success: true } | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error as string }
@@ -394,7 +481,7 @@ export async function confirmPurchaseReceipt(
 
   const { data: order } = await admin
     .from('purchase_orders')
-    .select('id, status, clinic_id, supplier_id, nfe_number, items:purchase_order_items(*)')
+    .select('id, status, clinic_id, supplier_id, nfe_number, cfop_natureza, movimenta_estoque, items:purchase_order_items(*)')
     .eq('id', orderId)
     .eq('clinic_id', ctx.clinic_id)
     .single()
@@ -403,7 +490,12 @@ export async function confirmPurchaseReceipt(
   if (order.status === 'received') return { error: 'Esta ordem já foi recebida.' }
   if (order.status === 'cancelled') return { error: 'Ordem cancelada não pode ser recebida.' }
 
-  const items = (order as any).items as PurchaseOrderItem[]
+  // Faturamento de entrega futura (5922/6922) é dinheiro, não mercadoria: a
+  // nota entra como recebida e sem crédito de saldo. A mercadoria chega depois,
+  // na nota de remessa, que aponta para esta.
+  const movimentaEstoque = (order as { movimenta_estoque?: boolean | null }).movimenta_estoque !== false
+
+  const items = movimentaEstoque ? ((order as any).items as PurchaseOrderItem[]) : []
 
   // Fornecedor e nº da NF-e vão para o HISTÓRICO do Livro de Controlados.
   let fornecedorNome: string | null = null
@@ -495,6 +587,10 @@ export async function confirmPurchaseReceipt(
 
   await admin.from('purchase_orders').update({
     status:     'received',
+    // A decisão sobre o financeiro deixa de ser só um checkbox que some: fica
+    // escrito na nota por que ela não gerou contas a pagar (bonificação, por
+    // exemplo), e o relatório consegue explicar depois.
+    ...(decisao?.lancaFinanceiro === undefined ? {} : { lanca_financeiro: decisao.lancaFinanceiro }),
     updated_at: new Date().toISOString(),
   }).eq('id', orderId)
 

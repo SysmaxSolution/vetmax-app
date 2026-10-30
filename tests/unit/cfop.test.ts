@@ -62,3 +62,27 @@ describe('CFOP — o que cada natureza faz ao lançar a entrada', () => {
     expect(natureza('5117')).toBe('entrega_futura_remessa')
   })
 })
+
+describe('CFOP — natureza da nota inteira', () => {
+  const { naturezaDaNota } = require('@/lib/fiscal/cfop') as typeof import('@/lib/fiscal/cfop')
+
+  it('nota com um CFOP só assume aquela natureza', () => {
+    expect(naturezaDaNota(['5102', '5102'])).toBe('compra')
+    expect(naturezaDaNota(['5910'])).toBe('bonificacao')
+  })
+
+  it('um item de entrega futura decide a nota toda', () => {
+    // Lançar como compra comum criaria contas a pagar ou saldo que não existem.
+    expect(naturezaDaNota(['5102', '5922'])).toBe('entrega_futura_faturamento')
+    expect(naturezaDaNota(['5102', '5117'])).toBe('entrega_futura_remessa')
+  })
+
+  it('bonificação ganha da compra quando vêm juntas', () => {
+    expect(naturezaDaNota(['5102', '5910'])).toBe('bonificacao')
+  })
+
+  it('CFOP vazio ou desconhecido não vira compra por acidente', () => {
+    expect(naturezaDaNota([null, undefined, ''])).toBe('outra')
+    expect(naturezaDaNota(['5949'])).toBe('outra')
+  })
+})

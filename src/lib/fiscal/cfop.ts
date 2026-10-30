@@ -85,3 +85,39 @@ export const EFEITO_DA_NATUREZA: Record<NaturezaCfop, { financeiro: boolean; est
   remessa_temporaria:          { financeiro: false, estoque: false },
   outra:                       { financeiro: true,  estoque: true },
 }
+
+/** Natureza de um CFOP isolado (de saída do fornecedor ou já de entrada). */
+export function naturezaDoCfop(cfop: string | null | undefined): NaturezaCfop {
+  const s = String(cfop ?? '').replace(/\D/g, '')
+  if (s.length !== 4) return 'outra'
+  return NATUREZA_POR_SUFIXO[s.slice(1)]?.natureza ?? 'outra'
+}
+
+/**
+ * Natureza da NOTA inteira, a partir dos CFOPs dos itens.
+ *
+ * Nota fiscal real costuma ter um CFOP só. Quando mistura, o que manda é a
+ * natureza mais específica: um único item de entrega futura ou de bonificação
+ * muda o que a nota faz aqui dentro, e lançar como compra comum criaria
+ * contas a pagar ou saldo que não existem.
+ */
+export function naturezaDaNota(cfops: (string | null | undefined)[]): NaturezaCfop {
+  const naturezas = cfops.map(naturezaDoCfop)
+  const prioridade: NaturezaCfop[] = [
+    'entrega_futura_faturamento', 'entrega_futura_remessa', 'devolucao',
+    'bonificacao', 'remessa_temporaria', 'compra',
+  ]
+  for (const p of prioridade) if (naturezas.includes(p)) return p
+  return 'outra'
+}
+
+/** Rótulo curto da natureza, para a tela. */
+export const ROTULO_NATUREZA: Record<NaturezaCfop, string> = {
+  compra:                     'Compra',
+  bonificacao:                'Bonificação / amostra',
+  entrega_futura_faturamento: 'Faturamento de entrega futura',
+  entrega_futura_remessa:     'Remessa de entrega futura',
+  devolucao:                  'Devolução',
+  remessa_temporaria:         'Remessa temporária',
+  outra:                      'Outra operação',
+}
