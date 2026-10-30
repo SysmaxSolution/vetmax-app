@@ -5,33 +5,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
 import { mensagemErro } from '@/lib/errors'
+import type { UserCommission, CommissionReport, CommissionableItem } from '@/types/commissions'
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-export interface UserCommission {
-  id:          string
-  clinic_id:   string
-  user_id:     string
-  item_type:   'all' | 'product' | 'service' | 'package'
-  item_id:     string | null
-  percentage:  number
-  description: string | null
-  created_at:  string
-}
-
-export interface CommissionReport {
-  professional_id:   string
-  professional_name: string
-  total_amount:      number
-  pending_amount:    number
-  entry_count:       number
-  entries: {
-    id:          string
-    description: string
-    amount:      number
-    due_date:    string
-    status:      string
-  }[]
-}
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
@@ -75,6 +50,18 @@ export async function processCommissions(params: {
   const saleRef = params.sale_id.slice(0, 8).toUpperCase()
   const entries: Record<string, unknown>[] = []
 
+  // Setor dos itens vendidos (comissão por setor, 0526) — uma consulta só.
+  const idsItens = params.items.map(i => i.stock_item_id).filter((x): x is string => !!x)
+  const setorDoItem = new Map<string, string | null>()
+  if (idsItens.length && rules.some((r: any) => r.item_type === 'sector')) {
+    const { data: itens } = await admin.from('stock_items').select('id, sector').eq('clinic_id', params.clinic_id).in('id', idsItens)
+    for (const it of (itens ?? []) as any[]) setorDoItem.set(it.id, it.sector ?? null)
+  }
+  const valorDaRegra = (rule: any, base: number, quantidade: number) =>
+    rule.fixed_amount != null && Number(rule.fixed_amount) > 0
+      ? +(Number(rule.fixed_amount) * quantidade).toFixed(2)
+      : +(base * (Number(rule.percentage ?? 0) / 100)).toFixed(2)
+
   for (const rule of rules) {
     if (rule.item_type === 'all') {
       // Comissão sobre o total líquido da venda
@@ -103,9 +90,10 @@ export async function processCommissions(params: {
       for (const item of params.items) {
         if (!item.stock_item_id) continue
         if (rule.item_id && item.stock_item_id !== rule.item_id) continue
+        if (rule.item_type === 'sector' && (setorDoItem.get(item.stock_item_id) ?? '') !== String(rule.sector ?? '')) continue
 
         const itemTotal = item.quantity * item.unit_price - item.discount
-        const amount = +(itemTotal * (rule.percentage / 100)).toFixed(2)
+        const amount = valorDaRegra(rule, itemTotal, item.quantity)
         if (amount <= 0) continue
 
         entries.push({
@@ -154,10 +142,21 @@ export async function listUserCommissions(userId?: string): Promise<UserCommissi
     user_id:     r.user_id,
     item_type:   r.item_type,
     item_id:     r.item_id ?? null,
-    percentage:  Number(r.percentage),
+    percentage:  Number(r.percentage ?? 0),
+    sector:      r.sector ?? null,
+    fixed_amount: r.fixed_amount == null ? null : Number(r.fixed_amount),
     description: r.description ?? null,
     created_at:  r.created_at,
   }))
+}
+
+/** Setores em uso nos itens da clínica (para a regra de comissão por setor). */
+export async function listItemSectors(): Promise<string[]> {
+  const ctx = await getClinicCtx()
+  if (!ctx) return []
+  const admin = createAdminClient()
+  const { data } = await admin.from('stock_items').select('sector').eq('clinic_id', ctx.clinic_id).not('sector', 'is', null).is('archived_at', null)
+  return [...new Set(((data ?? []) as { sector: string | null }[]).map(r => r.sector).filter((s): s is string => !!s))].sort((a, b) => a.localeCompare(b, 'pt-BR'))
 }
 
 export async function upsertUserCommission(data: {
@@ -166,6 +165,8 @@ export async function upsertUserCommission(data: {
   item_type:    UserCommission['item_type']
   item_id?:     string | null
   percentage:   number
+  sector?:      string | null
+  fixed_amount?: number | null
   description?: string
 }): Promise<{ id: string } | { error: string }> {
   const ctx = await getClinicCtx()
@@ -179,9 +180,13 @@ export async function upsertUserCommission(data: {
     item_type:   data.item_type,
     item_id:     data.item_id ?? null,
     percentage:  data.percentage,
+    sector:      data.item_type === 'sector' ? (data.sector?.trim() || null) : null,
+    fixed_amount: data.fixed_amount != null && Number.isFinite(data.fixed_amount) && data.fixed_amount > 0 ? data.fixed_amount : null,
     description: data.description ?? null,
     updated_at:  new Date().toISOString(),
   }
+  if (data.item_type === 'sector' && !payload.sector) return { error: 'Informe o setor da regra.' }
+  if (!(data.percentage > 0) && !payload.fixed_amount) return { error: 'Informe o percentual ou o valor fixo da comissão.' }
 
   const { data: result, error } = data.id
     ? await admin.from('user_commissions').update(payload).eq('id', data.id).select('id').single()
@@ -212,13 +217,6 @@ export async function deleteUserCommission(id: string): Promise<{ success: true 
 }
 
 // ─── Busca de itens para comissão por item específico ────────────────────────
-
-export interface CommissionableItem {
-  id:       string
-  name:     string
-  price:    number
-  category: string
-}
 
 export async function searchItemsForCommission(
   query: string,

@@ -12,28 +12,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
 import { mensagemErro } from '@/lib/errors'
-export interface PriceTable {
-  id: string
-  clinic_id: string
-  slot: number
-  name: string
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
-
-export type PricingPrecedence = 'client' | 'product'
-export type CompositionMode = 'simple' | 'complete'
-export type MarginCalcType = 'margin' | 'markup'
-
-export interface PricingSettings {
-  clinic_id: string
-  default_b2c_price_table_id: string | null
-  precedence: PricingPrecedence
-  composition_mode: CompositionMode
-  margin_calc_type: MarginCalcType
-  updated_at: string
-}
+import type { PriceTable, PricingPrecedence, CompositionMode, MarginCalcType, PricingSettings, ItemTablePrice } from '@/types/pricing'
 
 async function getCtx() {
   const supabase = await createClient()
@@ -165,12 +144,6 @@ export async function savePricingSettings(input: {
   return { ok: true }
 }
 
-// ─── PREÇO POR ITEM POR TABELA (grade de preços) ─────────────────────────────
-export interface ItemTablePrice {
-  price: number
-  margin: number | null
-}
-
 // Preço + margem de um item em cada tabela. Mapa price_table_id → {price, margin}.
 export async function getItemPrices(
   stockItemId: string,
@@ -180,13 +153,18 @@ export async function getItemPrices(
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('price_table_items')
-    .select('price_table_id, price, margin_percent')
+    .select('price_table_id, price, margin_percent, urgent_price, valid_from')
     .eq('clinic_id', ctx.clinic_id)
     .eq('stock_item_id', stockItemId)
   if (error) return { error: `Erro ao carregar preços do item: ${mensagemErro(error, 'lib/actions/pricing.ts')}` }
   const map: Record<string, ItemTablePrice> = {}
-  for (const row of (data ?? []) as { price_table_id: string; price: number; margin_percent: number | null }[]) {
-    map[row.price_table_id] = { price: Number(row.price), margin: row.margin_percent == null ? null : Number(row.margin_percent) }
+  for (const row of (data ?? []) as unknown as { price_table_id: string; price: number; margin_percent: number | null; urgent_price: number | null; valid_from: string | null }[]) {
+    map[row.price_table_id] = {
+      price: Number(row.price),
+      margin: row.margin_percent == null ? null : Number(row.margin_percent),
+      urgent: row.urgent_price == null ? null : Number(row.urgent_price),
+      valid_from: row.valid_from ?? null,
+    }
   }
   return map
 }
@@ -194,7 +172,7 @@ export async function getItemPrices(
 // Persiste preço + margem por tabela: upsert dos informados, delete dos zerados/vazios.
 export async function setItemPrices(
   stockItemId: string,
-  prices: { price_table_id: string; price: number | null; margin: number | null }[],
+  prices: { price_table_id: string; price: number | null; margin: number | null; urgent?: number | null; valid_from?: string | null }[],
 ): Promise<{ ok: true } | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error as string }
@@ -209,6 +187,9 @@ export async function setItemPrices(
       stock_item_id: stockItemId,
       price: Number(p.price),
       margin_percent: p.margin != null && Number.isFinite(p.margin) ? Number(p.margin) : null,
+      urgent_price: p.urgent != null && Number.isFinite(p.urgent) && Number(p.urgent) > 0 ? Number(p.urgent) : null,
+      // Vigência: a informada ou hoje. O preço anterior vai para o histórico (trigger 0526).
+      valid_from: p.valid_from && /^\d{4}-\d{2}-\d{2}$/.test(p.valid_from) ? p.valid_from : new Date().toISOString().slice(0, 10),
       updated_at: new Date().toISOString(),
     }))
   const toDelete = prices

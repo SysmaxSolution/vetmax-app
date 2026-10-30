@@ -290,7 +290,7 @@ import type { StockItem, StockMovement, StockItemV2, BulkImportRow } from '@/typ
 // actions deste módulo (era a causa do "não salva" em Estoque > Serviços).
 // Consumidores importam StockCategory direto de '@/lib/stock-constants'.
 
-const STOCK_V2_FIELDS = 'id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at, is_controlled, is_sellable, substance, concentration, is_human_use, control_class, brand, sku, barcode, batch_number, expiry_date, supplier, is_service, ncm, ncm_description, cfop, unit_com, supplier_id, default_insurance_price, insurance_card_interest_percent, nfse_item_lista_servico, nfse_codigo_tributario_municipio, cost_price, entry_tax_percent, margin_percent, purchase_price, supplier_discount_percent, entry_tax_icms, entry_tax_st, entry_tax_ipi, entry_tax_freight, entry_tax_ibs_cbs, sale_tax_percent'
+const STOCK_V2_FIELDS = 'id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at, is_controlled, is_sellable, sector, substance, concentration, is_human_use, control_class, brand, sku, barcode, batch_number, expiry_date, supplier, is_service, ncm, ncm_description, cfop, unit_com, supplier_id, default_insurance_price, insurance_card_interest_percent, nfse_item_lista_servico, nfse_codigo_tributario_municipio, cost_price, entry_tax_percent, margin_percent, purchase_price, supplier_discount_percent, entry_tax_icms, entry_tax_st, entry_tax_ipi, entry_tax_freight, entry_tax_ibs_cbs, sale_tax_percent'
 
 export async function getPharmacyStockV2(): Promise<StockItemV2[] | { error: string }> {
   const ctx = await getClinicAndUser()
@@ -332,6 +332,7 @@ export async function addStockItemV2(input: {
   is_controlled?: boolean
   is_sellable?:   boolean
   substance?:     string | null
+  sector?:        string | null
   concentration?: string | null
   is_human_use?:  boolean
   control_class?: string | null
@@ -382,6 +383,7 @@ export async function addStockItemV2(input: {
       // Padrão vendável: marcar tudo como insumo faria o PDV amanhecer vazio.
       is_sellable:     input.is_sellable ?? true,
       substance:       input.substance?.trim() || null,
+      sector:          input.sector?.trim() || null,
       concentration:   input.concentration?.trim() || null,
       is_human_use:    input.is_human_use ?? false,
       control_class:   input.control_class?.trim() || null,
@@ -455,6 +457,7 @@ export async function updateStockItemV2(
   if (input.is_sellable   !== undefined) patch.is_sellable   = input.is_sellable
   if (input.is_controlled !== undefined) patch.is_controlled = input.is_controlled
   if ('substance'     in input) patch.substance     = (input as any).substance?.trim()     || null
+  if ('sector'        in input) patch.sector        = (input as any).sector?.trim()        || null
   if ('concentration' in input) patch.concentration = (input as any).concentration?.trim() || null
   if (input.is_human_use !== undefined) patch.is_human_use = input.is_human_use
   if ('control_class' in input) patch.control_class = (input as any).control_class?.trim() || null
