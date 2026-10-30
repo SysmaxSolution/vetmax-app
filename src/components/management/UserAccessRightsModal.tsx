@@ -15,6 +15,8 @@ import {
   type GranularPermissionRow,
 } from '@/lib/actions/access-rights'
 import { getUserModuleAccess, setUserModuleAccess } from '@/lib/actions/user-management'
+import { listarGruposDeAcesso, aplicarGrupoAoUsuario, grupoAtualDoUsuario } from '@/lib/actions/access-groups'
+import type { AccessGroup } from '@/types/access-groups'
 
 interface Props {
   userId:       string
@@ -55,6 +57,12 @@ export default function UserAccessRightsModal({
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState<string | null>(null)
 
+  // ── Grupo de acesso: o molde que pré-carrega tudo de uma vez ───────────────
+  const [grupos, setGrupos]         = useState<AccessGroup[]>([])
+  const [grupoAtual, setGrupoAtual] = useState<string>('')
+  const [aplicando, setAplicando]   = useState(false)
+  const [avisoGrupo, setAvisoGrupo] = useState<string | null>(null)
+
   // Conjunto de módulos efetivamente desabilitados — derivado de moduleMap
   // (true = liberado, false ou ausente = bloqueado no novo default restritivo).
   const disabledModules = new Set(
@@ -64,6 +72,8 @@ export default function UserAccessRightsModal({
   // Carrega permissões + módulos ao montar
   useEffect(() => {
     if (isSelfEditing) { setLoading(false); return }
+    void listarGruposDeAcesso().then(r => { if (!('error' in r)) setGrupos(r) })
+    void grupoAtualDoUsuario(userId).then(r => { if (!('error' in r)) setGrupoAtual(r.groupId ?? '') })
     Promise.all([
       getUserAccessRights(userId),
       getUserModuleAccess(userId),
@@ -80,6 +90,39 @@ export default function UserAccessRightsModal({
       }
     })
   }, [userId, isSelfEditing])
+
+  /**
+   * Aplica o molde do grupo. Recarrega o que ficou gravado em vez de confiar
+   * no que mandamos: assim a tela mostra o estado real, inclusive se alguma
+   * linha não pôde ser escrita.
+   */
+  async function aplicarGrupo(novoGrupo: string) {
+    if (isSelfEditing) return
+    setAplicando(true)
+    setError(null)
+    setAvisoGrupo(null)
+    const res = await aplicarGrupoAoUsuario(userId, novoGrupo || null)
+    if ('error' in res) { setAplicando(false); setError(res.error); return }
+    setGrupoAtual(novoGrupo)
+    const [rightsRes, accessRes] = await Promise.all([
+      getUserAccessRights(userId),
+      getUserModuleAccess(userId),
+    ])
+    if (!('error' in rightsRes)) {
+      const m: PermMap = new Map()
+      for (const r of rightsRes) m.set(permKey(r.module, r.action), r.allowed)
+      setPerms(m)
+    }
+    if (!('error' in accessRes)) {
+      const map: Record<string, boolean> = {}
+      for (const r of accessRes) map[r.module_name] = r.enabled
+      setModuleMap(map)
+    }
+    setAplicando(false)
+    setAvisoGrupo(res.grupo
+      ? `Acessos de "${res.grupo}" aplicados: ${res.modulos} ${res.modulos === 1 ? 'módulo' : 'módulos'}. Dá para ajustar abaixo sem mexer no grupo.`
+      : 'Pessoa retirada do grupo. Os acessos atuais continuam como estão.')
+  }
 
   async function handleToggleModule(moduleName: string, currentlyEnabled: boolean) {
     if (isSelfEditing) return
@@ -253,6 +296,29 @@ export default function UserAccessRightsModal({
           ) : tab === 'modules' ? (
             // ── Aba 1: Módulos visíveis (toggle ON/OFF por módulo) ───────────
             <div className="space-y-3">
+              {/* Grupo de acesso: carrega tudo de uma vez, e segue ajustável */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-600">Grupo de acesso</span>
+                  <select
+                    value={grupoAtual}
+                    disabled={isSelfEditing || aplicando || grupos.length === 0}
+                    onChange={e => void aplicarGrupo(e.target.value)}
+                    className="flex-1 min-w-[180px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-teal-500 disabled:opacity-50"
+                  >
+                    <option value="">Sem grupo</option>
+                    {grupos.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                  </select>
+                  {aplicando && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+                </div>
+                <p className="mt-1.5 text-[11px] text-slate-500">
+                  {grupos.length === 0
+                    ? 'Nenhum grupo criado ainda. Crie em Gestão → Usuários → Grupos de acesso.'
+                    : 'Escolher um grupo pré-carrega os módulos daquela função. Os ajustes feitos depois valem só para esta pessoa.'}
+                </p>
+                {avisoGrupo && <p className="mt-1.5 text-[11px] font-medium text-teal-700">{avisoGrupo}</p>}
+              </div>
+
               <div className="flex items-center justify-between">
                 <p className="text-xs text-slate-500">
                   Marque os módulos que <strong className="text-slate-700">{userName}</strong> verá no menu.
