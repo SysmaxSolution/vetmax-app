@@ -825,7 +825,22 @@ export async function getPatientsList(
       : patientsQuery.is('deleted_at', null)
 
     if (query && query.trim().length >= 2) {
-      patientsQuery = patientsQuery.ilike('name', `%${query.trim()}%`)
+      // Busca por nome do PET ou por TUTOR (nome, CPF ou telefone): a Animais
+      // precisa abrir o cadastro do tutor e ver todos os pets dele (29/10/2026).
+      const q = query.trim()
+      const digitos = q.replace(/\D/g, '')
+      const condTutor = [`name.ilike.%${q}%`]
+      if (digitos.length >= 4) condTutor.push(`cpf.ilike.%${digitos}%`, `phone.ilike.%${digitos}%`)
+      const { data: tutoresAchados } = await admin
+        .from('tutors')
+        .select('id')
+        .eq('clinic_id', clinicId)
+        .or(condTutor.join(','))
+        .limit(50)
+      const idsTutores = (tutoresAchados ?? []).map(t => t.id as string)
+      patientsQuery = idsTutores.length
+        ? patientsQuery.or(`name.ilike.%${q}%,tutor_id.in.(${idsTutores.join(',')})`)
+        : patientsQuery.ilike('name', `%${q}%`)
     }
 
     const { data: patients, error: pError } = await patientsQuery.limit(100)

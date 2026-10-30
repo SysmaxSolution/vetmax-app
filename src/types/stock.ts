@@ -52,6 +52,8 @@ export type StockItemV2 = {
   is_sellable:   boolean
   // migration 0441 — Livro de Controlados
   substance:     string | null
+  /** Setor do item (LAB, IMG, CMED, CCIR, PS…): agrupa comissões e relatórios. */
+  sector:        string | null
   concentration: string | null
   is_human_use:  boolean
   control_class: string | null

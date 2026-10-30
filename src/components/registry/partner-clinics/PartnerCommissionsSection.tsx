@@ -6,7 +6,8 @@ import {
   listPartnerCommissions, addPartnerCommission, deletePartnerCommission,
   type PartnerCommission, type PartnerCommScope, type PartnerCommType,
 } from '@/lib/actions/partner-clinics'
-import { searchItemsForCommission, type CommissionableItem } from '@/lib/actions/commissions'
+import { searchItemsForCommission } from '@/lib/actions/commissions'
+import type { CommissionableItem } from '@/types/commissions'
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const SCOPE_LABEL: Record<PartnerCommScope, string> = { all: 'Todos os itens', product: 'Produto', service: 'Serviço', package: 'Pacote' }

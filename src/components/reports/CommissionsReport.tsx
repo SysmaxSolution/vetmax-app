@@ -6,7 +6,8 @@ import {
   Percent, Search, User, Clock, CheckCircle2,
 } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
-import { getCommissionsReport, payCommissions, type CommissionReport } from '@/lib/actions/commissions'
+import { getCommissionsReport, payCommissions } from '@/lib/actions/commissions'
+import type { CommissionReport } from '@/types/commissions'
 
 type StatusFilter = 'all' | 'pending' | 'paid'
 

@@ -10,11 +10,8 @@ import {
 } from 'lucide-react'
 import { adminUpdateUser, adminChangePassword, uploadUserSignature } from '@/lib/actions/user-management'
 import type { ClinicUserFull } from '@/types/user-management'
-import {
-  listUserCommissions, upsertUserCommission, deleteUserCommission,
-  searchItemsForCommission,
-  type UserCommission, type CommissionableItem,
-} from '@/lib/actions/commissions'
+import { listUserCommissions, upsertUserCommission, deleteUserCommission, searchItemsForCommission, listItemSectors } from '@/lib/actions/commissions'
+import type { UserCommission, CommissionableItem } from '@/types/commissions'
 import type { Room } from '@/lib/actions/rooms'
 import type { UserRole } from '@/types'
 import { listarAcessoDoUsuarioNoGrupo, definirAcessoDoUsuarioNaClinica } from '@/lib/actions/clinic-group-access'
@@ -55,6 +52,7 @@ const ITEM_TYPE_LABELS: Record<UserCommission['item_type'], string> = {
   product: 'Produtos',
   service: 'Serviços',
   package: 'Pacotes',
+  sector:  'Setor',
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -115,6 +113,10 @@ export default function UserManagementModal({
   const [commType,       setCommType]       = useState<UserCommission['item_type']>('all')
   const [commPct,        setCommPct]        = useState('')
   const [commDesc,       setCommDesc]       = useState('')
+  // Comissão por setor e por valor fixo (0526).
+  const [commSector,     setCommSector]     = useState('')
+  const [commFixed,      setCommFixed]      = useState('')
+  const [sectors,        setSectors]        = useState<string[]>([])
   const [savingComm,     setSavingComm]     = useState(false)
   const [deletingComm,   setDeletingComm]   = useState<string | null>(null)
 
@@ -231,20 +233,25 @@ export default function UserManagementModal({
   async function handleSaveCommission() {
     if (!user) return
     const pct = parseFloat(commPct)
-    if (isNaN(pct) || pct <= 0 || pct > 100) {
-      setError('Percentual deve ser entre 0,01% e 100%.'); return
+    const fixo = parseFloat(commFixed.replace(',', '.'))
+    const temFixo = Number.isFinite(fixo) && fixo > 0
+    if (!temFixo && (isNaN(pct) || pct <= 0 || pct > 100)) {
+      setError('Informe o percentual (0,01% a 100%) ou um valor fixo.'); return
     }
+    if (commType === 'sector' && !commSector) { setError('Escolha o setor.'); return }
     setSavingComm(true); setError(null)
     const res = await upsertUserCommission({
       user_id:     user.id,
       item_type:   commType,
       item_id:     null,
-      percentage:  pct,
+      percentage:  temFixo ? 0 : pct,
+      sector:      commType === 'sector' ? commSector : null,
+      fixed_amount: temFixo ? fixo : null,
       description: commDesc.trim() || undefined,
     })
     setSavingComm(false)
     if ('error' in res) { setError(res.error); return }
-    setCommPct(''); setCommDesc(''); setCommType('all'); setShowCommForm(false)
+    setCommPct(''); setCommDesc(''); setCommType('all'); setCommSector(''); setCommFixed(''); setShowCommForm(false)
     const updated = await listUserCommissions(user.id)
     if (!('error' in updated)) setCommissions(updated)
   }
@@ -677,7 +684,25 @@ export default function UserManagementModal({
                         <option value="product">Produtos</option>
                         <option value="service">Serviços</option>
                         <option value="package">Pacotes</option>
+                        <option value="sector">Setor (ex.: Laboratório, Imagem, Consultas)</option>
                       </select>
+                    </div>
+                    {commType === 'sector' && (
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Setor</label>
+                        <select value={commSector} onChange={e => setCommSector(e.target.value)}
+                          onFocus={() => { if (!sectors.length) listItemSectors().then(setSectors) }}
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500">
+                          <option value="">— escolha —</option>
+                          {sectors.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                        <p className="mt-1 text-[11px] text-slate-400">O setor vem do cadastro de cada item (Estoque/Serviços → campo Setor).</p>
+                      </div>
+                    )}
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Ou valor fixo por unidade (R$)</label>
+                      <input type="number" min="0" step="0.01" value={commFixed} onChange={e => setCommFixed(e.target.value)} placeholder="Ex: 50,00"
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500" />
                     </div>
 
                     {/* Percentual */}
@@ -759,10 +784,12 @@ export default function UserManagementModal({
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-semibold text-slate-800">
-                              {c.percentage.toFixed(2).replace('.', ',')}%
+                              {c.fixed_amount != null && c.fixed_amount > 0
+                                ? `R$ ${c.fixed_amount.toFixed(2).replace('.', ',')}/un`
+                                : `${c.percentage.toFixed(2).replace('.', ',')}%`}
                             </span>
                             <span className="text-xs bg-blue-100 text-blue-700 rounded-full px-2 py-0.5 font-medium">
-                              {ITEM_TYPE_LABELS[c.item_type]}
+                              {ITEM_TYPE_LABELS[c.item_type]}{c.item_type === 'sector' && c.sector ? ` · ${c.sector}` : ''}
                             </span>
                           </div>
                           {c.description && (

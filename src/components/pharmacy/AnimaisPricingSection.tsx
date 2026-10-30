@@ -8,7 +8,7 @@
 import { useEffect } from 'react'
 import { Tags } from 'lucide-react'
 import type { ItemForm } from './PharmacyWorkspace'
-import type { PriceTable, CompositionMode, MarginCalcType } from '@/lib/actions/pricing'
+import type { PriceTable, CompositionMode, MarginCalcType } from '@/types/pricing'
 
 const num = (s: string | undefined) => {
   const v = Number((s ?? '').toString().replace(',', '.'))
@@ -17,7 +17,7 @@ const num = (s: string | undefined) => {
 const inputCls =
   'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500'
 
-export interface TableRow { margin: string; price: string }
+export interface TableRow { margin: string; price: string; urgent?: string; valid_from?: string }
 
 interface Props {
   form: ItemForm
@@ -212,17 +212,19 @@ export default function AnimaisPricingSection({
           </p>
         ) : (
           <div className="space-y-2">
-            <div className="hidden sm:grid grid-cols-[1fr_7rem_8rem] gap-2 px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            <div className="hidden sm:grid grid-cols-[1fr_7rem_8rem_8rem_8rem] gap-2 px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
               <span>Tabela</span>
               <span>{marginLabel} (%)</span>
               <span>Preço (R$)</span>
+              <span>Urgência (R$)</span>
+              <span>Vigência</span>
             </div>
             {priceTables.map(t => {
               const row = tableRows[t.id] ?? { margin: '', price: '' }
               // Margem (sobre a venda) não pode chegar a 100% — venda = custo ÷ (1 − margem%).
               const marginInvalid = marginCalcType === 'margin' && row.margin.trim() !== '' && num(row.margin) >= 100
               return (
-                <div key={t.id} className="grid grid-cols-2 sm:grid-cols-[1fr_7rem_8rem] gap-2 items-center">
+                <div key={t.id} className="grid grid-cols-2 sm:grid-cols-[1fr_7rem_8rem_8rem_8rem] gap-2 items-center">
                   <label className="col-span-2 sm:col-span-1 text-xs font-medium text-slate-600 truncate" title={t.name}>{t.name}</label>
                   <input type="number" min="0" max={marginCalcType === 'margin' ? 99.99 : undefined} step="0.001" value={row.margin}
                     onChange={e => onMarginChange(t.id, e.target.value)}
@@ -239,8 +241,20 @@ export default function AnimaisPricingSection({
                       placeholder="—"
                       className="w-full rounded-lg border border-slate-300 pl-8 pr-2 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
                   </div>
+                  {/* Urgência/plantão e vigência (0526): preço fora de hora e desde quando vale. */}
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-slate-400">R$</span>
+                    <input type="number" min="0" step="0.01" value={row.urgent ?? ''}
+                      onChange={e => setTableRows(prev => ({ ...prev, [t.id]: { ...(prev[t.id] ?? { margin: '', price: '' }), urgent: e.target.value } }))}
+                      placeholder="urgência" title="Preço de urgência/plantão (opcional)"
+                      className="w-full rounded-lg border border-slate-300 pl-8 pr-2 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
+                  </div>
+                  <input type="date" value={row.valid_from ?? ''}
+                    onChange={e => setTableRows(prev => ({ ...prev, [t.id]: { ...(prev[t.id] ?? { margin: '', price: '' }), valid_from: e.target.value } }))}
+                    title="Início de vigência deste preço (vazio = hoje)"
+                    className="w-full rounded-lg border border-slate-300 px-2 py-2 text-xs outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
                   {marginInvalid && (
-                    <p className="col-span-2 sm:col-span-3 text-[11px] text-red-600">
+                    <p className="col-span-2 sm:col-span-5 text-[11px] text-red-600">
                       A margem deve ser <strong>menor que 100%</strong> (margem é sobre o preço de venda). Para lucro maior que o custo, use o cálculo por <strong>Markup</strong>.
                     </p>
                   )}

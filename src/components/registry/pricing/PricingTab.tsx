@@ -2,10 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { Loader2, Plus, Pencil, Tag, Check, X, Save, Settings2 } from 'lucide-react'
-import {
-  listPriceTables, upsertPriceTable, getPricingSettings, savePricingSettings,
-  type PriceTable, type PricingPrecedence, type CompositionMode, type MarginCalcType,
-} from '@/lib/actions/pricing'
+import { listPriceTables, upsertPriceTable, getPricingSettings, savePricingSettings } from '@/lib/actions/pricing'
+import type { PriceTable, PricingPrecedence, CompositionMode, MarginCalcType } from '@/types/pricing'
 import { Toast } from '@/components/ui/toast'
 
 interface Props { userRole?: string }

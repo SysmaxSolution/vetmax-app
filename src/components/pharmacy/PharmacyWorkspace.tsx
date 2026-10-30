@@ -15,10 +15,8 @@ import {
   restockItemV2, adjustStockItemV2,
   dispenseStockItem, deleteStockItemV2,
 } from '@/lib/actions/stock'
-import {
-  listPriceTables, getItemPrices, setItemPrices, getPricingSettings,
-  type PriceTable, type CompositionMode, type MarginCalcType,
-} from '@/lib/actions/pricing'
+import { listPriceTables, getItemPrices, setItemPrices, getPricingSettings } from '@/lib/actions/pricing'
+import type { PriceTable, CompositionMode, MarginCalcType } from '@/types/pricing'
 import { useAnimaisFoundation } from '@/components/providers/ClinicConfigProvider'
 import AnimaisPricingSection from './AnimaisPricingSection'
 import type { GlobalCatalogSuggestion } from '@/lib/actions/catalog'
@@ -110,6 +108,7 @@ export interface ItemForm {
   name: string; category: StockCategory; quantity: string; unit: string
   min_quantity: string; unit_price: string; is_controlled: boolean; is_sellable: boolean
   substance: string; concentration: string; control_class: string; is_human_use: boolean
+  sector: string
   brand: string; sku: string; barcode: string; batch_number: string
   expiry_date: string; supplier: string
   /** Preço base do serviço quando o pet tem convênio. Vazio = sem default. */
@@ -137,7 +136,7 @@ export interface ItemForm {
 const EMPTY_PRODUCT_FORM: ItemForm = {
   name: '', category: 'medication', quantity: '0', unit: 'un',
   min_quantity: '0', unit_price: '0', is_controlled: false, is_sellable: true,
-  substance: '', concentration: '', control_class: '', is_human_use: false,
+  substance: '', concentration: '', control_class: '', is_human_use: false, sector: '',
   brand: '', sku: '', barcode: '', batch_number: '', expiry_date: '', supplier: '',
   default_insurance_price: '',
   insurance_card_interest_percent: '',
@@ -151,7 +150,7 @@ const EMPTY_PRODUCT_FORM: ItemForm = {
 const EMPTY_SERVICE_FORM: ItemForm = {
   name: '', category: 'service', quantity: '0', unit: 'un',
   min_quantity: '0', unit_price: '0', is_controlled: false, is_sellable: true,
-  substance: '', concentration: '', control_class: '', is_human_use: false,
+  substance: '', concentration: '', control_class: '', is_human_use: false, sector: '',
   brand: '', sku: '', barcode: '', batch_number: '', expiry_date: '', supplier: '',
   default_insurance_price: '',
   insurance_card_interest_percent: '',
@@ -171,7 +170,7 @@ function formFromItem(item: StockItemV2): ItemForm {
     // Item antigo, de antes do campo existir, continua vendável — era o
     // comportamento que a clínica já tinha.
     is_sellable: (item as { is_sellable?: boolean }).is_sellable !== false,
-    substance: item.substance ?? '', concentration: item.concentration ?? '',
+    substance: item.substance ?? '', concentration: item.concentration ?? '', sector: item.sector ?? '',
     control_class: item.control_class ?? '', is_human_use: Boolean(item.is_human_use),
     brand: item.brand ?? '', sku: item.sku ?? '',
     barcode: item.barcode ?? '', batch_number: item.batch_number ?? '',
@@ -1052,7 +1051,7 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
   // Sprint Animais (0422/0424): tabelas de preço + preço por item + modos.
   const animaisFoundation = useAnimaisFoundation()
   const [priceTables, setPriceTables] = useState<PriceTable[]>([])
-  const [tableRows, setTableRows] = useState<Record<string, { margin: string; price: string }>>({})
+  const [tableRows, setTableRows] = useState<Record<string, { margin: string; price: string; urgent?: string; valid_from?: string }>>({})
   const [compositionMode, setCompositionMode] = useState<CompositionMode>('simple')
   const [marginCalcType, setMarginCalcType]   = useState<MarginCalcType>('margin')
   const [formTab, setFormTab] = useState<'info' | 'precos'>('info')
@@ -1095,9 +1094,9 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
     if (item?.id) {
       getItemPrices(item.id).then(res => {
         if (!('error' in res)) {
-          const rows: Record<string, { margin: string; price: string }> = {}
+          const rows: Record<string, { margin: string; price: string; urgent?: string; valid_from?: string }> = {}
           for (const [k, v] of Object.entries(res)) {
-            rows[k] = { price: String(v.price), margin: v.margin == null ? '' : String(v.margin) }
+            rows[k] = { price: String(v.price), margin: v.margin == null ? '' : String(v.margin), urgent: v.urgent == null ? '' : String(v.urgent), valid_from: v.valid_from ?? '' }
           }
           setTableRows(rows)
         }
@@ -1142,6 +1141,7 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
       is_controlled: form.is_controlled,
       is_sellable:   isService ? true : form.is_sellable,
       substance:     form.is_controlled ? (form.substance || null) : null,
+      sector:        form.sector.trim() || null,
       concentration: form.is_controlled ? (form.concentration || null) : null,
       control_class: form.is_controlled ? (form.control_class || null) : null,
       is_human_use:  form.is_controlled ? form.is_human_use : false,
@@ -1183,6 +1183,8 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
             price_table_id: t.id,
             price:  !r || r.price.trim()  === '' ? null : Number(r.price.replace(',', '.')),
             margin: !r || r.margin.trim() === '' ? null : Number(r.margin.replace(',', '.')),
+            urgent: !r || !r.urgent || r.urgent.trim() === '' ? null : Number(r.urgent.replace(',', '.')),
+            valid_from: r?.valid_from || null,
           }
         })
       : []
@@ -1287,6 +1289,13 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
                   {cat.label}
                 </button>
               ))}
+            </div>
+            {/* Setor (0526): agrupa comissões por setor e relatórios — LAB, IMG, CMED, CCIR, Loja… */}
+            <div className="mt-3">
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Setor <span className="font-normal text-slate-400">(opcional)</span></label>
+              <input type="text" value={form.sector} onChange={e => set('sector', e.target.value)} list="setores-itens"
+                placeholder="Ex.: LAB - Hematologia, IMG - Tomografia, CMED - Consultas"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
             </div>
           </div>
 
